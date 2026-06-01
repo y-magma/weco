@@ -16,3 +16,5 @@ https://www.youtube.com/watch?v=dCxSsr5xuL8
 - npm 
 
 - vibe coding - spec coding ia
+
+- apache
