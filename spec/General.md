@@ -1,3 +1,11 @@
+# Spécification du projet
+
+**Document consolidé (toutes les étapes A→H, phasage MVP/P2/P3) :** [spec_2.md](./spec_2.md)
+
+Détail par section : [decisions.md](./decisions.md) · [A-raw-data.md](./A-raw-data.md) · [B-clean-formats.md](./B-clean-formats.md) · [C-visualizations.md](./C-visualizations.md) · [D-statistics.md](./D-statistics.md) · [E-economic-models.md](./E-economic-models.md) · [architecture.md](./architecture.md)
+
+---
+
 # A: Raw Data
 
 ### A1) Genre de données qu'on souhaite avoir
