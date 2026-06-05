@@ -1,12 +1,14 @@
-# C3 — Échelles et interactions
+# C3 — Échelles, interactions et produit graphique
 
-*Échelles par défaut et comportements interactifs sur les vues [C1](./C1-graphiques-et-echelles.md), via [ECharts](./C2-representation-graphique/bibliotheques.md) et [traceurs](./C2-representation-graphique/implementation.md).*
+*Échelles, comportements interactifs et exigences d’interface sur les vues [C1](./C1-graphiques-et-echelles.md), via [ECharts](./C2-representation-graphique/bibliotheques.md) et [traceurs](./C2-representation-graphique/implementation.md).*
+
+Entrée : [B3 unified](../B-clean-data/B3-clean-vers-unified.md) ou [B4 dérivées](../B-clean-data/B4-transformations-derivees.md).
 
 ---
 
 ## Échelles par défaut
 
-Choix **au premier affichage** (avant action utilisateur). La bascule lin/log (phase 2) ne modifie que l’échelle d’affichage.
+Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne modifie que l’échelle d’affichage.
 
 | Graphique | Abscisse | Ordonnée |
 |-----------|----------|----------|
@@ -19,27 +21,66 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log (p
 
 ---
 
+## Sélecteur d’axes X / Y
+
+| Exigence | Comportement | Priorité |
+|----------|--------------|----------|
+| Abscisse et ordonnée **indépendantes** | L’utilisateur choisit quelle dimension / indicateur alimente chaque axe | Phase 2 |
+| Source des variables | Champs **unified** ou **dérivés** (B4) : indicateurs, tranches, années, pays… | Phase 2 |
+| Échelle temps | Année utilisable comme abscisse **ou** comme filtre | MVP (courbe) |
+| Préréquis format | **Tableau** ou **Série** pour XY libres ; **Distribution** : abscisse = tranches (sauf dérivée B4) | — |
+
+---
+
 ## Interactions
 
 | Interaction | Graphiques | Comportement | Priorité | Support ECharts |
 |-------------|------------|--------------|----------|-----------------|
 | **Tooltip** | Tous | Valeur, tranche, pays au survol | MVP | `tooltip` |
-| **Zoom temporel** | Courbe (Série) | Fenêtre d’années, slider + molette | MVP | `dataZoom` *(déjà dans `buildTimeSeriesOption`)* |
-| **Zoom / brush tranches** | Bâtons, histogramme | Plage de tranches → envoi [D1](../D-statistics/D1-analyses.md) | Phase 2 | `dataZoom` category, `brush` |
-| **Zoom haut de distribution** | Distribution fine | 0–100 % → top 1 % / 0,1 % | Phase 2 | `dataZoom` + filtre données |
-| **Bascule lin / log** | Courbe, bâtons, nuage | Remplace l’échelle ordonnée par défaut (affichage seul) | Phase 2 | `yAxis.type: 'log'` dynamique |
+| **Zoom temporel** | Courbe (Série) | Fenêtre d’années, slider + molette | MVP | `dataZoom` |
+| **Zoom / brush tranches** | Bâtons, histogramme | Plage d’abscisse → régression / analyse [D1](../D-statistics/D1-analyses.md) | Phase 2 | `dataZoom` category, `brush` |
+| **Zoom multi-niveaux** | Distribution fine | 0–100 % → déciles → centiles → top 1 % / 0,1 % / 0,01 % | Phase 2 | `dataZoom` + rechargement tranches |
+| **Bascule lin / log abscisse** | Courbe, nuage, distribution | Échelle X indépendante de Y | Phase 2 | `xAxis.type: 'log'` |
+| **Bascule lin / log ordonnée** | Courbe, bâtons, nuage | Échelle Y indépendante de X | Phase 2 | `yAxis.type: 'log'` |
 | **Légende cliquable** | Courbe multi-séries | Masquer / afficher une série | MVP | `legend` |
 | **Export image** | Courbe MVP, puis tous | PNG depuis la toolbox | MVP / P2 | `toolbox.saveAsImage` |
 | **Réinitialiser vue** | Tous avec zoom | Retour à la plage initiale | MVP | `toolbox.restore` |
 
 ---
 
-## Règles
+## Layout multi-panneaux
 
-- Les interactions ne **modifient pas** les données unified : elles filtrent l’affichage ou déclenchent une analyse D sur la plage sélectionnée.
-- Préférence lin/log mémorisée par vue (phase 2).
-- Accessibilité cible : titres, contraste, puis ARIA sur les contrôles.
+| Exigence | Comportement | Priorité |
+|----------|--------------|----------|
+| **Plusieurs graphes en parallèle** | Dashboard : N panneaux (courbe + distribution + nuage) | MVP |
+| Synchronisation optionnelle | Même pays / fenêtre temporelle entre panneaux | Phase 2 |
+| Implémentation | `dashboard.vue`, `useDashboard.ts` — [C2b](./C2-representation-graphique/implementation.md) |
 
 ---
 
-[C1](./C1-graphiques-et-echelles.md) · [C2](./C2-representation-graphique/)
+## Superposition de types de graphes
+
+| Exigence | Comportement | Priorité |
+|----------|--------------|----------|
+| **Deux géométries sur un canvas** | Ex. histogramme + nuage, bâtons + courbe | Phase 2 |
+| Overlays d’analyse | Régression, densité PDF — [C1](./C1-graphiques-et-echelles.md) · [D2](../D-statistics/D2-programmes-statistiques.md) | Phase 2 |
+| Règle | Séries superposées : **mêmes axes** (ou axe secondaire documenté) | — |
+
+---
+
+## Extensibilité des types de graphes
+
+- Nouveau type = `build*Option` ([C2b](./C2-representation-graphique/implementation.md)) + entrée [C1](./C1-graphiques-et-echelles.md) + module ECharts ([C2a](./C2-representation-graphique/bibliotheques.md)).
+- Pas de modification du pipeline B3 pour ajouter un graphique.
+
+---
+
+## Règles
+
+- Les interactions ne **modifient pas** les données unified : elles filtrent l’affichage ou déclenchent une analyse D sur la plage sélectionnée.
+- Préférences lin/log **par axe** mémorisées par vue (phase 2).
+- Accessibilité cible : titres, contraste, puis ARIA.
+
+---
+
+[C1](./C1-graphiques-et-echelles.md) · [C2](./C2-representation-graphique/) · [B4](../B-clean-data/B4-transformations-derivees.md)

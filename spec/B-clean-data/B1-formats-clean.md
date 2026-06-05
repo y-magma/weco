@@ -30,9 +30,9 @@
 ## Enchaînement
 
 ```text
-A2 (brut) → B2 (convertisseurs) → B1 (clean) → B3 (unified) → C / D
+A2 (brut) → B2 → B1 (clean) → B3 (unified) → B4? (dérivées) → C / D
 ```
 
 ---
 
-[B2](./B2-brut-vers-clean.md) · [B3](./B3-clean-vers-unified.md)
+[B2](./B2-brut-vers-clean.md) · [B3](./B3-clean-vers-unified.md) · [B4](./B4-transformations-derivees.md)

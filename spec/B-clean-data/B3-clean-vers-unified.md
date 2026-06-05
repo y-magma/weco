@@ -22,9 +22,9 @@
 ## Chaîne
 
 ```text
-B1 (clean, éventuellement plusieurs sources) → B3 (unificateur) → unified → C / D
+B1 (clean) → B3 (unificateur) → unified → B4? (dérivées) → C / D
 ```
 
 ---
 
-[B1](./B1-formats-clean.md) · [B2](./B2-brut-vers-clean.md)
+[B1](./B1-formats-clean.md) · [B2](./B2-brut-vers-clean.md) · [B4](./B4-transformations-derivees.md)

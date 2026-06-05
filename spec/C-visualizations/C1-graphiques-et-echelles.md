@@ -29,4 +29,10 @@ Entrée : formats **Série**, **Distribution**, **Tableau**, **Point**. Champs o
 
 ---
 
+## Extensibilité
+
+Nouveau type de graphique : ajouter une ligne au catalogue, un `build*Option` ([C2b](./C2-representation-graphique/implementation.md)) et le module ECharts ([C2a](./C2-representation-graphique/bibliotheques.md)). Superpositions et multi-panneaux : [C3](./C3-interactions.md).
+
+---
+
 [C2](./C2-representation-graphique/) · [C3](./C3-interactions.md) · [B](../B-clean-data/)
