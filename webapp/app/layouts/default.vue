@@ -18,6 +18,10 @@ const drawerModel = computed<boolean>({
 
 const navItems = [
   { title: 'Home', to: '/', icon: 'mdi-home' },
+  { title: 'Profil par centile', to: '/profil', icon: 'mdi-chart-bar' },
+  { title: 'Nuage 2 variables', to: '/nuage', icon: 'mdi-chart-scatter-plot' },
+  { title: 'Multi-panneaux', to: '/panneaux', icon: 'mdi-view-grid' },
+  { title: 'Spécification', to: '/spec', icon: 'mdi-file-document-multiple' },
   { title: 'Dashboard', to: '/dashboard', icon: 'mdi-chart-line' },
   { title: 'Data Sources', to: '/sources', icon: 'mdi-database' },
   { title: 'CSV Import', to: '/csv', icon: 'mdi-file-delimited' },

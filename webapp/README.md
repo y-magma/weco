@@ -20,6 +20,18 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Tests
+
+Unit tests run with [Vitest](https://vitest.dev/) on the pure logic of the WID
+data layer and chart builders (no network, browser, or Vue component needed).
+
+```bash
+npm test            # single run
+npm run test:watch  # watch mode
+```
+
+See [`test/README.md`](./test/README.md) for the per-suite coverage breakdown.
+
 ## Static deployment
 
 ```bash

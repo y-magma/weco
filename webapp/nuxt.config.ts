@@ -46,7 +46,7 @@ export default defineNuxtConfig({
 
   nitro: {
     prerender: {
-      routes: ['/', '/dashboard', '/sources', '/csv'],
+      routes: ['/', '/profil', '/nuage', '/panneaux', '/spec', '/dashboard', '/sources', '/csv'],
     },
   },
 

@@ -9,6 +9,7 @@ import {
   TitleComponent,
   ToolboxComponent,
   TooltipComponent,
+  VisualMapComponent,
 } from 'echarts/components'
 import VChart from 'vue-echarts'
 import type { EChartsOption } from 'echarts'
@@ -24,6 +25,7 @@ use([
   DataZoomComponent,
   ToolboxComponent,
   TitleComponent,
+  VisualMapComponent,
 ])
 
 withDefaults(

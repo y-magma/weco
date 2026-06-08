@@ -25,3 +25,25 @@ Dans cette visualisation j'aurai besoin de :
 - avoir la possibilité de faire une regression linéaire sur les données dans un intervalle d'abscisse à choisir ou via un algo qui déterminera le meilleur endroit où faire cette regression. Et tracer la droite de regression
 - pouvoir superposer une densité d'une loi de proba connue (paramètre à régler) à un graphe obtenu à partir des données.
 
+
+# Versions 
+## Version 1
+
+- Dans cette version nous allons nous contenter des données du WID.world.
+- Ces données sont déjà clean 
+- Elles nécessitent une transformation (Question ? Est-ce qu'il existe une librairie ou des fonctions qui permettent de tracer la réciproque d'un histogramme qui trace le patrimoine en fonction de des 127 centiles du WID.world)
+- Les données sont représentées par 7 paramètres : country, variable, percentile, year, value, age, pop 
+
+- Sur les graphes je veux pouvoir faire :
+    - pouvoir choisir une année : les années sont celles du paramètre `year`
+    - un nuage de point/histogramme : avec en ordonnées les valeurs `value` associées à un paramètre de `variable` qui commence par 'a' et en abscisse les 127 `percentile` successifs (p0p1, ..., p98p99 ; p99p99.1, ...,p99.8p99.9 ; p99.9p99.91, ...,p99.98p99.99 ; p99.99p99.991, ..., p99.999p100).
+    - Inverser les deux axes précédents mais cette fois avoir en abscisse les valeurs `value` associées à un paramètre de `varaible` qui commence par 't'
+    - passer en échelle lin ou log sur les abscisses et ordonnées
+    - selectionner le nombre de graphique que je veux afficher en parallèle
+    - un nuage de point entre 2 variables de `variable`.
+
+- en ce qui concerne la bibliothèque je te laisse me proposer et si besoin d'implémentation propose moi aussi.
+
+
+# etude 1
+

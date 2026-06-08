@@ -5,19 +5,22 @@ definePageMeta({
 
 const features = [
   {
-    icon: 'mdi-chart-timeline-variant',
-    title: 'Compare indicators',
-    text: 'Overlay inequality metrics and stress proxies on interactive time-series charts.',
+    icon: 'mdi-chart-bar',
+    title: 'Profil par centile',
+    text: 'Valeur d’une variable WID (moyenne a… ou seuil t…) à travers les 127 g-percentiles, avec bascule lin/log et zoom queue haute.',
+    to: '/profil',
   },
   {
-    icon: 'mdi-earth',
-    title: 'Plug external APIs',
-    text: 'Start with WID.world and extend the registry with World Bank, OECD, or custom endpoints.',
+    icon: 'mdi-chart-scatter-plot',
+    title: 'Nuage 2 variables',
+    text: 'Relation entre deux variables jointes par percentile : un point = un g-percentile, mêmes age/pop.',
+    to: '/nuage',
   },
   {
-    icon: 'mdi-file-delimited',
-    title: 'Import CSV data',
-    text: 'Use the CSV reader factory to load local datasets and map columns to chart fields.',
+    icon: 'mdi-view-grid',
+    title: 'Multi-panneaux',
+    text: 'Plusieurs profils en parallèle pour comparer variables, pays ou années d’un coup d’œil.',
+    to: '/panneaux',
   },
 ]
 </script>
@@ -27,30 +30,32 @@ const features = [
     <v-row class="mb-8">
       <v-col cols="12" md="7">
         <h1 class="text-h3 font-weight-bold mb-4">
-          Compare economic data & stress hypotheses
+          Explorer la distribution des richesses (WID)
         </h1>
         <p class="text-body-1 text-medium-emphasis mb-6">
-          A public dashboard skeleton built with Nuxt, Vuetify, and ECharts.
-          Explore income inequality from
-          <a href="https://wid.world/" target="_blank" rel="noopener">WID.world</a>,
-          test stress hypothesis scenarios, and import your own CSV datasets.
+          Visualisez les données de
+          <a href="https://wid.world/" target="_blank" rel="noopener">WID.world</a>
+          sur les 127 g-percentiles : profils moyens et seuils, nuages joints par
+          percentile et comparaisons multi-panneaux. Construit avec Nuxt, Vuetify
+          et ECharts.
         </p>
         <div class="d-flex flex-wrap ga-3">
-          <v-btn color="primary" size="large" to="/dashboard">
-            Open dashboard
+          <v-btn color="primary" size="large" to="/profil">
+            Ouvrir l’explorateur
           </v-btn>
-          <v-btn variant="outlined" size="large" to="/csv">
-            Import CSV
+          <v-btn variant="outlined" size="large" to="/spec">
+            Voir la spécification
           </v-btn>
         </div>
       </v-col>
       <v-col cols="12" md="5">
         <v-card variant="tonal" color="primary" class="pa-6 h-100">
-          <v-icon icon="mdi-lightbulb-on-outline" size="36" class="mb-4" />
-          <h2 class="text-h6 mb-2">Stress hypothesis</h2>
+          <v-icon icon="mdi-database-search-outline" size="36" class="mb-4" />
+          <h2 class="text-h6 mb-2">Version 1</h2>
           <p class="text-body-2">
-            Test whether rising top-income shares correlate with social stress
-            proxies. Configure hypotheses as data, not hard-coded UI logic.
+            Source unique WID.world, filtres age/pop obligatoires, tri des
+            g-percentiles par rang, échelles lin/log avec garde-fou sur les
+            valeurs négatives. Données d’exemple hors-ligne, live via clé API.
           </p>
         </v-card>
       </v-col>
@@ -63,7 +68,12 @@ const features = [
         cols="12"
         md="4"
       >
-        <v-card class="h-100 pa-5" variant="outlined">
+        <v-card
+          class="h-100 pa-5"
+          variant="outlined"
+          :to="feature.to"
+          hover
+        >
           <v-icon :icon="feature.icon" color="primary" size="32" class="mb-3" />
           <h3 class="text-h6 mb-2">{{ feature.title }}</h3>
           <p class="text-body-2 text-medium-emphasis">{{ feature.text }}</p>

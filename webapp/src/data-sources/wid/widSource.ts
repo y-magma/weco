@@ -3,10 +3,14 @@ import type {
   DataSeries,
   DistributionSeries,
   FetchDistributionParams,
+  FetchProfileParams,
   FetchSeriesParams,
   IndicatorMeta,
+  PercentilePoint,
+  PercentileProfile,
   SearchIndicatorsParams,
 } from '@src/domain/types'
+import { findWidVariable, measureKind } from '@src/data-sources/wid/widCodes'
 import type { DataSource, DataSourceStatus } from '@src/data-sources/Source'
 import { DataSourceError } from '@src/data-sources/errors'
 import { dataSourceCache } from '@src/data-sources/cache'
@@ -17,6 +21,7 @@ import {
 } from '@src/data-sources/wid/indicators'
 import {
   getSampleDistribution,
+  getSampleProfile,
   getSampleScatter,
   getSampleSeries,
 } from '@src/data-sources/wid/sampleData'
@@ -136,6 +141,81 @@ export class WidDataSource implements DataSource {
     )
     dataSourceCache.set(cacheKey, distribution)
     return distribution
+  }
+
+  /** True when the source has no API key and serves offline sample data. */
+  isSampleMode(): boolean {
+    return this.useSampleData
+  }
+
+  /**
+   * Fetch a WID variable across the 127 g-percentiles for a fixed
+   * country / year / age / pop. Falls back to sample data when no API key is
+   * configured or when the live request fails / returns nothing.
+   */
+  async fetchPercentileProfile(params: FetchProfileParams): Promise<PercentileProfile> {
+    const cacheKey = dataSourceCache.buildKey(this.id, 'profile', params)
+    const cached = dataSourceCache.get<PercentileProfile>(cacheKey)
+    if (cached) return cached
+
+    const sample = () =>
+      getSampleProfile(
+        params.countryCode,
+        params.variable,
+        params.year,
+        params.age,
+        params.pop,
+      )
+
+    if (this.useSampleData) {
+      const profile = sample()
+      dataSourceCache.set(cacheKey, profile)
+      return profile
+    }
+
+    try {
+      const rows = await this.client.fetchProfileData({
+        area: params.countryCode,
+        sixlet: params.variable,
+        age: params.age,
+        pop: params.pop,
+        year: params.year,
+      })
+
+      if (!rows.length) {
+        return sample()
+      }
+
+      const meta = findWidVariable(params.variable)
+      const points: PercentilePoint[] = rows.map((row) => ({
+        percentile: row.percentile,
+        rank: row.rank,
+        value: row.value,
+      }))
+
+      const profile: PercentileProfile = {
+        id: `${params.countryCode}-${params.variable}-${params.age}-${params.pop}-${params.year}`,
+        country: params.countryCode,
+        variable: params.variable,
+        year: params.year,
+        age: params.age,
+        pop: params.pop,
+        kind: measureKind(params.variable),
+        unit: meta?.unit,
+        label: `${params.countryCode} · ${meta?.label ?? params.variable} (${params.year})`,
+        points,
+        sample: false,
+      }
+
+      this.lastFetchAt = new Date().toISOString()
+      this.lastError = undefined
+      dataSourceCache.set(cacheKey, profile)
+      return profile
+    } catch (error) {
+      this.lastError = error instanceof Error ? error.message : 'Unknown error'
+      // Graceful degradation: never break the UI on a live API hiccup.
+      return sample()
+    }
   }
 
   getStatus(): DataSourceStatus {

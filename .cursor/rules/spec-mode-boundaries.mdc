@@ -1,0 +1,26 @@
+---
+description: Frontières spec / dev — ne pas toucher webapp pendant le travail sur la spec ; plan.md en lecture seule
+alwaysApply: true
+---
+
+# Frontières spec / dev
+
+Le projet sépare la **spec d'intention** (`spec/`) du **code applicatif** (`webapp/`).
+
+## webapp/ — hors périmètre en phase spec
+
+Tant qu'on travaille sur la spec (`spec/**`), **ne pas lire ni modifier** les fichiers de développement sous `webapp/` :
+
+- Pas d'ouverture, lecture, recherche ciblée ou édition de `webapp/**`.
+- Ne pas lancer de build / commandes dans `webapp/`.
+- Si une tâche semble exiger de toucher `webapp/`, **s'arrêter et demander** une bascule explicite en mode dev avant d'y accéder.
+
+L'utilisateur indiquera clairement quand on passe de la spec au dev. Cette frontière ne s'applique qu'en phase spec.
+
+## spec/plan.md — lecture seule
+
+`spec/plan.md` est la **référence utilisateur**.
+
+- Lecture **autorisée**.
+- Modification **interdite** sans accord explicite de l'utilisateur.
+- Les écarts se comblent dans les autres fichiers de `spec/`, jamais dans `plan.md`.
