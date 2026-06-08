@@ -57,16 +57,18 @@ Cible : `parseProfileResponse` (fonction pure exportée de `src/data-sources/wid
 | robustesse | réponse vide / `null` → `[]` ; valeurs non-numériques ou non-finies écartées |
 
 ### `profileChart.spec.ts` — option ECharts du profil
-Cible : `buildProfileOption` et `tailCoordinate` (`src/charts/profile.ts`).
+Cible : `buildProfileOption` et `rankTopLogCoordinate` (`src/charts/profile.ts`).
 
 | Cas | Vérifie |
 | --- | --- |
-| axe X catégorie | catégories triées par rang quel que soit l'ordre d'entrée ; trous `null` conservés |
+| axe X linéaire | abscisses = rang % triées ; trous `null` conservés |
 | axe Y | `value` (linéaire) par défaut, `log` si `logScaleY` |
-| **garde-fou ≤ 0** | sur axe log, les valeurs ≤ 0 deviennent des trous (ne cassent pas le graphe) |
-| type / unité | type de série respecté (bar/scatter) ; unité affichée sur l'axe Y |
-| `tailCoordinate` | rang → log₁₀(1/(1−p)) (0→0, 90→1, 99→2, 99.9→3), `null` si p ≥ 1, croissant |
-| **mode queue haute** | axe X numérique, paires `[x, y]` triées avec x = `tailCoordinate`, garde-fou ≤ 0 toujours appliqué |
+| **garde-fou ≤ 0** | sur axe log Y, les valeurs ≤ 0 deviennent des trous (ne cassent pas le graphe) |
+| type / unité | type de série respecté (bar/scatter/line) ; unité affichée sur l'axe Y |
+| `rankFromTopLogCoordinate` | inverse log → rang % ; `formatRankAxisLabel` affiche le rang réel sur les graduations |
+| **log X** | points placés en log₁₀(100−rang), graduations en rang % ; garde-fou ≤ 0 sur l'axe valeur |
+| **densité population** | axes inversés (X = valeur, Y = part de population) ; logs routés vers l'axe affiché |
+| **densité probabilité** | dérivée ΔF/Δx de la CDF entre tranches consécutives ; Y = densité empirique |
 
 ### `joinProfiles.spec.ts` — jointure de deux profils par percentile
 Cible : `joinProfilesByPercentile` (`src/domain/joinProfiles.ts`).

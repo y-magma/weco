@@ -68,6 +68,7 @@ withDefaults(
     >
       <VChart
         :option="option"
+        :update-options="{ notMerge: true }"
         autoresize
         class="chart-instance"
       />

@@ -1,0 +1,5 @@
+# Exclude webapp build artifacts and dependencies from codebase indexing (RAG)
+webapp/node_modules/
+webapp/dist/
+webapp/.output/
+webapp/.nuxt/

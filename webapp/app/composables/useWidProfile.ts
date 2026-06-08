@@ -1,5 +1,5 @@
 import type { EChartsOption } from 'echarts'
-import { buildProfileOption, type ProfileXScale } from '@src/charts/profile'
+import { buildProfileOption } from '@src/charts/profile'
 import type { CountryOption, PercentileProfile } from '@src/domain/types'
 import type { WidDataSource } from '@src/data-sources/wid/widSource'
 import {
@@ -24,9 +24,11 @@ export function useWidProfile() {
   const year = ref(2021)
   const age = ref(WID_DEFAULT_AGE)
   const pop = ref(WID_DEFAULT_POP)
-  const chartType = ref<'bar' | 'scatter' | 'line'>('bar')
+  const chartType = ref<'bar' | 'scatter' | 'line'>('line')
   const logScaleY = ref(false)
-  const xScale = ref<ProfileXScale>('category')
+  const logScaleX = ref(false)
+  const populationDensity = ref(false)
+  const probabilityDensity = ref(false)
 
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -59,7 +61,9 @@ export function useWidProfile() {
     profileOption.value = buildProfileOption(profile.value, {
       chartType: chartType.value,
       logScaleY: logScaleY.value,
-      xScale: xScale.value,
+      logScaleX: logScaleX.value,
+      populationDensity: populationDensity.value,
+      probabilityDensity: probabilityDensity.value,
     })
   }
 
@@ -86,7 +90,13 @@ export function useWidProfile() {
   }
 
   watch([countryCode, variable, year, age, pop], load)
-  watch([chartType, logScaleY, xScale], rebuild)
+  watch(probabilityDensity, (enabled) => {
+    if (enabled) populationDensity.value = true
+  })
+  watch(populationDensity, (enabled) => {
+    if (!enabled) probabilityDensity.value = false
+  })
+  watch([chartType, logScaleY, logScaleX, populationDensity, probabilityDensity], rebuild)
 
   onMounted(async () => {
     await loadCountries()
@@ -101,7 +111,9 @@ export function useWidProfile() {
     pop,
     chartType,
     logScaleY,
-    xScale,
+    logScaleX,
+    populationDensity,
+    probabilityDensity,
     countries,
     variables,
     ageOptions,

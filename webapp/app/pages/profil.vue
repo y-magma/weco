@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { buildActiveCalculationHelp, PROFILE_HELP } from '@src/charts/profileHelp'
+
 definePageMeta({ layout: 'default' })
 
 const {
@@ -9,7 +11,9 @@ const {
   pop,
   chartType,
   logScaleY,
-  xScale,
+  logScaleX,
+  populationDensity,
+  probabilityDensity,
   countries,
   variables,
   ageOptions,
@@ -29,10 +33,14 @@ const chartTypes = [
   { value: 'line', label: 'Ligne' },
 ]
 
-const xScales = [
-  { value: 'category', label: 'Rang (catégorie)' },
-  { value: 'tail', label: 'Queue haute log(1−p)' },
-]
+const activeCalculationHelp = computed(() => buildActiveCalculationHelp({
+  chartType: chartType.value,
+  logScaleX: logScaleX.value,
+  logScaleY: logScaleY.value,
+  populationDensity: populationDensity.value,
+  probabilityDensity: probabilityDensity.value,
+  profile: profile.value,
+}))
 </script>
 
 <template>
@@ -112,9 +120,16 @@ const xScales = [
           />
         </v-col>
       </v-row>
+
       <v-row dense class="mt-1 align-center">
         <v-col cols="12" md="auto">
-          <div class="text-caption text-medium-emphasis mb-1">Type</div>
+          <div class="d-flex align-center ga-1 mb-1">
+            <span class="text-caption text-medium-emphasis">Type</span>
+            <ProfileHelpButton
+              :title="PROFILE_HELP.chartType.title"
+              :paragraphs="PROFILE_HELP.chartType.paragraphs"
+            />
+          </div>
           <v-btn-toggle v-model="chartType" mandatory density="comfortable" divided>
             <v-btn
               v-for="type in chartTypes"
@@ -126,20 +141,56 @@ const xScales = [
             </v-btn>
           </v-btn-toggle>
         </v-col>
-        <v-col cols="12" md="auto">
-          <div class="text-caption text-medium-emphasis mb-1">Axe X</div>
-          <v-btn-toggle v-model="xScale" mandatory density="comfortable" divided>
-            <v-btn
-              v-for="scale in xScales"
-              :key="scale.value"
-              :value="scale.value"
-              size="small"
-            >
-              {{ scale.label }}
-            </v-btn>
-          </v-btn-toggle>
+
+        <v-col cols="12" md="auto" class="d-flex align-center">
+          <v-switch
+            v-model="populationDensity"
+            label="Densité de population"
+            color="primary"
+            density="compact"
+            hide-details
+            class="mt-4"
+          />
+          <ProfileHelpButton
+            class="mt-4"
+            :title="PROFILE_HELP.populationDensity.title"
+            :paragraphs="PROFILE_HELP.populationDensity.paragraphs"
+          />
         </v-col>
-        <v-col cols="12" md="auto" class="d-flex align-end">
+
+        <v-col cols="12" md="auto" class="d-flex align-center">
+          <v-switch
+            v-model="probabilityDensity"
+            label="Densité de probabilité"
+            color="primary"
+            density="compact"
+            hide-details
+            class="mt-4"
+          />
+          <ProfileHelpButton
+            class="mt-4"
+            :title="PROFILE_HELP.probabilityDensity.title"
+            :paragraphs="PROFILE_HELP.probabilityDensity.paragraphs"
+          />
+        </v-col>
+
+        <v-col cols="12" md="auto" class="d-flex align-center">
+          <v-switch
+            v-model="logScaleX"
+            label="Échelle log (abscisse)"
+            color="primary"
+            density="compact"
+            hide-details
+            class="mt-4"
+          />
+          <ProfileHelpButton
+            class="mt-4"
+            :title="PROFILE_HELP.logScaleX.title"
+            :paragraphs="PROFILE_HELP.logScaleX.paragraphs"
+          />
+        </v-col>
+
+        <v-col cols="12" md="auto" class="d-flex align-center">
           <v-switch
             v-model="logScaleY"
             label="Échelle log (ordonnée)"
@@ -148,9 +199,22 @@ const xScales = [
             hide-details
             class="mt-4"
           />
+          <ProfileHelpButton
+            class="mt-4"
+            :title="PROFILE_HELP.logScaleY.title"
+            :paragraphs="PROFILE_HELP.logScaleY.paragraphs"
+          />
         </v-col>
+
         <v-spacer />
-        <v-col cols="12" md="auto" class="d-flex justify-end align-end">
+
+        <v-col cols="12" md="auto" class="d-flex align-center justify-end ga-2 mt-4">
+          <ProfileHelpButton
+            :title="activeCalculationHelp.title"
+            :paragraphs="activeCalculationHelp.paragraphs"
+            label="Comment sont calculées mes données ?"
+            hint="Récapitulatif selon les options actives"
+          />
           <v-btn
             color="primary"
             variant="tonal"
@@ -162,17 +226,6 @@ const xScales = [
           </v-btn>
         </v-col>
       </v-row>
-
-      <v-expand-transition>
-        <p
-          v-if="logScaleY"
-          class="text-caption text-medium-emphasis mt-2 mb-0"
-        >
-          <v-icon size="x-small" icon="mdi-information-outline" /> Échelle log : les
-          valeurs ≤ 0 (ex. patrimoine net négatif en bas de distribution) sont
-          masquées (trou), elles ne peuvent pas être tracées en log.
-        </p>
-      </v-expand-transition>
     </v-card>
 
     <v-card variant="outlined" class="pa-4">
@@ -191,6 +244,7 @@ const xScales = [
         </v-chip>
       </div>
       <EChart
+        :key="`${populationDensity}-${probabilityDensity}-${chartType}`"
         :option="profileOption"
         :loading="loading"
         :error="error"
