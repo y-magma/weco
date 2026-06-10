@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { buildProfileOption, computePdfBins, formatRankAxisLabel, rankDisplayCoordinate, rankFromDisplayCoordinate, rankFromTopLogCoordinate, rankTopLogCoordinate } from '@src/charts/profile'
+import {
+  buildProfileOption,
+  buildRankBandItems,
+  computeBandAxisBounds,
+  computeProfileValueExtent,
+  computeRankIntervalExtent,
+  filterPointsByValueRange,
+  computePdfBins,
+  formatRankAxisLabel,
+  rankDisplayCoordinate,
+  rankDisplayCoordinateUpper,
+  rankFromDisplayCoordinate,
+  rankFromTopLogCoordinate,
+  rankTopLogCoordinate,
+} from '@src/charts/profile'
 import type { PercentileProfile } from '@src/domain/types'
 
 function makeProfile(overrides: Partial<PercentileProfile> = {}): PercentileProfile {
@@ -35,6 +49,100 @@ function seriesPairs(option: ReturnType<typeof buildProfileOption>): [number, nu
   return seriesData(option).map((datum) => datum.value)
 }
 
+describe('computeProfileValueExtent', () => {
+  it('returns min and max over finite values', () => {
+    const extent = computeProfileValueExtent(makeProfile().points)
+    expect(extent).toEqual({ min: -1000, max: 200000 })
+  })
+})
+
+describe('filterPointsByValueRange', () => {
+  it('keeps points within [min, max]', () => {
+    const filtered = filterPointsByValueRange(makeProfile().points, { min: 10000, max: 100000 })
+    expect(filtered.map((p) => p.rank)).toEqual([50])
+  })
+})
+
+describe('computeRankIntervalExtent', () => {
+  it('spans ]i %, k %] over the given points', () => {
+    const extent = computeRankIntervalExtent([
+      { percentile: 'p50p51', rank: 50, value: 50000 },
+      { percentile: 'p90p91', rank: 90, value: 200000 },
+    ])
+    expect(extent).toEqual({ rankLo: 50, rankHi: 91 })
+  })
+})
+
+describe('buildProfileOption — value range zoom', () => {
+  it('zooms Y (valeur) and X (population %) in the default profile view', () => {
+    const option = buildProfileOption(makeProfile(), {
+      valueRange: { min: 10000, max: 100000 },
+    })
+    expect((option.yAxis as { min: number, max: number }).min).toBe(10000)
+    expect((option.yAxis as { max: number }).max).toBe(100000)
+    expect((option.xAxis as { min: number }).min).toBeGreaterThanOrEqual(45)
+    expect((option.xAxis as { max: number }).max).toBeLessThanOrEqual(55)
+  })
+
+  it('zooms X (richesse) and Y (population %) in population-density view', () => {
+    const option = buildProfileOption(makeProfile(), {
+      populationDensity: true,
+      valueRange: { min: 10000, max: 100000 },
+    })
+    expect((option.xAxis as { min: number, max: number }).min).toBe(10000)
+    expect((option.xAxis as { max: number }).max).toBe(100000)
+    expect((option.yAxis as { min: number }).min).toBeGreaterThanOrEqual(45)
+    expect((option.yAxis as { max: number }).max).toBeLessThanOrEqual(55)
+  })
+
+  it('filters series to points inside the value range', () => {
+    const option = buildProfileOption(makeProfile(), {
+      valueRange: { min: 10000, max: 100000 },
+    })
+    const series = (option.series as { data: { value: [number, number | null] }[] }[])[0]!
+    expect(series.data).toHaveLength(1)
+    expect(series.data[0]!.value[0]).toBe(50)
+  })
+})
+
+describe('computeBandAxisBounds', () => {
+  it('anchors bars at yBase = 0 on a linear value axis even with negative data', () => {
+    const items = buildRankBandItems([
+      { percentile: 'p0p1', rank: 0, value: -1000 },
+      { percentile: 'p90p91', rank: 90, value: 200000 },
+    ])
+    const bounds = computeBandAxisBounds(items)
+    expect(bounds.yBase).toBe(0)
+    expect(bounds.yMin).toBeLessThan(0)
+  })
+})
+
+describe('buildRankBandItems', () => {
+  it('keeps the ]99.999 %, 100 %] band when log X is enabled', () => {
+    const bands = buildRankBandItems(
+      [{ percentile: 'p99.999p100', rank: 99.999, value: 1_000_000 }],
+      { logOnRank: true },
+    )
+    expect(bands).toHaveLength(1)
+    expect(bands[0]!.i).toBe(99.999)
+    expect(bands[0]!.k).toBe(100)
+    expect(bands[0]!.value[0]).toBeCloseTo(rankDisplayCoordinate(99.999)!)
+    expect(bands[0]!.value[1]).toBeCloseTo(rankDisplayCoordinateUpper(100)!)
+    expect(bands[0]!.value[1]).toBeGreaterThan(bands[0]!.value[0])
+  })
+
+  it('maps each pᵢpₖ bracket to a band on ]i %, k %]', () => {
+    const bands = buildRankBandItems(makeProfile().points)
+    expect(bands.map((b) => [b.i, b.k])).toEqual([
+      [0, 1],
+      [50, 51],
+      [90, 91],
+    ])
+    expect(bands[0]!.value).toEqual([0, 1, -1000])
+    expect(bands.find((b) => b.name === 'p20p21')).toBeUndefined()
+  })
+})
+
 describe('buildProfileOption', () => {
   it('orders points by rank on a linear X axis', () => {
     const option = buildProfileOption(makeProfile())
@@ -67,7 +175,7 @@ describe('buildProfileOption', () => {
   it('honours the chart type', () => {
     const bar = buildProfileOption(makeProfile(), { chartType: 'bar' })
     const scatter = buildProfileOption(makeProfile(), { chartType: 'scatter' })
-    expect((bar.series as { type: string }[])[0]!.type).toBe('bar')
+    expect((bar.series as { type: string }[])[0]!.type).toBe('custom')
     expect((scatter.series as { type: string }[])[0]!.type).toBe('scatter')
   })
 
@@ -82,11 +190,59 @@ describe('buildProfileOption', () => {
     expect((option.yAxis as { name: string }).name).toContain('EUR')
   })
 
-  it('anchors the rank axis between 0 and 100 %', () => {
+  it('draws ]i %, k %] bands as a custom series in bar mode', () => {
+    const option = buildProfileOption(makeProfile(), { chartType: 'bar' })
+    const series = (option.series as { type: string, data: unknown[] }[])[0]!
+    expect(series.type).toBe('custom')
+    expect(series.data).toHaveLength(3)
+  })
+
+  it('auto-scales the rank axis to the displayed brackets (line view)', () => {
     const option = buildProfileOption(makeProfile())
     expect((option.xAxis as { name: string }).name).toBe('Part de population (%)')
-    expect((option.xAxis as { min: number, max: number }).min).toBe(0)
-    expect((option.xAxis as { max: number }).max).toBe(100)
+    // brackets span ]0,1] … ]90,91] → axis fits 0 → ~91 (padded), not the full 100
+    expect((option.xAxis as { min: number }).min).toBe(0)
+    expect((option.xAxis as { max: number }).max).toBeGreaterThan(91)
+    expect((option.xAxis as { max: number }).max).toBeLessThanOrEqual(100)
+  })
+
+  it('rescales the rank axis to a drilled top-tail subset (line view)', () => {
+    const topTail = makeProfile({
+      points: [
+        { percentile: 'p99p99.1', rank: 99, value: 1_000_000 },
+        { percentile: 'p99.5p99.6', rank: 99.5, value: 2_000_000 },
+        { percentile: 'p99.9p100', rank: 99.9, value: 5_000_000 },
+      ],
+    })
+    const option = buildProfileOption(topTail, { chartType: 'line' })
+    const xAxis = option.xAxis as { min: number, max: number }
+    expect(xAxis.min).toBeGreaterThanOrEqual(98)
+    expect(xAxis.min).toBeLessThan(99.5)
+    expect(xAxis.max).toBe(100)
+  })
+
+  it('reaches 100 % when a bracket touches the top (scatter view)', () => {
+    const full = makeProfile({
+      points: [
+        { percentile: 'p0p1', rank: 0, value: 10 },
+        { percentile: 'p99p100', rank: 99, value: 1_000 },
+      ],
+    })
+    const option = buildProfileOption(full, { chartType: 'scatter' })
+    const xAxis = option.xAxis as { min: number, max: number }
+    expect(xAxis.min).toBe(0)
+    expect(xAxis.max).toBe(100)
+  })
+
+  it('extends the log rank axis to the ]99.999 %, 100 %] cap when a bracket reaches 100 %', () => {
+    const full = makeProfile({
+      points: [
+        { percentile: 'p0p1', rank: 0, value: 10 },
+        { percentile: 'p99.999p100', rank: 99.999, value: 1_000_000 },
+      ],
+    })
+    const option = buildProfileOption(full, { logScaleX: true })
+    expect((option.xAxis as { max: number }).max).toBeCloseTo(rankDisplayCoordinateUpper(100)!)
   })
 })
 
@@ -114,6 +270,19 @@ describe('rankFromTopLogCoordinate', () => {
     expect(rankFromTopLogCoordinate(rankTopLogCoordinate(0)!)).toBeCloseTo(0)
     expect(rankFromTopLogCoordinate(rankTopLogCoordinate(90)!)).toBeCloseTo(90)
     expect(rankFromTopLogCoordinate(rankTopLogCoordinate(99.9)!)).toBeCloseTo(99.9)
+  })
+})
+
+describe('rankDisplayCoordinateUpper', () => {
+  it('returns a finite coordinate beyond 99.999 % for k = 100 %', () => {
+    const upper = rankDisplayCoordinateUpper(100)!
+    const anchor = rankDisplayCoordinate(99.999)!
+    expect(upper).toBeGreaterThan(anchor)
+    expect(rankDisplayCoordinate(100)).toBeNull()
+  })
+
+  it('matches rankDisplayCoordinate for k < 100 %', () => {
+    expect(rankDisplayCoordinateUpper(90)).toBeCloseTo(rankDisplayCoordinate(90)!)
   })
 })
 
@@ -145,6 +314,7 @@ describe('formatRankAxisLabel', () => {
     expect(formatRankAxisLabel(-1)).toBe('90 %')
     expect(formatRankAxisLabel(0)).toBe('99 %')
     expect(formatRankAxisLabel(1)).toBe('99,9 %')
+    expect(formatRankAxisLabel(rankDisplayCoordinateUpper(100)!)).toBe('100 %')
   })
 
   it('hides ticks that fall outside 0–100 %', () => {
@@ -215,9 +385,10 @@ describe('buildProfileOption — population density view', () => {
     expect((option.yAxis as { scale: boolean }).scale).toBe(true)
     const pairs = seriesPairs(option)
     // rank 0 dropped: value -1000 fails log guard on X
-    expect(pairs.some((pair) => pair[1] === 0)).toBe(false)
-    expect(pairs.find((pair) => pair[1] === 90)![0]).toBe(200000)
-    expect(pairs.find((pair) => pair[1] === 90)![1]).toBeCloseTo(rankDisplayCoordinate(90)!)
+    expect(pairs.some((pair) => pair[0] === -1000)).toBe(false)
+    const rank90 = pairs.find((pair) => pair[0] === 200000)!
+    expect(rank90[0]).toBe(200000)
+    expect(rank90[1]).toBeCloseTo(rankDisplayCoordinate(90)!)
   })
 })
 

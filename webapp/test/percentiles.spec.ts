@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildGPercentiles,
+  parsePercentileInterval,
   parsePercentileRank,
   parsePercentileUpper,
   sortPercentileCodes,
@@ -38,6 +39,19 @@ describe('parsePercentileUpper', () => {
 
   it('falls back to the lower bound for single-bound codes', () => {
     expect(parsePercentileUpper('p50')).toBe(50)
+  })
+})
+
+describe('parsePercentileInterval', () => {
+  it('returns ]i, k] bounds for a bracket code', () => {
+    expect(parsePercentileInterval('p50p51')).toEqual({ i: 50, k: 51 })
+    expect(parsePercentileInterval('p0p1')).toEqual({ i: 0, k: 1 })
+    expect(parsePercentileInterval('p99.9p99.91')).toEqual({ i: 99.9, k: 99.91 })
+  })
+
+  it('returns null for invalid codes', () => {
+    expect(parsePercentileInterval('')).toBeNull()
+    expect(parsePercentileInterval('abc')).toBeNull()
   })
 })
 

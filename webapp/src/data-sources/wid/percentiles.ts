@@ -32,6 +32,16 @@ export function parsePercentileUpper(percentile: string): number {
   return parsePercentileRank(percentile)
 }
 
+/** Bounds of a WID bracket `pᵢpₖ` as the half-open interval ]i, k] (in %). */
+export function parsePercentileInterval(
+  percentile: string,
+): { i: number, k: number } | null {
+  const i = parsePercentileRank(percentile)
+  const k = parsePercentileUpper(percentile)
+  if (Number.isNaN(i) || Number.isNaN(k) || k <= i) return null
+  return { i, k }
+}
+
 /** Sort percentile codes by their parsed lower bound (ascending). */
 export function sortPercentileCodes(codes: string[]): string[] {
   return [...codes].sort((a, b) => parsePercentileRank(a) - parsePercentileRank(b))

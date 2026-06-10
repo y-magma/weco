@@ -6,7 +6,7 @@ definePageMeta({
 const features = [
   {
     icon: 'mdi-chart-bar',
-    title: 'Profil par centile',
+    title: 'Boie à outils de visus',
     text: 'Valeur d’une variable WID (moyenne a… ou seuil t…) à travers les 127 g-percentiles, avec bascule lin/log et zoom queue haute.',
     to: '/profil',
   },

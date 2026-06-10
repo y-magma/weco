@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, LineChart, ScatterChart } from 'echarts/charts'
+import { BarChart, CustomChart, LineChart, ScatterChart } from 'echarts/charts'
 import {
   DataZoomComponent,
   GridComponent,
@@ -19,6 +19,7 @@ use([
   LineChart,
   BarChart,
   ScatterChart,
+  CustomChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
@@ -41,6 +42,8 @@ withDefaults(
     height: '360px',
   },
 )
+
+const emit = defineEmits<{ chartClick: [params: unknown] }>()
 </script>
 
 <template>
@@ -71,6 +74,7 @@ withDefaults(
         :update-options="{ notMerge: true }"
         autoresize
         class="chart-instance"
+        @click="(params: unknown) => emit('chartClick', params)"
       />
     </div>
 

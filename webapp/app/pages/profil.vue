@@ -22,10 +22,26 @@ const {
   loading,
   error,
   sampleMode,
+  valueZoomRange,
+  valueZoomStep,
+  profileValueExtent,
+  drillLevel,
+  drillBreadcrumb,
+  currentDrillableCode,
+  canDrillDown,
+  showAllPercentiles,
+  drillTo,
+  drillDownTop,
+  handleChartClick,
   profile,
   profileOption,
   load,
 } = useWidProfile()
+
+function formatValue(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return '—'
+  return n.toLocaleString('fr-FR', { maximumFractionDigits: 0 })
+}
 
 const chartTypes = [
   { value: 'bar', label: 'Bâtons' },
@@ -47,10 +63,12 @@ const activeCalculationHelp = computed(() => buildActiveCalculationHelp({
   <div>
     <v-row class="mb-2">
       <v-col cols="12">
-        <h1 class="text-h4 font-weight-bold mb-1">Profil par centile</h1>
+        <h1 class="text-h4 font-weight-bold mb-1">Boite à outils de visus</h1>
         <p class="text-body-1 text-medium-emphasis">
           Valeur d'une variable WID (moyenne <code>a…</code> ou seuil <code>t…</code>)
           à travers les 127 g-percentiles, à <strong>pays / année / âge / population</strong> fixés.
+          En mode <strong>Bâtons</strong>, chaque tranche <code>pᵢpₖ</code> est une bande
+          sur l'intervalle <code>]i %, k %]</code>.
         </p>
       </v-col>
     </v-row>
@@ -226,6 +244,28 @@ const activeCalculationHelp = computed(() => buildActiveCalculationHelp({
           </v-btn>
         </v-col>
       </v-row>
+
+      <v-row v-if="profileValueExtent" dense class="mt-2">
+        <v-col cols="12">
+          <p class="text-body-2 font-weight-medium mb-2">Plage de valeurs affichée</p>
+          <v-range-slider
+            v-model="valueZoomRange"
+            :min="profileValueExtent.min"
+            :max="profileValueExtent.max"
+            :step="valueZoomStep"
+            color="primary"
+            track-color="grey-lighten-2"
+            track-fill-color="primary"
+            thumb-label="always"
+            hide-details
+            class="value-zoom-slider"
+          >
+            <template #thumb-label="{ modelValue }">
+              {{ formatValue(modelValue) }}
+            </template>
+          </v-range-slider>
+        </v-col>
+      </v-row>
     </v-card>
 
     <v-card variant="outlined" class="pa-4">
@@ -243,13 +283,78 @@ const activeCalculationHelp = computed(() => buildActiveCalculationHelp({
           {{ profile.kind === 'average' ? 'Moyenne (a…)' : profile.kind === 'threshold' ? 'Seuil (t…)' : 'Autre' }}
         </v-chip>
       </div>
+
+      <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-3">
+        <div v-if="!showAllPercentiles" class="d-flex align-center flex-wrap ga-1">
+          <template v-for="(crumb, idx) in drillBreadcrumb" :key="crumb.level">
+            <v-icon v-if="idx > 0" size="x-small" icon="mdi-chevron-right" class="text-medium-emphasis" />
+            <v-chip
+              size="small"
+              :color="crumb.level === drillLevel ? 'primary' : undefined"
+              :variant="crumb.level === drillLevel ? 'flat' : 'text'"
+              @click="drillTo(crumb.level)"
+            >
+              {{ crumb.label }}
+            </v-chip>
+          </template>
+        </div>
+        <div v-else class="text-body-2 font-weight-medium">
+          Vue détaillée — 127 g-percentiles
+        </div>
+
+        <div class="d-flex align-center ga-2">
+          <v-btn
+            v-if="canDrillDown"
+            size="small"
+            variant="tonal"
+            color="primary"
+            prepend-icon="mdi-magnify-plus-outline"
+            @click="drillDownTop"
+          >
+            Zoomer sur {{ currentDrillableCode }}
+          </v-btn>
+          <v-switch
+            v-model="showAllPercentiles"
+            label="127 g-percentiles"
+            color="primary"
+            density="compact"
+            hide-details
+          />
+        </div>
+      </div>
+
+      <p v-if="showAllPercentiles" class="text-caption text-medium-emphasis mb-2">
+        Les 127 g-percentiles WID sont affichés d'un coup. Décochez « 127 g-percentiles »
+        pour revenir à la vue agrégée avec zoom progressif sur le sommet.
+      </p>
+      <p v-else-if="canDrillDown" class="text-caption text-medium-emphasis mb-2">
+        Cliquez sur la tranche du sommet (<code>{{ currentDrillableCode }}</code>, vers 100 %)
+        pour la re-découper en tranches plus fines. Le fil d'Ariane ci-dessus permet de revenir en arrière.
+      </p>
+      <p v-else class="text-caption text-medium-emphasis mb-2">
+        Niveau le plus fin atteint : tranches de la queue de distribution affichées telles quelles.
+      </p>
+
       <EChart
-        :key="`${populationDensity}-${probabilityDensity}-${chartType}`"
+        :key="`${populationDensity}-${probabilityDensity}-${chartType}-${valueZoomRange[0]}-${valueZoomRange[1]}-${drillLevel}-${showAllPercentiles}`"
         :option="profileOption"
         :loading="loading"
         :error="error"
         height="460px"
+        @chart-click="handleChartClick"
       />
     </v-card>
   </div>
 </template>
+
+<style scoped>
+.value-zoom-slider :deep(.v-slider-track__fill),
+.value-zoom-slider :deep(.v-slider-track__background) {
+  height: 10px;
+  border-radius: 5px;
+}
+
+.value-zoom-slider :deep(.v-slider-thumb__surface) {
+  border-width: 2px;
+}
+</style>

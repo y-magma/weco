@@ -127,9 +127,9 @@ export function getSampleProfile(
     const shape = Math.pow(1 / (1 - p), 1.5)
     let value = baseUnit * scale * yearFactor * (0.15 + shape * 0.02)
 
-    // Bottom of the wealth distribution: net debt for the first brackets.
+    // Bottom brackets: small positive floor (sample stays ≥ 0).
     if (isWealth && rank < 5) {
-      value = -baseUnit * scale * (5 - rank) * 0.03
+      value = baseUnit * scale * yearFactor * (0.002 + rank * 0.004)
     }
     // Thresholds are a touch below the in-bracket average.
     if (kind === 'threshold') {
@@ -139,7 +139,7 @@ export function getSampleProfile(
     return {
       percentile,
       rank,
-      value: Number(value.toFixed(isWealth ? 0 : 0)),
+      value: Number(Math.max(0, value).toFixed(0)),
     }
   })
 

@@ -24,10 +24,11 @@ describe('getSampleProfile', () => {
     expect(profile.unit).toBeDefined()
   })
 
-  it('produces net debt (negative values) at the bottom of the wealth distribution', () => {
-    const bottom = profile.points[0]!
-    expect(bottom.value).not.toBeNull()
-    expect(bottom.value as number).toBeLessThan(0)
+  it('keeps all wealth values strictly positive in sample mode', () => {
+    for (const point of profile.points) {
+      expect(point.value as number).toBeGreaterThanOrEqual(0)
+    }
+    expect(profile.points[0]!.value as number).toBeGreaterThan(0)
   })
 
   it('grows towards the top of the distribution', () => {
