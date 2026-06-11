@@ -15,9 +15,15 @@ export function listDataSources(): DataSource[] {
   return Array.from(registry.values())
 }
 
-export function initializeDataSources(): void {
+export function initializeDataSources(config?: {
+  widApiKey?: string
+  widApiBaseUrl?: string
+}): void {
   if (registry.size > 0) return
-  registerDataSource(createWidDataSource())
+  registerDataSource(createWidDataSource({
+    apiKey: config?.widApiKey,
+    baseUrl: config?.widApiBaseUrl,
+  }))
 }
 
 export function getDefaultDataSource(): DataSource {

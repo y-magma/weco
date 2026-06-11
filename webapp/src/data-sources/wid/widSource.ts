@@ -24,7 +24,11 @@ import {
   getSampleScatter,
   getSampleSeries,
 } from '@src/data-sources/wid/sampleData'
+import { WidClient } from '@src/data-sources/wid/widClient'
 import { WidLocalClient } from '@src/data-sources/wid/widLocalClient'
+
+const DEFAULT_WID_API_BASE_URL =
+  'https://rfap9nitz6.execute-api.eu-west-1.amazonaws.com/prod'
 
 /** Default g-percentile used when reading a single-series WID indicator. */
 const SERIES_PERCENTILE: Record<string, string> = {
@@ -36,7 +40,6 @@ const SERIES_PERCENTILE: Record<string, string> = {
 
 function seriesPercentile(sixlet: string): string {
   if (SERIES_PERCENTILE[sixlet]) return SERIES_PERCENTILE[sixlet]!
-  // Share indicators (s…) default to the top decile, others to the whole pop.
   return sixlet.charAt(0).toLowerCase() === 's' ? 'p90p100' : 'p0p100'
 }
 
@@ -47,15 +50,23 @@ export class WidDataSource implements DataSource {
     'World Inequality Database — distributional national accounts and inequality indicators.'
   readonly website = 'https://wid.world/'
 
-  private client: WidLocalClient
-  private useSampleData = false
+  private readonly mode: 'live' | 'local'
+  private readonly liveClient?: WidClient
+  private readonly localClient?: WidLocalClient
   private lastFetchAt?: string
   private lastError?: string
 
-  constructor(_config?: { baseUrl?: string; apiKey?: string }) {
-    // Data now comes from the local WID dump via the Nitro `/api/wid/*` routes;
-    // no external API nor API key is involved.
-    this.client = new WidLocalClient()
+  constructor(config?: { baseUrl?: string; apiKey?: string }) {
+    if (config?.apiKey?.trim()) {
+      this.mode = 'live'
+      this.liveClient = new WidClient({
+        baseUrl: config.baseUrl ?? DEFAULT_WID_API_BASE_URL,
+        apiKey: config.apiKey,
+      })
+    } else {
+      this.mode = 'local'
+      this.localClient = new WidLocalClient()
+    }
   }
 
   async searchIndicators(params?: SearchIndicatorsParams): Promise<IndicatorMeta[]> {
@@ -72,16 +83,14 @@ export class WidDataSource implements DataSource {
   }
 
   async listCountries(): Promise<CountryOption[]> {
-    if (this.useSampleData) {
-      return WID_COUNTRIES
-    }
-
     const cacheKey = dataSourceCache.buildKey(this.id, 'countries', {})
     const cached = dataSourceCache.get<CountryOption[]>(cacheKey)
     if (cached) return cached
 
     try {
-      const countries = await this.client.listCountries()
+      const countries = this.mode === 'live'
+        ? await this.liveClient!.listCountries()
+        : await this.localClient!.listCountries()
       this.lastFetchAt = new Date().toISOString()
       this.lastError = undefined
       dataSourceCache.set(cacheKey, countries)
@@ -97,7 +106,6 @@ export class WidDataSource implements DataSource {
     const cached = dataSourceCache.get<DataSeries>(cacheKey)
     if (cached) return cached
 
-    // The synthetic stress proxy has no WID counterpart on disk.
     if (params.indicatorId === 'stress_index') {
       const series = getSampleSeries(
         params.countryCode,
@@ -113,7 +121,42 @@ export class WidDataSource implements DataSource {
       getSampleSeries(params.countryCode, params.indicatorId, params.yearFrom, params.yearTo)
 
     try {
-      const points = await this.client.fetchSeries({
+      if (this.mode === 'live') {
+        const years: number[] = []
+        if (params.yearFrom && params.yearTo) {
+          for (let year = params.yearFrom; year <= params.yearTo; year++) {
+            years.push(year)
+          }
+        }
+
+        const rows = await this.liveClient!.fetchData({
+          areas: [params.countryCode],
+          variables: [params.indicatorId],
+          years: years.length ? years : undefined,
+        })
+
+        const indicator = WID_INDICATORS.find((item) => item.id === params.indicatorId)
+        const series = this.liveClient!.mapRowsToSeries(
+          rows,
+          `${params.countryCode}-${params.indicatorId}`,
+          `${params.countryCode} · ${indicator?.label ?? params.indicatorId}`,
+          params.yearFrom,
+          params.yearTo,
+        )
+
+        if (!series.points.length) {
+          const fallback = sampleSeries()
+          dataSourceCache.set(cacheKey, fallback)
+          return fallback
+        }
+
+        this.lastFetchAt = new Date().toISOString()
+        this.lastError = undefined
+        dataSourceCache.set(cacheKey, series)
+        return series
+      }
+
+      const points = await this.localClient!.fetchSeries({
         country: params.countryCode,
         sixlet: params.indicatorId,
         age: '992',
@@ -143,7 +186,6 @@ export class WidDataSource implements DataSource {
       return series
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : 'Unknown error'
-      // Never break the dashboard on a local read hiccup.
       return sampleSeries()
     }
   }
@@ -162,16 +204,15 @@ export class WidDataSource implements DataSource {
     return distribution
   }
 
-  /** True when the source has no API key and serves offline sample data. */
+  /** True when the last profile load fell back to synthetic sample data. */
   isSampleMode(): boolean {
-    return this.useSampleData
+    return false
   }
 
-  /**
-   * Fetch a WID variable across the 127 g-percentiles for a fixed
-   * country / year / age / pop. Falls back to sample data when no API key is
-   * configured or when the live request fails / returns nothing.
-   */
+  usesLiveApi(): boolean {
+    return this.mode === 'live'
+  }
+
   async fetchPercentileProfile(params: FetchProfileParams): Promise<PercentileProfile> {
     const cacheKey = dataSourceCache.buildKey(this.id, 'profile', params)
     const cached = dataSourceCache.get<PercentileProfile>(cacheKey)
@@ -186,20 +227,22 @@ export class WidDataSource implements DataSource {
         params.pop,
       )
 
-    if (this.useSampleData) {
-      const profile = sample()
-      dataSourceCache.set(cacheKey, profile)
-      return profile
-    }
-
     try {
-      const rows = await this.client.fetchProfile({
-        country: params.countryCode,
-        sixlet: params.variable,
-        age: params.age,
-        pop: params.pop,
-        year: params.year,
-      })
+      const rows = this.mode === 'live'
+        ? await this.liveClient!.fetchProfileData({
+            area: params.countryCode,
+            sixlet: params.variable,
+            age: params.age,
+            pop: params.pop,
+            year: params.year,
+          })
+        : await this.localClient!.fetchProfile({
+            country: params.countryCode,
+            sixlet: params.variable,
+            age: params.age,
+            pop: params.pop,
+            year: params.year,
+          })
 
       if (!rows.length) {
         return sample()
@@ -232,7 +275,6 @@ export class WidDataSource implements DataSource {
       return profile
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : 'Unknown error'
-      // Graceful degradation: never break the UI on a live API hiccup.
       return sample()
     }
   }
@@ -264,11 +306,9 @@ export class WidDataSource implements DataSource {
   }
 }
 
-export function createWidDataSource(_config?: {
+export function createWidDataSource(config?: {
   baseUrl?: string
   apiKey?: string
 }): WidDataSource {
-  // Config is accepted for backward compatibility but unused: data is read
-  // from the local WID dump through the Nitro `/api/wid/*` routes.
-  return new WidDataSource()
+  return new WidDataSource(config)
 }

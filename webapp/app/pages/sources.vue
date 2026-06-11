@@ -3,12 +3,16 @@ definePageMeta({
   layout: 'default',
 })
 
+const runtimeConfig = useRuntimeConfig()
 const { sources } = useDataSources()
 
 const sourceStatuses = computed(() =>
   sources.value.map((source) => ({
     ...source.getStatus(),
     usingSampleData: false,
+    usingLiveApi: 'usesLiveApi' in source && typeof source.usesLiveApi === 'function'
+      ? source.usesLiveApi()
+      : Boolean(runtimeConfig.public.widApiKey),
   })),
 )
 </script>
@@ -59,9 +63,19 @@ const sourceStatuses = computed(() =>
               :title="source.lastFetchAt ? `Last fetch: ${source.lastFetchAt}` : 'Last fetch: not yet'"
             />
             <v-list-item
+              v-if="source.usingLiveApi"
+              prepend-icon="mdi-cloud-check-outline"
+              title="Live WID.world API (NUXT_PUBLIC_WID_API_KEY)"
+            />
+            <v-list-item
+              v-else
+              prepend-icon="mdi-folder-table-outline"
+              title="Local WID dump (webapp/data/WID_DATA)"
+            />
+            <v-list-item
               v-if="source.usingSampleData"
               prepend-icon="mdi-flask-outline"
-              title="Using sample data (local WID dump unavailable)"
+              title="Using sample data (no live data for last query)"
             />
             <v-list-item
               v-if="source.lastError"

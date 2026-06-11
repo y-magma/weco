@@ -1,5 +1,6 @@
 import { fetchJson } from '@src/http/fetchJson'
 import type { DataSeries, SeriesPoint } from '@src/domain/types'
+import { buildWidApiKeyHeader } from '@src/data-sources/wid/widApiKey'
 import { buildGPercentiles, parsePercentileRank } from '@src/data-sources/wid/percentiles'
 import { buildVariableCode } from '@src/data-sources/wid/widCodes'
 
@@ -29,20 +30,33 @@ export interface WidProfileRow {
   value: number
 }
 
-function base64Encode(input: string): string {
-  if (typeof btoa === 'function') return btoa(input)
-  // Fallback for SSR / Node contexts.
-  const g = globalThis as unknown as { Buffer?: { from(s: string): { toString(enc: string): string } } }
-  if (g.Buffer) return g.Buffer.from(input).toString('base64')
-  return input
-}
-
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = []
   for (let i = 0; i < items.length; i += size) {
     out.push(items.slice(i, i + size))
   }
   return out
+}
+
+/** Normalize a WID value entry (tuple or {y,v} object) to [year, value]. */
+function parseWidValueEntry(entry: unknown): [number, number] | null {
+  if (Array.isArray(entry) && entry.length >= 2) {
+    if (entry[0] == null || entry[1] == null) return null
+    const year = Number(entry[0])
+    const value = Number(entry[1])
+    if (Number.isFinite(year) && Number.isFinite(value)) return [year, value]
+    return null
+  }
+  if (entry && typeof entry === 'object') {
+    const record = entry as { y?: unknown; v?: unknown; year?: unknown; value?: unknown }
+    const yearRaw = record.y ?? record.year
+    const valueRaw = record.v ?? record.value
+    if (yearRaw == null || valueRaw == null) return null
+    const year = Number(yearRaw)
+    const value = Number(valueRaw)
+    if (Number.isFinite(year) && Number.isFinite(value)) return [year, value]
+  }
+  return null
 }
 
 /**
@@ -73,11 +87,13 @@ export function parseProfileResponse(
     for (const countryEntry of countryEntries) {
       if (!countryEntry || typeof countryEntry !== 'object') continue
       for (const payload of Object.values(countryEntry as Record<string, unknown>)) {
-        const values = (payload as { values?: [number, number][] })?.values
+        const values = (payload as { values?: unknown[] })?.values
         if (!Array.isArray(values)) continue
-        const match = values.find((pair) => Number(pair?.[0]) === year)
-        if (match && typeof match[1] === 'number' && Number.isFinite(match[1])) {
-          rows.push({ percentile, rank, year, value: match[1] })
+        for (const entry of values) {
+          const parsed = parseWidValueEntry(entry)
+          if (!parsed || parsed[0] !== year) continue
+          rows.push({ percentile, rank, year, value: parsed[1] })
+          break
         }
       }
     }
@@ -88,21 +104,19 @@ export function parseProfileResponse(
 
 export class WidClient {
   private readonly baseUrl: string
-  private readonly apiKey?: string
+  private readonly apiKeyHeader?: string
 
   constructor(config: WidClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '')
-    this.apiKey = config.apiKey
+    this.apiKeyHeader = buildWidApiKeyHeader(config.apiKey)
   }
 
   private headers(): Record<string, string> {
     const headers: Record<string, string> = {
       Accept: 'application/json',
     }
-    if (this.apiKey) {
-      // The WID webservice expects the (public) API key base64-encoded,
-      // matching the official `wid` R package.
-      headers['x-api-key'] = base64Encode(this.apiKey)
+    if (this.apiKeyHeader) {
+      headers['x-api-key'] = this.apiKeyHeader
     }
     return headers
   }

@@ -55,7 +55,12 @@ export default defineNuxtConfig({
     // (`WID_data_<AREA>.csv`). Defaults to `webapp/data/WID_DATA` (a symlink to
     // the full dump). Override with the `WID_DATA_DIR` env var.
     widDataDir: process.env.WID_DATA_DIR || '',
-    public: {},
+    public: {
+      widApiKey: process.env.NUXT_PUBLIC_WID_API_KEY || '',
+      widApiBaseUrl:
+        process.env.NUXT_PUBLIC_WID_API_BASE_URL
+        || 'https://rfap9nitz6.execute-api.eu-west-1.amazonaws.com/prod',
+    },
   },
 
   app: {

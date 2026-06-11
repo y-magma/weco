@@ -45,8 +45,10 @@ const {
       class="mb-4"
       icon="mdi-flask-outline"
     >
-      Données d'exemple : le dump local WID.world est introuvable pour ces
-      paramètres. Vérifiez le dossier <code>webapp/data/WID_DATA</code>.
+      Données d'exemple : aucune donnée live trouvée pour ces paramètres.
+      Renseignez <code>NUXT_PUBLIC_WID_API_KEY</code> dans <code>.env</code>
+      (clé hex du package R <code>wid</code>) ou vérifiez le dump local
+      <code>webapp/data/WID_DATA</code>.
     </v-alert>
 
     <v-card variant="outlined" class="mb-6 pa-4">

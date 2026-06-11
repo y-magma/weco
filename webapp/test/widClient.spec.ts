@@ -51,4 +51,15 @@ describe('parseProfileResponse', () => {
     } as unknown as Record<string, unknown>
     expect(parseProfileResponse(broken, 2021)).toEqual([])
   })
+
+  it('accepts { y, v } objects from the live webservice', () => {
+    const live = {
+      ahweal_p50p51_992_j: [
+        { FR: { values: [{ y: 2020, v: 50000 }, { y: 2021, v: 52000 }] } },
+      ],
+    } as Record<string, unknown>
+    const rows = parseProfileResponse(live, 2021)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.value).toBe(52000)
+  })
 })

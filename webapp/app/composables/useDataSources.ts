@@ -9,8 +9,13 @@ import type { DataSource } from '@src/data-sources/Source'
 let initialized = false
 
 export function useDataSources() {
+  const runtimeConfig = useRuntimeConfig()
+
   if (!initialized) {
-    initializeDataSources()
+    initializeDataSources({
+      widApiKey: runtimeConfig.public.widApiKey || undefined,
+      widApiBaseUrl: runtimeConfig.public.widApiBaseUrl || undefined,
+    })
     initialized = true
   }
 
