@@ -9,13 +9,8 @@ import type { DataSource } from '@src/data-sources/Source'
 let initialized = false
 
 export function useDataSources() {
-  const config = useRuntimeConfig()
-
   if (!initialized) {
-    initializeDataSources({
-      widBaseUrl: config.public.widApiBaseUrl,
-      widApiKey: config.public.widApiKey || undefined,
-    })
+    initializeDataSources()
     initialized = true
   }
 
@@ -23,13 +18,7 @@ export function useDataSources() {
 
   const defaultSource = computed(() => getDefaultDataSource())
 
-  const refreshWidSource = () => {
-    const wid = createWidDataSource({
-      baseUrl: config.public.widApiBaseUrl,
-      apiKey: config.public.widApiKey || undefined,
-    })
-    return wid
-  }
+  const refreshWidSource = () => createWidDataSource()
 
   return {
     sources,

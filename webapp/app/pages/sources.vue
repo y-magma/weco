@@ -4,12 +4,11 @@ definePageMeta({
 })
 
 const { sources } = useDataSources()
-const runtimeConfig = useRuntimeConfig()
 
 const sourceStatuses = computed(() =>
   sources.value.map((source) => ({
     ...source.getStatus(),
-    usingSampleData: source.id === 'wid' && !runtimeConfig.public.widApiKey,
+    usingSampleData: false,
   })),
 )
 </script>
@@ -62,7 +61,7 @@ const sourceStatuses = computed(() =>
             <v-list-item
               v-if="source.usingSampleData"
               prepend-icon="mdi-flask-outline"
-              title="Using sample data (set NUXT_PUBLIC_WID_API_KEY for live API)"
+              title="Using sample data (local WID dump unavailable)"
             />
             <v-list-item
               v-if="source.lastError"

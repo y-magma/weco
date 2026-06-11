@@ -81,8 +81,8 @@ const activeCalculationHelp = computed(() => buildActiveCalculationHelp({
       class="mb-4"
       icon="mdi-flask-outline"
     >
-      Données d'exemple (hors-ligne). Renseignez <code>NUXT_PUBLIC_WID_API_KEY</code>
-      dans <code>.env</code> pour activer les données live WID.world.
+      Données d'exemple : le dump local WID.world est introuvable pour ces
+      paramètres. Vérifiez le dossier <code>webapp/data/WID_DATA</code>.
     </v-alert>
 
     <v-card variant="outlined" class="mb-6 pa-4">

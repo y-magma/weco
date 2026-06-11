@@ -51,11 +51,11 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
-    public: {
-      widApiBaseUrl:
-        'https://rfap9nitz6.execute-api.eu-west-1.amazonaws.com/prod',
-      widApiKey: '',
-    },
+    // Server-only: directory holding the local WID.world dump
+    // (`WID_data_<AREA>.csv`). Defaults to `webapp/data/WID_DATA` (a symlink to
+    // the full dump). Override with the `WID_DATA_DIR` env var.
+    widDataDir: process.env.WID_DATA_DIR || '',
+    public: {},
   },
 
   app: {

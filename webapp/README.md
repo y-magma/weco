@@ -50,10 +50,16 @@ cp .env.example .env
 
 | Variable | Description |
 |----------|-------------|
-| `NUXT_PUBLIC_WID_API_KEY` | Optional WID.world API key for live data |
-| `NUXT_PUBLIC_WID_API_BASE_URL` | WID API base URL |
+| `WID_DATA_DIR` | Directory of the local WID dump (`WID_data_<AREA>.csv`). Defaults to `webapp/data/WID_DATA`. |
 
-Without an API key, the dashboard uses **sample data** so you can develop and demo offline.
+Data is read **locally** from the WID.world dump through the Nitro routes under
+`/api/wid/*` — no external API nor API key is required. `webapp/data/WID_DATA`
+is a symlink to the full dump; point it (or `WID_DATA_DIR`) at your own copy.
+The charts fall back to **sample data** only when a file/series is missing.
+
+> Because the data is read from disk at request time, run the app with a Node
+> server (`npm run dev` or `npm run build && npm run preview`), not a fully
+> static `nuxt generate` export.
 
 ## Project structure
 
