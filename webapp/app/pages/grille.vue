@@ -45,8 +45,7 @@ onMounted(async () => {
         <h1 class="text-h4 font-weight-bold mb-1">Grille de visualisations</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
           Composez une grille de panneaux en parallèle — séries temporelles,
-          nuages de variables ou profils sur les g-percentiles. Deux colonnes,
-          lignes illimitées.
+          nuages de variables ou profils sur les g-percentiles. 
         </p>
       </v-col>
     </v-row>

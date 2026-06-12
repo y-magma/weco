@@ -451,10 +451,6 @@ function applyPdfDensityAxisExtent(
   }
 }
 
-function formatBandInterval(i: number, k: number): string {
-  return `]${formatRankPercent(i)} %, ${formatRankPercent(k)} %]`
-}
-
 /**
  * Build band items for each `pᵢpₖ` bracket on ]i %, k %].
  * Default view: X = rank span, Y = value. Population-density view: X = value, Y = rank span.
@@ -1050,15 +1046,12 @@ export function buildProfileOption(
       tooltip: {
         trigger: 'item',
         formatter: (params) => {
-          const p = params as { name?: string, data?: { i?: number, k?: number, value?: [number, number, number] } }
+          const p = params as { name?: string, data?: { value?: [number, number, number] } }
           const band = p?.data
-          const i = band?.i
-          const k = band?.k
           const yVal = populationDensity ? band?.value?.[0] : band?.value?.[2]
           const shown = yVal === null || yVal === undefined ? '—' : yVal.toLocaleString('fr-FR')
           const code = p?.name ? `${p.name}<br/>` : ''
-          const interval = i !== undefined && k !== undefined ? formatBandInterval(i, k) : ''
-          return `${code}${interval}<br/>${valueAxisName}: ${shown}`
+          return `${code}${valueAxisName}: ${shown}`
         },
       },
       xAxis,
