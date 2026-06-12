@@ -15,6 +15,8 @@ import {
 export interface WidSeriesStateOptions {
   countries?: Ref<CountryOption[]>
   initialVariable?: string
+  /** Initial country codes when used in a multi-panel grid. */
+  initialCountryCodes?: string[]
 }
 
 const PERCENTILE_OPTIONS = [
@@ -26,13 +28,13 @@ const PERCENTILE_OPTIONS = [
 
 /**
  * Time series toolbox state: one WID variable over years at a fixed percentile.
- * See spec/version1.md (graphe #1 — évolution dans le temps).
+ * Supports overlaying several countries on the same chart.
  */
 export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
   const { defaultSource } = useDataSources()
   const sharedCountries = options.countries
 
-  const countryCode = ref('FR')
+  const countryCodes = ref<string[]>(options.initialCountryCodes ?? ['FR'])
   const variable = ref(options.initialVariable ?? 'ahweal')
   const age = ref(WID_DEFAULT_AGE)
   const pop = ref(WID_DEFAULT_POP)
@@ -41,10 +43,11 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
 
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const loadWarning = ref<string | null>(null)
 
   const localCountries = ref<CountryOption[]>([])
   const countries = sharedCountries ?? localCountries
-  const series = ref<DataSeries | null>(null)
+  const seriesList = ref<DataSeries[]>([])
   const chartOption = ref<EChartsOption | null>(null)
 
   const variables = WID_PROFILE_VARIABLES
@@ -56,33 +59,88 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
 
   const variableMeta = computed(() => findWidVariable(variable.value))
 
+  const countryLabel = (code: string) =>
+    countries.value.find((item) => item.code === code)?.label ?? code
+
+  const yearCountLabel = computed(() => {
+    const counts = seriesList.value.map((series) => series.points.length)
+    if (counts.length === 0) return ''
+    const min = Math.min(...counts)
+    const max = Math.max(...counts)
+    return min === max ? `${max} années` : `${min}–${max} années`
+  })
+
   const rebuild = () => {
-    if (!series.value) {
+    if (seriesList.value.length === 0) {
       chartOption.value = null
       return
     }
     const meta = variableMeta.value
-    const title = `${meta?.label ?? variable.value} — ${countryCode.value}`
-    chartOption.value = buildTimeSeriesOption([series.value], title, {
+    const title = meta?.label ?? variable.value
+    chartOption.value = buildTimeSeriesOption(seriesList.value, title, {
       logScaleY: logScaleY.value,
     })
   }
 
   const load = async () => {
+    const codes = countryCodes.value.length > 0 ? countryCodes.value : ['FR']
+    if (countryCodes.value.length === 0) {
+      countryCodes.value = codes
+    }
+
     loading.value = true
     error.value = null
+    loadWarning.value = null
+
     try {
-      series.value = await widSource().fetchVariableTimeSeries({
-        countryCode: countryCode.value,
+      const source = widSource()
+      const params = {
         variable: variable.value,
         age: age.value,
         pop: pop.value,
         percentile: percentile.value,
+      }
+
+      const results = await Promise.allSettled(
+        codes.map((countryCode) =>
+          source.fetchVariableTimeSeries({ ...params, countryCode }),
+        ),
+      )
+
+      const loaded: DataSeries[] = []
+      const failures: string[] = []
+
+      results.forEach((result, index) => {
+        const code = codes[index]!
+        if (result.status === 'fulfilled') {
+          loaded.push({
+            ...result.value,
+            label: countryLabel(code),
+          })
+        } else {
+          const message = result.reason instanceof Error
+            ? result.reason.message
+            : 'Échec du chargement'
+          failures.push(`${countryLabel(code)} : ${message}`)
+        }
       })
+
+      seriesList.value = loaded
+
+      if (loaded.length === 0) {
+        error.value = failures[0] ?? 'Échec du chargement des séries'
+        chartOption.value = null
+        return
+      }
+
+      if (failures.length > 0) {
+        loadWarning.value = failures.join(' · ')
+      }
+
       rebuild()
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Échec du chargement de la série'
-      series.value = null
+      error.value = err instanceof Error ? err.message : 'Échec du chargement des séries'
+      seriesList.value = []
       chartOption.value = null
     } finally {
       loading.value = false
@@ -100,11 +158,11 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
     await load()
   }
 
-  watch([countryCode, variable, age, pop, percentile], load)
+  watch([countryCodes, variable, age, pop, percentile], load, { deep: true })
   watch(logScaleY, rebuild)
 
   return {
-    countryCode,
+    countryCodes,
     variable,
     age,
     pop,
@@ -117,9 +175,11 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
     percentileOptions,
     loading,
     error,
-    series,
+    loadWarning,
+    seriesList,
     chartOption,
     variableMeta,
+    yearCountLabel,
     load,
     init,
   }

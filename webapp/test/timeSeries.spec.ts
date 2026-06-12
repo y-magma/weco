@@ -37,4 +37,22 @@ describe('buildTimeSeriesOption', () => {
     expect(data[0]).toBeNull()
     expect(data[1]).toBe(100)
   })
+
+  it('renders one line per country with a legend', () => {
+    const france: DataSeries = {
+      id: 'FR',
+      label: 'France',
+      points: [{ year: 2020, value: 100 }],
+    }
+    const usa: DataSeries = {
+      id: 'US',
+      label: 'États-Unis',
+      points: [{ year: 2020, value: 200 }],
+    }
+    const option = buildTimeSeriesOption([france, usa], 'Patrimoine net moyen')
+    const echartsSeries = option.series as { name: string, type: string }[]
+    expect(echartsSeries).toHaveLength(2)
+    expect(echartsSeries.map((item) => item.name)).toEqual(['France', 'États-Unis'])
+    expect((option.legend as { show: boolean }).show).toBe(true)
+  })
 })

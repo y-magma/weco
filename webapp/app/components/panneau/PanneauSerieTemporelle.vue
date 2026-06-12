@@ -27,10 +27,11 @@ if (!countries) {
 }
 
 const initialVariable = WID_PROFILE_VARIABLES[props.panelIndex ?? 0]?.sixlet ?? 'ahweal'
-const state = createWidSeriesState({ countries, initialVariable })
+const initialCountryCodes = props.panelIndex % 2 === 1 ? ['FR', 'US'] : ['FR']
+const state = createWidSeriesState({ countries, initialVariable, initialCountryCodes })
 
 const {
-  countryCode,
+  countryCodes,
   variable,
   age,
   pop,
@@ -42,9 +43,11 @@ const {
   percentileOptions,
   loading,
   error: panelError,
-  series,
+  loadWarning,
+  seriesList,
   chartOption,
   variableMeta,
+  yearCountLabel,
   load,
 } = state
 
@@ -66,15 +69,16 @@ onMounted(() => {
       <v-row dense class="panel-filters-row align-start">
         <v-col class="panel-filters-row__item">
           <v-autocomplete
-            v-model="countryCode"
+            v-model="countryCodes"
             :items="countries"
             item-title="label"
             item-value="code"
             label="Pays"
             prepend-inner-icon="mdi-earth"
-            placeholder="Rechercher un pays…"
-            clearable
-            auto-select-first
+            placeholder="Comparer plusieurs pays…"
+            multiple
+            chips
+            closable-chips
             density="compact"
             hide-details
           />
@@ -173,20 +177,33 @@ onMounted(() => {
     </PanneauFiltersShell>
 
     <v-card variant="outlined" class="pa-3">
+      <v-alert
+        v-if="loadWarning"
+        type="warning"
+        variant="tonal"
+        density="compact"
+        class="mb-3"
+      >
+        {{ loadWarning }}
+      </v-alert>
+
       <div class="d-flex flex-wrap ga-2 mb-2">
-        <v-chip v-if="series" size="x-small" color="primary" variant="tonal">
+        <v-chip v-if="seriesList.length" size="x-small" color="primary" variant="tonal">
           Source : WID.world
         </v-chip>
         <v-chip v-if="variableMeta?.unit" size="x-small" variant="tonal">
           Unité : {{ variableMeta.unit }}
         </v-chip>
-        <v-chip v-if="series?.points.length" size="x-small" variant="tonal">
-          {{ series.points.length }} années
+        <v-chip v-if="seriesList.length" size="x-small" variant="tonal">
+          {{ seriesList.length }} pays
+        </v-chip>
+        <v-chip v-if="yearCountLabel" size="x-small" variant="tonal">
+          {{ yearCountLabel }}
         </v-chip>
       </div>
 
       <EChart
-        :key="`${logScaleY}-${variable}-${percentile}`"
+        :key="`${logScaleY}-${variable}-${percentile}-${countryCodes.join(',')}`"
         :option="chartOption"
         :loading="loading"
         :error="panelError"

@@ -94,7 +94,7 @@ Gabarit commun à toutes les pages :
 |---------|------|
 | `useDataSources.ts` | Initialise le registre WID (clé API depuis `runtimeConfig`), expose `defaultSource` |
 | `useWidProfile.ts` | **`createWidProfileState()`** — profil sur g-percentiles : filtres, drill-down, option ECharts |
-| `useWidSeries.ts` | **`createWidSeriesState()`** — série temporelle : variable × année à percentile fixé |
+| `useWidSeries.ts` | **`createWidSeriesState()`** — série temporelle : plusieurs pays superposables, variable × année à percentile fixé, légende ECharts |
 | `useWidScatter.ts` | **`createWidScatterState()`** — nuage 2 variables joint par percentile |
 | `panneauTypes.ts` | Catalogue des 3 types de panneau (id, icône, titre, route) |
 | `useSpec.ts` | Blocs Markdown pour `/spec` |
@@ -113,7 +113,7 @@ Organisés par dossier ; Nuxt les auto-importe sans préfixe de chemin.
 | Fichier | Rôle |
 |---------|------|
 | `PanneauVisualisation.vue` | Profil population : filtres, réglages, drill-down, graphe ECharts |
-| `PanneauSerieTemporelle.vue` | Série temporelle : pays, variable, percentile, échelle log |
+| `PanneauSerieTemporelle.vue` | Série temporelle : sélection multi-pays, variable, percentile, échelle log, légende |
 | `PanneauNuageVariables.vue` | Nuage 2 variables : pays, année, variables X/Y, échelles log |
 | `PanneauFiltersShell.vue` | Enveloppe repliable des filtres (grille) : titre du type + chevron |
 | `PanneauAddTile.vue` | Tuile « + » ; dialogue modal pour choisir le type de panneau |
@@ -196,7 +196,7 @@ Sans clé API valide, les pages affichent une erreur explicite (pas de données 
 |---------|------|
 | `profile.ts` | **`buildProfileOption()`** — profil 127 g-percentiles : barres/ligne/nuage, log, densités, Lorenz, zoom |
 | `scatterProfiles.ts` | **`buildProfileScatterOption()`** — nuage 2 variables, visualMap rang, axes compacts |
-| `timeSeries.ts` | **`buildTimeSeriesOption()`** — courbe temporelle, axes compacts, option log |
+| `timeSeries.ts` | **`buildTimeSeriesOption()`** — une ou plusieurs séries comparées, légende, axes compacts, option log |
 | `drilldown.ts` | Drill-down hiérarchique sur le haut de la distribution |
 | `axisFormat.ts` | **`formatCompactAxisValue()`** — libellés WID : 1000, 10k, 1M, 1B… |
 | `profileHelp.ts` | Textes d'aide selon les options actives du profil |
@@ -233,8 +233,8 @@ panneau/temps.vue
   │  provide('widCountries')
   └─ PanneauSerieTemporelle.vue
        └─ createWidSeriesState({ countries })
-            ├─ widSource.fetchVariableTimeSeries()
-            └─ buildTimeSeriesOption([series], title, { logScaleY })
+            ├─ widSource.fetchVariableTimeSeries() × N pays (Promise.allSettled)
+            └─ buildTimeSeriesOption(seriesList, title, { logScaleY })
        └─ EChart.vue
 ```
 
@@ -285,7 +285,7 @@ grille.vue
 ## 5. Tests et scripts
 
 ```bash
-npm test                 # Vitest — logique pure (hors conformité live)
+npm test                 # Vitest — logique pure (~117 tests, hors conformité live)
 npm run test:conformance # API vs dump CSV (réseau + clé + dump)
 npm run wid:conformance  # Rapport CLI conformité
 npm run wid:compare      # Comparaison percentile par percentile
@@ -298,6 +298,8 @@ npm run wid:compare      # Comparaison percentile par percentile
 | `widClient.spec.ts` | Parsing réponses API |
 | `profileChart.spec.ts` | `buildProfileOption` |
 | `scatterProfiles.spec.ts` | `buildProfileScatterOption` |
+| `timeSeries.spec.ts` | `buildTimeSeriesOption` (multi-séries, log) |
+| `joinProfiles.spec.ts` | `joinProfilesByPercentile` |
 | `axisFormat.spec.ts` | `formatCompactAxisValue` |
 | `profileHelp.spec.ts` | Textes d'aide contextuels |
 | `drilldown.spec.ts` | Zoom hiérarchique |
@@ -338,3 +340,24 @@ npm run lint         # ESLint
 3. Ajouter une page sous `app/pages/panneau/` et la route dans `nitro.prerender.routes`
 4. Brancher le type dans `grille.vue` et le dialogue de `PanneauAddTile.vue`
 5. Ajouter un `build*Option()` dans `src/charts/` et les tests Vitest associés
+
+---
+
+## 9. Valeurs par défaut et catalogue V1
+
+Certaines valeurs sont **figées dans le code** (périmètre V1, pas encore externalisées) :
+
+| Zone | Valeurs | Fichier principal |
+|------|---------|-------------------|
+| Variables exposées | `ahweal`, `thweal`, `aptinc`, `tptinc` | `src/data-sources/wid/widCodes.ts` |
+| Âge / population par défaut | `992` / `j` | `WID_DEFAULT_AGE`, `WID_DEFAULT_POP` |
+| Pays / année au démarrage | `FR`, `2021` | composables `createWid*State()` |
+| Percentile série temporelle | `p50p51` (médiane) | `useWidSeries.ts`, `widSource.ts` |
+| Couleurs des graphes | palette ECharts fixe | `timeSeries.ts`, `profile.ts`, `scatterProfiles.ts` |
+| URL API (secours) | endpoint AWS prod | `nuxt.config.ts`, `widSource.ts` |
+
+**Dynamiques** (non figées) : liste des pays (`listCountries()`), années disponibles
+(`listProfileYears()`), données des graphiques (API live).
+
+Les panneaux en **grille** varient légèrement les défauts selon `panelIndex`
+(variable initiale, paire FR+US pour la série temporelle du 2ᵉ panneau).

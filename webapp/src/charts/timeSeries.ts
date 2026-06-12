@@ -23,16 +23,18 @@ export function buildTimeSeriesOption(
     title: { text: title, left: 'center', textStyle: { fontSize: 14 } },
     tooltip: {
       trigger: 'axis',
-      valueFormatter: (value) => `${value}`,
+      valueFormatter: (value) =>
+        value === null || value === undefined ? '—' : formatCompactAxisValue(Number(value)),
     },
     legend: {
+      show: seriesList.length > 0,
       top: 28,
       type: 'scroll',
     },
     grid: {
       left: 48,
       right: 24,
-      top: 72,
+      top: seriesList.length > 1 ? 88 : 72,
       bottom: 64,
     },
     toolbox: {

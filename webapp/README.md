@@ -1,14 +1,18 @@
 # Boîte à outils de visualisations
 
-Nuxt + Vuetify + TypeScript SPA pour explorer les distributions WID.world
-(127 g-percentiles) : profils, grilles multi-panneaux, import CSV.
+Nuxt + Vuetify + TypeScript SPA pour explorer les données WID.world :
+trois types de visualisation (profil sur les g-percentiles, série temporelle,
+nuage de 2 variables), grilles composables et import CSV.
 
 ## Features
 
 - Page d'accueil et navigation responsive (Vuetify)
 - Couche de sources de données extensible avec adaptateur **WID.world**
-- Panneau de visualisation : barres / ligne / nuage, échelles log, drill-down, densités
-- Grille de visualisations composable (N panneaux en parallèle)
+- **Hub `/panneau`** : trois boîtes à outils (population, temps, variables)
+- **Profil population** : bandes / ligne / nuage, échelles log, drill-down, densités, Lorenz
+- **Série temporelle** : comparaison multi-pays sur une même variable, légende, axes compacts
+- **Nuage 2 variables** : jointure par percentile, jauge de rang, axes compacts
+- **Grille** : panneaux de types mixtes, filtres repliables, tuile « + » avec dialogue de choix
 - Import CSV avec aperçu et série temporelle
 - Rendu de la spécification Markdown (`/spec`)
 
@@ -28,7 +32,7 @@ Unit tests run with [Vitest](https://vitest.dev/) on the pure logic of the WID
 data layer and chart builders (no network, browser, or Vue component needed).
 
 ```bash
-npm test            # single run
+npm test            # single run (~117 tests, excludes live conformance)
 npm run test:watch  # watch mode
 ```
 

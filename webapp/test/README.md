@@ -7,7 +7,7 @@ navigateur ou composant Vue : uniquement des fonctions déterministes.
 ## Lancer les tests
 
 ```bash
-npm test              # exécution unique (CI), hors conformité live
+npm test              # exécution unique (~117 tests, CI), hors conformité live
 npm run test:watch    # mode watch
 npm run test:conformance  # API vs dump CSV (clé + dump requis)
 ```
@@ -38,7 +38,7 @@ Cible : `src/charts/drilldown.ts`.
 ### `axisFormat.spec.ts` — formatage compact des axes
 Cible : `formatCompactAxisValue` (`src/charts/axisFormat.ts`).
 
-### `timeSeries.spec.ts` — courbe temporelle
+### `timeSeries.spec.ts` — série temporelle (mono / multi-pays, log)
 Cible : `buildTimeSeriesOption` (`src/charts/timeSeries.ts`).
 
 ### `scatterProfiles.spec.ts` — nuage 2 variables
