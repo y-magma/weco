@@ -4,7 +4,9 @@ import type {
   DistributionSeries,
   FetchDistributionParams,
   FetchProfileParams,
+  ListProfileYearsParams,
   FetchSeriesParams,
+  FetchVariableTimeSeriesParams,
   IndicatorMeta,
   PercentilePoint,
   PercentileProfile,
@@ -14,18 +16,16 @@ import { findWidVariable, measureKind } from '@src/data-sources/wid/widCodes'
 import type { DataSource, DataSourceStatus } from '@src/data-sources/Source'
 import { dataSourceCache } from '@src/data-sources/cache'
 import {
-  WID_COUNTRIES,
   WID_INDICATORS,
-  WID_STRESS_PROXY_INDICATORS,
 } from '@src/data-sources/wid/indicators'
 import {
-  getSampleDistribution,
-  getSampleProfile,
-  getSampleScatter,
-  getSampleSeries,
-} from '@src/data-sources/wid/sampleData'
+  WID_EMPTY_COUNTRIES_ERROR,
+  WID_NO_API_KEY_ERROR,
+  widApiRequestError,
+  widEmptyProfileError,
+  widEmptySeriesError,
+} from '@src/data-sources/wid/widErrors'
 import { WidClient } from '@src/data-sources/wid/widClient'
-import { WidLocalClient } from '@src/data-sources/wid/widLocalClient'
 
 const DEFAULT_WID_API_BASE_URL =
   'https://rfap9nitz6.execute-api.eu-west-1.amazonaws.com/prod'
@@ -50,32 +50,33 @@ export class WidDataSource implements DataSource {
     'World Inequality Database — distributional national accounts and inequality indicators.'
   readonly website = 'https://wid.world/'
 
-  private readonly mode: 'live' | 'local'
   private readonly liveClient?: WidClient
-  private readonly localClient?: WidLocalClient
   private lastFetchAt?: string
   private lastError?: string
 
   constructor(config?: { baseUrl?: string; apiKey?: string }) {
     if (config?.apiKey?.trim()) {
-      this.mode = 'live'
       this.liveClient = new WidClient({
         baseUrl: config.baseUrl ?? DEFAULT_WID_API_BASE_URL,
         apiKey: config.apiKey,
       })
-    } else {
-      this.mode = 'local'
-      this.localClient = new WidLocalClient()
     }
   }
 
+  private requireLiveClient(): WidClient {
+    if (!this.liveClient) {
+      this.lastError = WID_NO_API_KEY_ERROR
+      throw new Error(WID_NO_API_KEY_ERROR)
+    }
+    return this.liveClient
+  }
+
   async searchIndicators(params?: SearchIndicatorsParams): Promise<IndicatorMeta[]> {
-    const all = [...WID_INDICATORS, ...WID_STRESS_PROXY_INDICATORS]
     const query = params?.query?.toLowerCase().trim()
 
-    if (!query) return all
+    if (!query) return WID_INDICATORS
 
-    return all.filter(
+    return WID_INDICATORS.filter(
       (indicator) =>
         indicator.label.toLowerCase().includes(query)
         || indicator.id.toLowerCase().includes(query),
@@ -85,19 +86,27 @@ export class WidDataSource implements DataSource {
   async listCountries(): Promise<CountryOption[]> {
     const cacheKey = dataSourceCache.buildKey(this.id, 'countries', {})
     const cached = dataSourceCache.get<CountryOption[]>(cacheKey)
-    if (cached) return cached
+    if (cached?.length) return cached
+
+    const client = this.requireLiveClient()
 
     try {
-      const countries = this.mode === 'live'
-        ? await this.liveClient!.listCountries()
-        : await this.localClient!.listCountries()
-      this.lastFetchAt = new Date().toISOString()
-      this.lastError = undefined
-      dataSourceCache.set(cacheKey, countries)
-      return countries
+      const countries = await client.listCountries()
+      if (countries.length > 0) {
+        this.lastFetchAt = new Date().toISOString()
+        this.lastError = undefined
+        dataSourceCache.set(cacheKey, countries)
+        return countries
+      }
+
+      this.lastError = WID_EMPTY_COUNTRIES_ERROR
+      throw new Error(WID_EMPTY_COUNTRIES_ERROR)
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : 'Unknown error'
-      return WID_COUNTRIES
+      if (error instanceof Error && error.message === WID_EMPTY_COUNTRIES_ERROR) {
+        throw error
+      }
+      this.lastError = widApiRequestError(error)
+      throw new Error(this.lastError)
     }
   }
 
@@ -106,58 +115,11 @@ export class WidDataSource implements DataSource {
     const cached = dataSourceCache.get<DataSeries>(cacheKey)
     if (cached) return cached
 
-    if (params.indicatorId === 'stress_index') {
-      const series = getSampleSeries(
-        params.countryCode,
-        params.indicatorId,
-        params.yearFrom,
-        params.yearTo,
-      )
-      dataSourceCache.set(cacheKey, series)
-      return series
-    }
-
-    const sampleSeries = () =>
-      getSampleSeries(params.countryCode, params.indicatorId, params.yearFrom, params.yearTo)
+    const client = this.requireLiveClient()
 
     try {
-      if (this.mode === 'live') {
-        const years: number[] = []
-        if (params.yearFrom && params.yearTo) {
-          for (let year = params.yearFrom; year <= params.yearTo; year++) {
-            years.push(year)
-          }
-        }
-
-        const rows = await this.liveClient!.fetchData({
-          areas: [params.countryCode],
-          variables: [params.indicatorId],
-          years: years.length ? years : undefined,
-        })
-
-        const indicator = WID_INDICATORS.find((item) => item.id === params.indicatorId)
-        const series = this.liveClient!.mapRowsToSeries(
-          rows,
-          `${params.countryCode}-${params.indicatorId}`,
-          `${params.countryCode} · ${indicator?.label ?? params.indicatorId}`,
-          params.yearFrom,
-          params.yearTo,
-        )
-
-        if (!series.points.length) {
-          const fallback = sampleSeries()
-          dataSourceCache.set(cacheKey, fallback)
-          return fallback
-        }
-
-        this.lastFetchAt = new Date().toISOString()
-        this.lastError = undefined
-        dataSourceCache.set(cacheKey, series)
-        return series
-      }
-
-      const points = await this.localClient!.fetchSeries({
-        country: params.countryCode,
+      const points = await client.fetchIndicatorSeries({
+        area: params.countryCode,
         sixlet: params.indicatorId,
         age: '992',
         pop: 'j',
@@ -167,9 +129,9 @@ export class WidDataSource implements DataSource {
       })
 
       if (!points.length) {
-        const fallback = sampleSeries()
-        dataSourceCache.set(cacheKey, fallback)
-        return fallback
+        const message = widEmptySeriesError(params)
+        this.lastError = message
+        throw new Error(message)
       }
 
       const indicator = WID_INDICATORS.find((item) => item.id === params.indicatorId)
@@ -185,32 +147,100 @@ export class WidDataSource implements DataSource {
       dataSourceCache.set(cacheKey, series)
       return series
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : 'Unknown error'
-      return sampleSeries()
+      if (error instanceof Error && error.message.startsWith("L'API WID n'a renvoyé aucune série")) {
+        throw error
+      }
+      this.lastError = widApiRequestError(error)
+      throw new Error(this.lastError)
     }
   }
 
-  async fetchDistribution(params: FetchDistributionParams): Promise<DistributionSeries> {
-    const cacheKey = dataSourceCache.buildKey(this.id, 'distribution', params)
-    const cached = dataSourceCache.get<DistributionSeries>(cacheKey)
+  async fetchVariableTimeSeries(params: FetchVariableTimeSeriesParams): Promise<DataSeries> {
+    const cacheKey = dataSourceCache.buildKey(this.id, 'variable-series', params)
+    const cached = dataSourceCache.get<DataSeries>(cacheKey)
     if (cached) return cached
 
-    const distribution = getSampleDistribution(
-      params.countryCode,
-      params.indicatorId,
-      params.year ?? 2020,
-    )
-    dataSourceCache.set(cacheKey, distribution)
-    return distribution
+    const client = this.requireLiveClient()
+    const percentile = params.percentile ?? 'p50p51'
+
+    try {
+      const points = await client.fetchIndicatorSeries({
+        area: params.countryCode,
+        sixlet: params.variable,
+        age: params.age,
+        pop: params.pop,
+        percentile,
+        yearFrom: params.yearFrom,
+        yearTo: params.yearTo,
+      })
+
+      if (!points.length) {
+        const message =
+          `L'API WID n'a renvoyé aucune série pour ${params.countryCode} · `
+          + `${params.variable} (${percentile}, ${params.age}/${params.pop}).`
+        this.lastError = message
+        throw new Error(message)
+      }
+
+      const meta = findWidVariable(params.variable)
+      const series: DataSeries = {
+        id: `${params.countryCode}-${params.variable}-${percentile}-${params.age}-${params.pop}`,
+        label: `${params.countryCode} · ${meta?.label ?? params.variable}`,
+        unit: meta?.unit,
+        points,
+        metadata: { sample: false, percentile },
+      }
+
+      this.lastFetchAt = new Date().toISOString()
+      this.lastError = undefined
+      dataSourceCache.set(cacheKey, series)
+      return series
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("L'API WID n'a renvoyé aucune série")) {
+        throw error
+      }
+      this.lastError = widApiRequestError(error)
+      throw new Error(this.lastError)
+    }
   }
 
-  /** True when the last profile load fell back to synthetic sample data. */
-  isSampleMode(): boolean {
-    return false
+  async fetchDistribution(_params: FetchDistributionParams): Promise<DistributionSeries> {
+    const message =
+      "La distribution par percentile n'est pas disponible via l'API WID (données synthétiques retirées)."
+    this.lastError = message
+    throw new Error(message)
   }
 
   usesLiveApi(): boolean {
-    return this.mode === 'live'
+    return Boolean(this.liveClient)
+  }
+
+  async listProfileYears(params: ListProfileYearsParams): Promise<number[]> {
+    const cacheKey = dataSourceCache.buildKey(this.id, 'profile-years', params)
+    const cached = dataSourceCache.get<number[]>(cacheKey)
+    if (cached?.length) return cached
+
+    const client = this.requireLiveClient()
+
+    try {
+      const years = await client.listProfileYears({
+        area: params.countryCode,
+        sixlet: params.variable,
+        age: params.age,
+        pop: params.pop,
+      })
+
+      if (years.length > 0) {
+        this.lastFetchAt = new Date().toISOString()
+        this.lastError = undefined
+        dataSourceCache.set(cacheKey, years)
+      }
+
+      return years
+    } catch (error) {
+      this.lastError = widApiRequestError(error)
+      throw new Error(this.lastError)
+    }
   }
 
   async fetchPercentileProfile(params: FetchProfileParams): Promise<PercentileProfile> {
@@ -218,34 +248,21 @@ export class WidDataSource implements DataSource {
     const cached = dataSourceCache.get<PercentileProfile>(cacheKey)
     if (cached) return cached
 
-    const sample = () =>
-      getSampleProfile(
-        params.countryCode,
-        params.variable,
-        params.year,
-        params.age,
-        params.pop,
-      )
+    const client = this.requireLiveClient()
 
     try {
-      const rows = this.mode === 'live'
-        ? await this.liveClient!.fetchProfileData({
-            area: params.countryCode,
-            sixlet: params.variable,
-            age: params.age,
-            pop: params.pop,
-            year: params.year,
-          })
-        : await this.localClient!.fetchProfile({
-            country: params.countryCode,
-            sixlet: params.variable,
-            age: params.age,
-            pop: params.pop,
-            year: params.year,
-          })
+      const rows = await client.fetchProfileData({
+        area: params.countryCode,
+        sixlet: params.variable,
+        age: params.age,
+        pop: params.pop,
+        year: params.year,
+      })
 
       if (!rows.length) {
-        return sample()
+        const message = widEmptyProfileError(params)
+        this.lastError = message
+        throw new Error(message)
       }
 
       const meta = findWidVariable(params.variable)
@@ -264,7 +281,7 @@ export class WidDataSource implements DataSource {
         pop: params.pop,
         kind: measureKind(params.variable),
         unit: meta?.unit,
-        label: `${params.countryCode} · ${meta?.label ?? params.variable} (${params.year})`,
+        label: meta?.label ?? params.variable,
         points,
         sample: false,
       }
@@ -274,8 +291,11 @@ export class WidDataSource implements DataSource {
       dataSourceCache.set(cacheKey, profile)
       return profile
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : 'Unknown error'
-      return sample()
+      if (error instanceof Error && error.message.startsWith("L'API WID n'a renvoyé aucune donnée")) {
+        throw error
+      }
+      this.lastError = widApiRequestError(error)
+      throw new Error(this.lastError)
     }
   }
 
@@ -289,20 +309,6 @@ export class WidDataSource implements DataSource {
       lastFetchAt: this.lastFetchAt,
       lastError: this.lastError,
     }
-  }
-
-  getSampleScatterData(
-    inequalityIndicatorId: string,
-    stressIndicatorId: string,
-    yearFrom?: number,
-    yearTo?: number,
-  ) {
-    return getSampleScatter(
-      inequalityIndicatorId,
-      stressIndicatorId,
-      yearFrom,
-      yearTo,
-    )
   }
 }
 

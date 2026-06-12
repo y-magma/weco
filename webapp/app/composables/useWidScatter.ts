@@ -1,4 +1,5 @@
 import type { EChartsOption } from 'echarts'
+import type { Ref } from 'vue'
 import { buildProfileScatterOption } from '@src/charts/scatterProfiles'
 import { joinProfilesByPercentile, type ProfileScatterPoint } from '@src/domain/joinProfiles'
 import type { CountryOption, PercentileProfile } from '@src/domain/types'
@@ -9,21 +10,26 @@ import {
   WID_DEFAULT_AGE,
   WID_DEFAULT_POP,
   WID_POP_OPTIONS,
-  WID_V1_VARIABLES,
+  WID_PROFILE_VARIABLES,
 } from '@src/data-sources/wid/widCodes'
 
-const YEARS = Array.from({ length: 2023 - 1980 + 1 }, (_, i) => 1980 + i).reverse()
+export interface WidScatterStateOptions {
+  countries?: Ref<CountryOption[]>
+  initialVariableX?: string
+  initialVariableY?: string
+}
 
 /**
  * Scatter of two WID variables joined by percentile (graphe #6 de version1.md).
  * One point = one g-percentile, X = var1, Y = var2, same country/year/age/pop.
  */
-export function useWidScatter() {
+export function createWidScatterState(options: WidScatterStateOptions = {}) {
   const { defaultSource } = useDataSources()
+  const sharedCountries = options.countries
 
   const countryCode = ref('FR')
-  const variableX = ref('thweal')
-  const variableY = ref('ahweal')
+  const variableX = ref(options.initialVariableX ?? 'thweal')
+  const variableY = ref(options.initialVariableY ?? 'ahweal')
   const year = ref(2021)
   const age = ref(WID_DEFAULT_AGE)
   const pop = ref(WID_DEFAULT_POP)
@@ -31,27 +37,28 @@ export function useWidScatter() {
   const logScaleY = ref(false)
 
   const loading = ref(false)
+  const yearsLoading = ref(false)
   const error = ref<string | null>(null)
-  const sampleMode = ref(false)
 
-  const countries = ref<CountryOption[]>([])
+  const localCountries = ref<CountryOption[]>([])
+  const countries = sharedCountries ?? localCountries
+  const availableYears = ref<number[]>([])
   const points = ref<ProfileScatterPoint[]>([])
   const scatterOption = ref<EChartsOption | null>(null)
 
-  const variables = WID_V1_VARIABLES
+  const variables = WID_PROFILE_VARIABLES
   const ageOptions = WID_AGE_OPTIONS
   const popOptions = WID_POP_OPTIONS
-  const years = YEARS
+  const years = computed(() => availableYears.value)
+  const yearRangeLabel = computed(() => {
+    const list = availableYears.value
+    if (list.length === 0) return ''
+    const min = list[list.length - 1]!
+    const max = list[0]!
+    return min === max ? `${max}` : `${min}–${max}`
+  })
 
   const widSource = () => defaultSource.value as WidDataSource
-
-  const loadCountries = async () => {
-    try {
-      countries.value = await widSource().listCountries()
-    } catch {
-      countries.value = [{ code: 'FR', label: 'France' }]
-    }
-  }
 
   const labelFor = (sixlet: string) => findWidVariable(sixlet)?.label ?? sixlet
 
@@ -66,6 +73,25 @@ export function useWidScatter() {
       logScaleX: logScaleX.value,
       logScaleY: logScaleY.value,
     })
+  }
+
+  const refreshYears = async () => {
+    yearsLoading.value = true
+    try {
+      availableYears.value = await widSource().listProfileYears({
+        countryCode: countryCode.value,
+        variable: variableX.value,
+        age: age.value,
+        pop: pop.value,
+      })
+      if (availableYears.value.length && !availableYears.value.includes(year.value)) {
+        year.value = availableYears.value[0]!
+      }
+    } catch {
+      availableYears.value = []
+    } finally {
+      yearsLoading.value = false
+    }
   }
 
   const load = async () => {
@@ -83,23 +109,32 @@ export function useWidScatter() {
         source.fetchPercentileProfile({ ...params, variable: variableX.value }),
         source.fetchPercentileProfile({ ...params, variable: variableY.value }),
       ])
-      sampleMode.value = xProfile.sample || yProfile.sample
       points.value = joinProfilesByPercentile(xProfile, yProfile)
       rebuild()
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Échec du chargement du nuage'
+      points.value = []
+      scatterOption.value = null
     } finally {
       loading.value = false
     }
   }
 
-  watch([countryCode, variableX, variableY, year, age, pop], load)
-  watch([logScaleX, logScaleY], rebuild)
-
-  onMounted(async () => {
-    await loadCountries()
+  const init = async () => {
+    if (!sharedCountries) {
+      try {
+        localCountries.value = await widSource().listCountries()
+      } catch {
+        localCountries.value = [{ code: 'FR', label: 'France' }]
+      }
+    }
+    await refreshYears()
     await load()
-  })
+  }
+
+  watch([countryCode, variableX, variableY, year, age, pop], load)
+  watch([countryCode, variableX, age, pop], refreshYears)
+  watch([logScaleX, logScaleY], rebuild)
 
   return {
     countryCode,
@@ -115,11 +150,13 @@ export function useWidScatter() {
     ageOptions,
     popOptions,
     years,
+    yearsLoading,
+    yearRangeLabel,
     loading,
     error,
-    sampleMode,
     points,
     scatterOption,
     load,
+    init,
   }
 }

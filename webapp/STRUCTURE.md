@@ -1,228 +1,340 @@
-# Structure de `webapp/` — où trouver quoi
+# Structure de `webapp/` — carte de l'application
 
-Application **Nuxt 4** (Vue 3 + Vuetify + ECharts) qui visualise les données
-**WID.world**. Les données sont lues **localement** depuis le dump WID
-(`WID_data_<ZONE>.csv`) via des routes serveur Nitro — aucune API externe ni
-clé n'est utilisée.
+**Boîte à outils de visualisations** : application **Nuxt 4** (Vue 3 + Vuetify + ECharts)
+en mode **SPA** (`ssr: false`). Elle interroge l'**API live WID.world** depuis le
+navigateur (clé API requise). Un dump CSV local sert uniquement aux **tests de
+conformité** API ↔ export bulk, pas au fonctionnement de l'app.
 
-## Vue d'ensemble en une phrase
+## Séparation des responsabilités
 
-- Le **code de l'app** (UI, pages, état) est dans `app/`.
-- La **logique métier réutilisable** (graphes, sources de données, types) est dans `src/`.
-- L'**accès aux fichiers CSV locaux** se fait via `server/` (routes Nitro).
-- Les **données brutes** sont dans `data/WID_DATA` (un symlink vers le dump).
+| Zone | Rôle | Dépend de Vue ? |
+|------|------|-----------------|
+| `app/` | Interface : pages, composants, état réactif, navigation | Oui |
+| `src/` | Logique métier pure : graphes, accès données, types | Non (testable Vitest) |
+| `test/` | Tests unitaires sur `src/` | Non |
+| `scripts/` | Outils CLI (conformité, comparaison CSV/API) | Non |
+| `public/` | Fichiers statiques servis tels quels | — |
+
+L'alias TypeScript **`@src`** (`nuxt.config.ts` + `tsconfig.json`) pointe vers `./src`.
+Les composables Nuxt importent `@src/...` ; les pages/composants aussi.
 
 ```
 webapp/
-├── app/            # Code de l'application Nuxt (ce que voit l'utilisateur)
-│   ├── app.vue              # Racine de l'app
-│   ├── layouts/             # Gabarits (barre de nav, structure de page)
-│   ├── pages/               # Une page = une route (/profil, /nuage, …)
-│   ├── components/          # Composants Vue réutilisables (graphe, upload CSV)
-│   ├── composables/         # Logique d'état par page (useXxx)
-│   ├── plugins/             # Plugins Nuxt (Vuetify)
-│   └── assets/              # Styles globaux (SCSS)
+├── app/                      # Couche présentation (Nuxt)
+│   ├── app.vue               # Racine Vue (<NuxtLayout> + <NuxtPage>)
+│   ├── assets/main.scss      # Styles globaux
+│   ├── layouts/default.vue   # Shell : drawer, app-bar, footer
+│   ├── pages/                # 1 fichier = 1 route (file-based routing)
+│   ├── components/           # Composants auto-importés (pathPrefix: false)
+│   ├── composables/          # Hooks partagés (useXxx, createXxx)
+│   └── plugins/vuetify.client.ts
 │
-├── src/            # Logique métier pure, indépendante de Vue (testable)
-│   ├── charts/              # Construction des options ECharts
-│   ├── data-sources/        # Accès et modélisation des données (WID, cache…)
-│   ├── domain/              # Types + transformations métier
-│   ├── csv/                 # Lecture de fichiers CSV (import utilisateur)
-│   ├── http/                # Helper fetch (JSON / texte)
-│   ├── hypotheses/          # Définition de l'hypothèse « stress »
-│   └── spec/                # Chargement de la spec Markdown pour la page /spec
+├── src/                      # Logique métier (sans Vue)
+│   ├── charts/               # Options ECharts (fonctions pures)
+│   ├── data-sources/         # Interface DataSource + adaptateur WID
+│   ├── domain/               # Types TypeScript partagés
+│   ├── csv/                  # Lecture CSV utilisateur (PapaParse)
+│   ├── http/                 # fetchJson / fetchText
+│   └── spec/                 # Chargement spec Markdown (page /spec)
 │
-├── server/         # Backend Nitro : lit les CSV WID locaux
-│   ├── api/wid/             # Endpoints HTTP /api/wid/*
-│   └── utils/               # Lecture/filtre des CSV en streaming
-│
-├── data/           # Données
-│   └── WID_DATA  ->  symlink vers le dump WID complet
-│
-├── test/           # Tests unitaires (Vitest)
-├── public/         # Fichiers statiques servis tels quels (favicon, robots.txt)
-├── nuxt.config.ts  # Config Nuxt (runtimeConfig, modules, prerender…)
-├── package.json    # Dépendances + scripts npm
-├── tsconfig.json   # Config TypeScript
-├── vitest.config.ts# Config des tests
+├── test/                     # Vitest (*.spec.ts)
+├── scripts/                  # wid-conformance.mjs, wid-compare.mjs
+├── data/WID_DATA             # Symlink dump CSV (tests conformité)
+├── public/                   # robots.txt, favicon…
+├── nuxt.config.ts
+├── package.json
+├── vitest.config.ts
+├── tsconfig.json
 └── eslint.config.mjs
 ```
 
 ---
 
-## 1. `app/` — l'interface (Nuxt)
+## 1. `app/` — l'interface web
 
-### `app/pages/` — les écrans (routing automatique)
+### 1.1 Pages (`app/pages/`)
 
-Chaque fichier `.vue` devient une route accessible dans la barre de navigation.
+Nuxt génère les routes automatiquement à partir du nom de fichier.
 
-| Fichier | Route | Rôle |
-|---|---|---|
-| `index.vue` | `/` | Page d'accueil. |
-| `profil.vue` | `/profil` | **Page principale** : profil des 127 g-percentiles (barres / ligne / nuage), zoom plage de valeurs, drill-down sur le haut de la distribution, tableau de données. Affiché « Boîte à outils de visus » dans le menu. |
-| `nuage.vue` | `/nuage` | Nuage de points croisant 2 variables WID, jointes par percentile. |
-| `panneaux.vue` | `/panneaux` | Multi-panneaux : plusieurs profils en parallèle (pays/année/âge/pop partagés). |
-| `dashboard.vue` | `/dashboard` | Tableau de bord de l'hypothèse inégalités ↔ stress (série temporelle + nuage). Le proxy « stress » reste synthétique. |
-| `sources.vue` | `/sources` | État des sources de données enregistrées. |
-| `csv.vue` | `/csv` | Import et aperçu d'un CSV fourni par l'utilisateur. |
-| `spec.vue` | `/spec` | Rendu de la spécification (`spec/**/*.md` du dépôt). |
+| Fichier | Route | Description |
+|---------|-------|-------------|
+| `index.vue` | `/` | Accueil : liens vers panneau, grille, spec |
+| `panneau/index.vue` | `/panneau` | **Hub** — choix entre 3 types de boîtes à outils |
+| `panneau/population.vue` | `/panneau/population` | Profil WID sur les 127 g-percentiles |
+| `panneau/temps.vue` | `/panneau/temps` | Série temporelle (variable × année) |
+| `panneau/variables.vue` | `/panneau/variables` | Nuage de 2 variables joint par percentile |
+| `grille.vue` | `/grille` | Grille 2 colonnes : N panneaux de types mixtes |
+| `spec.vue` | `/spec` | Rendu Markdown de `spec/**/*.md` (dépôt parent) |
+| `sources.vue` | `/sources` | Statut des sources de données enregistrées |
+| `csv.vue` | `/csv` | Import et aperçu d'un CSV utilisateur |
 
-### `app/composables/` — l'état et la logique de chaque page
+**Redirections** (`nuxt.config.ts` → `routeRules`) :
 
-Hooks Vue (`useXxx`) qui orchestrent : filtres, appel aux sources de données,
-construction des options de graphe. **C'est ici qu'on branche une page sur les
-données.**
+| Ancienne route | Cible |
+|----------------|-------|
+| `/profil` | `/panneau/population` |
+| `/panneau-visualisation` | `/panneau` |
+| `/nuage` | `/panneau/variables` |
+| `/grille-visus`, `/grille-visualisations` | `/grille` |
 
-| Fichier | Utilisé par | Rôle |
-|---|---|---|
-| `useWidProfile.ts` | `profil.vue` | État du profil : pays/variable/année/âge/pop, type de graphe, échelles log, zoom valeur, drill-down, tableau. |
-| `useWidScatter.ts` | `nuage.vue` | Charge 2 profils et les joint par percentile. |
-| `useWidPanels.ts` | `panneaux.vue` | Charge N profils en parallèle. |
-| `useDashboard.ts` | `dashboard.vue` | Séries temporelles + distribution + nuage de l'hypothèse. |
-| `useDataSources.ts` | toutes | Initialise et fournit la source de données par défaut (WID). |
-| `useSpec.ts` | `spec.vue` | Fournit les blocs de spec à afficher. |
+Routes prérendues (déploiement statique) : voir `nitro.prerender.routes` dans
+`nuxt.config.ts`.
 
-### `app/components/` — composants réutilisables
+### 1.2 Layout (`app/layouts/default.vue`)
+
+Gabarit commun à toutes les pages :
+
+- **Drawer** : menu (`navItems`) — Home, Panneau, Grille, Spec, Sources, CSV
+- **App bar** : titre « Boîte à outils de visualisations », lien WID.world
+- **`<slot />`** : contenu de la page courante
+
+### 1.3 Composables (`app/composables/`)
 
 | Fichier | Rôle |
-|---|---|
-| `charts/EChart.vue` | Wrapper générique ECharts (rend une `EChartsOption`, émet `chart-click`). |
-| `charts/ProfileHelpButton.vue` | Bouton d'aide contextuelle sur le profil. |
-| `csv/CsvUploadCard.vue` | Carte d'upload/aperçu pour la page CSV. |
+|---------|------|
+| `useDataSources.ts` | Initialise le registre WID (clé API depuis `runtimeConfig`), expose `defaultSource` |
+| `useWidProfile.ts` | **`createWidProfileState()`** — profil sur g-percentiles : filtres, drill-down, option ECharts |
+| `useWidSeries.ts` | **`createWidSeriesState()`** — série temporelle : variable × année à percentile fixé |
+| `useWidScatter.ts` | **`createWidScatterState()`** — nuage 2 variables joint par percentile |
+| `panneauTypes.ts` | Catalogue des 3 types de panneau (id, icône, titre, route) |
+| `useSpec.ts` | Blocs Markdown pour `/spec` |
 
-### `app/layouts/default.vue`
+Les fonctions `createWid*State()` sont instanciées **une fois par panneau**
+(pages dédiées ou chaque cellule de `/grille`). La liste des pays peut être
+**partagée** via `provide('widCountries', …)` pour éviter N appels parallèles à
+`listCountries()`.
 
-Gabarit commun : **barre de navigation** (la liste `navItems` définit le menu),
-app-bar et pied de page.
+### 1.4 Composants (`app/components/`)
 
-### `app/plugins/vuetify.client.ts`
+Organisés par dossier ; Nuxt les auto-importe sans préfixe de chemin.
 
-Initialise Vuetify (thème, composants) côté client.
+#### `components/panneau/`
 
-### `app/assets/main.scss`
+| Fichier | Rôle |
+|---------|------|
+| `PanneauVisualisation.vue` | Profil population : filtres, réglages, drill-down, graphe ECharts |
+| `PanneauSerieTemporelle.vue` | Série temporelle : pays, variable, percentile, échelle log |
+| `PanneauNuageVariables.vue` | Nuage 2 variables : pays, année, variables X/Y, échelles log |
+| `PanneauFiltersShell.vue` | Enveloppe repliable des filtres (grille) : titre du type + chevron |
+| `PanneauAddTile.vue` | Tuile « + » ; dialogue modal pour choisir le type de panneau |
+| `PanneauBackLink.vue` | Lien retour vers `/panneau` (sous-pages dédiées) |
 
-Styles globaux.
+Dans la **grille**, chaque panneau reçoit `collapsible`, `:panel-type`, et
+`:default-filters-expanded="false"` : la zone de filtres est repliée par défaut
+et affiche le type (ex. « Série temporelle ») dans l'en-tête.
+
+#### `components/charts/`
+
+| Fichier | Rôle |
+|---------|------|
+| `EChart.vue` | Wrapper `vue-echarts` : reçoit une `EChartsOption`, émet `chart-click` |
+| `ProfileHelpButton.vue` | Bouton d'aide contextuelle (textes depuis `src/charts/profileHelp.ts`) |
+
+#### `components/csv/`
+
+| Fichier | Rôle |
+|---------|------|
+| `CsvUploadCard.vue` | Upload fichier, aperçu colonnes, construction série temporelle |
+
+### 1.5 Plugin Vuetify
+
+`plugins/vuetify.client.ts` — thème et composants Vuetify, chargé côté client
+uniquement (suffixe `.client.ts`).
 
 ---
 
-## 2. `src/` — la logique métier (sans Vue, testée)
+## 2. `src/` — logique métier
 
-### `src/data-sources/` — d'où viennent les données
+Code **indépendant de Vue**, testé par Vitest. C'est ici que vivent les
+transformations de données et la construction des graphes.
 
-| Fichier | Rôle |
-|---|---|
-| `Source.ts` | Interface `DataSource` que toute source doit implémenter. |
-| `registry.ts` | Enregistre / récupère les sources disponibles. |
-| `cache.ts` | Cache mémoire des résultats (clé = id + params). |
-| `errors.ts` | Erreurs typées des sources. |
-| `wid/widSource.ts` | **Source WID** : implémente `fetchPercentileProfile`, `fetchSeries`, `listCountries`. Appelle le client local ; repli sur données d'exemple si fichier/série manquant. |
-| `wid/widLocalClient.ts` | Client qui appelle les routes serveur `/api/wid/*` (lecture du dump local). |
-| `wid/widClient.ts` | Ancien client de l'API HTTP WID (conservé, plus utilisé par l'app — encore couvert par un test). |
-| `wid/percentiles.ts` | Construit/parse les **127 g-percentiles** (`buildGPercentiles`, `parsePercentileRank`…). |
-| `wid/widCodes.ts` | Variables/âges/populations WID + libellés (`ahweal`, `thweal`…). |
-| `wid/indicators.ts` | Listes d'indicateurs et de pays par défaut. |
-| `wid/sampleData.ts` | Génère des données synthétiques (repli hors-ligne). |
-
-> **Pour changer la façon dont l'app obtient les données**, c'est dans
-> `wid/widSource.ts` + `wid/widLocalClient.ts`.
-
-### `src/charts/` — comment les graphes sont construits
-
-Fonctions pures qui produisent des `EChartsOption`.
+### 2.1 `src/domain/`
 
 | Fichier | Rôle |
-|---|---|
-| `profile.ts` | Profil par percentile (barres/ligne/nuage), zoom dual-axe, échelles log, densité. |
-| `drilldown.ts` | Logique de drill-down hiérarchique sur le haut de la distribution + agrégats. |
-| `scatterProfiles.ts` | Nuage de 2 profils joints par percentile. |
-| `scatter.ts` | Nuage générique (dashboard). |
-| `timeSeries.ts` | Série temporelle (dashboard). |
-| `distribution.ts` | Histogramme/distribution (dashboard). |
-| `profileHelp.ts` | Textes d'aide du profil. |
+|---------|------|
+| `types.ts` | Types centraux : `PercentileProfile`, `DataSeries`, `CountryOption`, paramètres de fetch |
+| `joinProfiles.ts` | Jointure de 2 profils par percentile → points pour le nuage (`ProfileScatterPoint`) |
 
-### `src/domain/` — types et transformations
+### 2.2 `src/data-sources/` — accès aux données
+
+```
+data-sources/
+├── Source.ts          # Interface DataSource
+├── registry.ts        # Enregistrement / liste des sources
+├── cache.ts           # Cache mémoire (clé = source + opération + params)
+└── wid/
+    ├── widSource.ts       # WidDataSource : profils, séries, pays
+    ├── widClient.ts       # Client HTTP API WID (countries-variables, …)
+    ├── widLocalCsv.ts     # Lecture dump CSV (tests conformité)
+    ├── conformance.ts     # Comparaison profils API vs CSV
+    ├── percentiles.ts     # 127 g-percentiles : buildGPercentiles, parsePercentileRank
+    ├── widCodes.ts        # Variables WID (sixlet, âge, pop), libellés V1
+    ├── indicators.ts      # Métadonnées indicateurs pour fetchSeries
+    ├── countryLabels.ts   # Libellés pays affichés dans l'UI
+    ├── widCountryNames.ts # Table de noms pays
+    ├── widApiKey.ts       # En-tête clé API
+    └── widErrors.ts       # Messages d'erreur WID
+```
+
+**Méthodes clés de `WidDataSource`** :
+
+| Méthode | Usage |
+|---------|-------|
+| `fetchPercentileProfile()` | Profil 127 g-percentiles (panneau population) |
+| `fetchVariableTimeSeries()` | Série temporelle à percentile fixé (panneau temps) |
+| `listProfileYears()` | Années disponibles pour une variable |
+| `listCountries()` | Liste des pays |
+| `fetchSeries()` | Séries indicateurs agrégés (indicateurs `indicators.ts`) |
+
+**Flux live** : `WidDataSource` → `WidClient` → API AWS WID (`NUXT_PUBLIC_WID_API_KEY`).
+
+Sans clé API valide, les pages affichent une erreur explicite (pas de données synthétiques).
+
+### 2.3 `src/charts/` — construction ECharts
 
 | Fichier | Rôle |
-|---|---|
-| `types.ts` | **Types centraux** : `PercentilePoint`, `PercentileProfile`, `DataSeries`, params de fetch… À lire en premier pour comprendre les structures de données. |
-| `joinProfiles.ts` | Jointure de 2 profils par percentile (pour le nuage). |
-| `panels.ts` | Helpers de mise en page des multi-panneaux. |
+|---------|------|
+| `profile.ts` | **`buildProfileOption()`** — profil 127 g-percentiles : barres/ligne/nuage, log, densités, Lorenz, zoom |
+| `scatterProfiles.ts` | **`buildProfileScatterOption()`** — nuage 2 variables, visualMap rang, axes compacts |
+| `timeSeries.ts` | **`buildTimeSeriesOption()`** — courbe temporelle, axes compacts, option log |
+| `drilldown.ts` | Drill-down hiérarchique sur le haut de la distribution |
+| `axisFormat.ts` | **`formatCompactAxisValue()`** — libellés WID : 1000, 10k, 1M, 1B… |
+| `profileHelp.ts` | Textes d'aide selon les options actives du profil |
 
-### Autres dossiers `src/`
+### 2.4 Autres modules `src/`
 
 | Dossier | Rôle |
-|---|---|
-| `csv/CsvReaderFactory.ts` | Lecture CSV (fichier / chaîne / URL) via PapaParse, + `mapCsvToSeries`. |
-| `http/fetchJson.ts` | `fetchJson` / `fetchText` avec timeout + retries. |
-| `hypotheses/` | Définition de l'hypothèse « inégalités ↔ stress » (`stressHypothesis.ts`) et ses types. |
-| `spec/` | `specDocs.ts` charge `spec/**/*.md` à la compilation ; `renderMarkdown.ts` rend le Markdown. |
+|---------|------|
+| `csv/CsvReaderFactory.ts` | `createCsvReader()` (file/string/url) + `mapCsvToSeries()` |
+| `http/fetchJson.ts` | `fetchJson` / `fetchText` avec timeout |
+| `spec/specDocs.ts` | Liste des fichiers `spec/**/*.md` à la compilation |
+| `spec/renderMarkdown.ts` | Rendu Markdown (`marked`) |
 
 ---
 
-## 3. `server/` — lecture des CSV WID locaux (Nitro)
+## 3. Parcours de données
 
-Tourne côté Node : c'est ce qui permet de lire les gros fichiers sur disque.
-
-| Fichier | Endpoint | Rôle |
-|---|---|---|
-| `api/wid/profile.get.ts` | `GET /api/wid/profile` | 127 g-percentiles pour `country/variable/age/pop/year`. |
-| `api/wid/series.get.ts` | `GET /api/wid/series` | Série temporelle d'un `(variable, percentile)`. |
-| `api/wid/countries.get.ts` | `GET /api/wid/countries` | Liste des zones présentes dans le dump. |
-| `utils/widCsv.ts` | — | Lecture/filtre **en streaming** des CSV (résolution du dossier, `WID_data_<ZONE>.csv`, set des 127 codes). |
-
-> **Pour modifier les filtres / le format lu dans les CSV**, c'est dans
-> `server/utils/widCsv.ts`.
-
----
-
-## 4. `data/` — les données brutes
+### 3.1 Panneau population (`/panneau/population`, type `population` en grille)
 
 ```
-data/WID_DATA  ->  /home/.../Stage_gscop/wid_all_data   (symlink)
+panneau/population.vue
+  │  provide('widCountries')
+  └─ PanneauVisualisation.vue
+       └─ createWidProfileState({ countries })
+            ├─ widSource.fetchPercentileProfile()
+            └─ buildProfileOption(profile, opts)
+       └─ EChart.vue
 ```
 
-Un CSV par zone, séparateur `;`, colonnes :
-`country;variable;percentile;year;value;age;pop`.
-La colonne `variable` encode `<sixlet><pop><age>` (ex. `ahwealj992`).
+### 3.2 Série temporelle (`/panneau/temps`, type `temps` en grille)
 
-Le dossier lu est configurable via la variable d'env **`WID_DATA_DIR`**
-(défaut : `data/WID_DATA`), définie dans `nuxt.config.ts → runtimeConfig.widDataDir`.
+```
+panneau/temps.vue
+  │  provide('widCountries')
+  └─ PanneauSerieTemporelle.vue
+       └─ createWidSeriesState({ countries })
+            ├─ widSource.fetchVariableTimeSeries()
+            └─ buildTimeSeriesOption([series], title, { logScaleY })
+       └─ EChart.vue
+```
+
+### 3.3 Nuage 2 variables (`/panneau/variables`, type `variables` en grille)
+
+```
+panneau/variables.vue
+  │  provide('widCountries')
+  └─ PanneauNuageVariables.vue
+       └─ createWidScatterState({ countries })
+            ├─ widSource.fetchPercentileProfile() × 2 (var X, var Y)
+            ├─ joinProfilesByPercentile(xProfile, yProfile)
+            └─ buildProfileScatterOption(points, { xLabel, yLabel, logScaleX, logScaleY })
+       └─ EChart.vue
+```
+
+### 3.4 Grille (`/grille`)
+
+```
+grille.vue
+  │  provide('widCountries')
+  ├─ PanneauSerieTemporelle | PanneauNuageVariables | PanneauVisualisation
+  │    (selon panel.type : temps | variables | population)
+  │    collapsible + PanneauFiltersShell
+  └─ PanneauAddTile → dialogue → addPanel(type)
+```
 
 ---
 
-## 5. Configuration et tests
+## 4. Configuration
 
-| Fichier | Rôle |
-|---|---|
-| `nuxt.config.ts` | Config Nuxt : `ssr: false` (SPA), modules, `runtimeConfig.widDataDir`, routes prérendues. |
-| `package.json` | Scripts : `dev`, `build`, `preview`, `generate`, `test`, `lint`. |
-| `tsconfig.json` | Alias `@src` → `./src`. |
-| `vitest.config.ts` | Config des tests unitaires. |
-| `test/*.spec.ts` | Tests des fonctions pures de `src/` (percentiles, profil, drill-down, jointures…). |
+| Fichier | Contenu clé |
+|---------|-------------|
+| `nuxt.config.ts` | SPA, alias `@src`, clé API WID (`runtimeConfig.public`), prerender, redirections, Vuetify |
+| `.env.example` | `NUXT_PUBLIC_WID_API_KEY`, `NUXT_PUBLIC_WID_API_BASE_URL`, `WID_REFERENCE_DATA_DIR` |
+| `vitest.config.ts` | Tests Node, alias `@src` aligné sur Nuxt |
 
-### Lancer l'app
+### Variables d'environnement
+
+| Variable | Usage |
+|----------|-------|
+| `NUXT_PUBLIC_WID_API_KEY` | **Obligatoire** en dev/prod pour les données live |
+| `NUXT_PUBLIC_WID_API_BASE_URL` | Endpoint API (défaut : prod AWS) |
+| `WID_REFERENCE_DATA_DIR` | Dossier `WID_data_*.csv` — **tests conformité uniquement** |
+
+---
+
+## 5. Tests et scripts
 
 ```bash
-npm run dev          # serveur de dev (lit les CSV à la volée)
-# ou
-npm run build && npm run preview
+npm test                 # Vitest — logique pure (hors conformité live)
+npm run test:conformance # API vs dump CSV (réseau + clé + dump)
+npm run wid:conformance  # Rapport CLI conformité
+npm run wid:compare      # Comparaison percentile par percentile
 ```
 
-> ⚠️ Comme les données sont lues sur disque à chaque requête, il faut un serveur
-> Node. Un export 100 % statique (`nuxt generate`) ne servirait pas les routes
-> `/api/wid/*`.
+| Fichier de test | Cible |
+|-----------------|-------|
+| `percentiles.spec.ts` | Génération et tri des g-percentiles |
+| `widCodes.spec.ts` | Sémantique des variables WID |
+| `widClient.spec.ts` | Parsing réponses API |
+| `profileChart.spec.ts` | `buildProfileOption` |
+| `scatterProfiles.spec.ts` | `buildProfileScatterOption` |
+| `axisFormat.spec.ts` | `formatCompactAxisValue` |
+| `profileHelp.spec.ts` | Textes d'aide contextuels |
+| `drilldown.spec.ts` | Zoom hiérarchique |
+| `countryLabels.spec.ts` | Libellés pays |
+| `conformance.spec.ts` | Comparaison profils API vs CSV (unitaire) |
+| `widApiKey.spec.ts` | En-tête clé API |
+| `widConformance.spec.ts` | Intégration live (exclu de `npm test`) |
+
+Détail par suite : [`test/README.md`](./test/README.md).
 
 ---
 
-## Parcours type d'une donnée (page Profil)
+## 6. Commandes de développement
 
+```bash
+cd webapp
+npm install
+npm run dev          # http://localhost:3000
+npm run build        # build production
+npm run preview      # prévisualiser le build
+npm run generate     # export statique → .output/public
+npm run lint         # ESLint
 ```
-profil.vue
-  └─ useWidProfile.ts            (état + filtres)
-       └─ widSource.fetchPercentileProfile()      [src/data-sources/wid]
-            └─ widLocalClient.fetchProfile()       (fetch /api/wid/profile)
-                 └─ server/api/wid/profile.get.ts
-                      └─ server/utils/widCsv.ts → lit data/WID_DATA/WID_data_FR.csv
-  └─ buildProfileOption()        [src/charts/profile.ts]  → option ECharts
-  └─ EChart.vue                  (rendu)
-```
+
+---
+
+## 7. Ajouter une source de données
+
+1. Implémenter `DataSource` (`src/data-sources/Source.ts`)
+2. Créer l'adaptateur sous `src/data-sources/<nom>/`
+3. Enregistrer dans `src/data-sources/registry.ts`
+4. Brancher un composable ou une page sur la nouvelle source
+
+## 8. Ajouter un type de panneau
+
+1. Ajouter une entrée dans `app/composables/panneauTypes.ts`
+2. Créer le composable `createWid*State()` et le composant `Panneau*.vue`
+3. Ajouter une page sous `app/pages/panneau/` et la route dans `nitro.prerender.routes`
+4. Brancher le type dans `grille.vue` et le dialogue de `PanneauAddTile.vue`
+5. Ajouter un `build*Option()` dans `src/charts/` et les tests Vitest associés

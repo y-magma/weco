@@ -9,7 +9,6 @@ const { sources } = useDataSources()
 const sourceStatuses = computed(() =>
   sources.value.map((source) => ({
     ...source.getStatus(),
-    usingSampleData: false,
     usingLiveApi: 'usesLiveApi' in source && typeof source.usesLiveApi === 'function'
       ? source.usesLiveApi()
       : Boolean(runtimeConfig.public.widApiKey),
@@ -69,13 +68,8 @@ const sourceStatuses = computed(() =>
             />
             <v-list-item
               v-else
-              prepend-icon="mdi-folder-table-outline"
-              title="Local WID dump (webapp/data/WID_DATA)"
-            />
-            <v-list-item
-              v-if="source.usingSampleData"
-              prepend-icon="mdi-flask-outline"
-              title="Using sample data (no live data for last query)"
+              prepend-icon="mdi-key-outline"
+              title="No API key — set NUXT_PUBLIC_WID_API_KEY in .env"
             />
             <v-list-item
               v-if="source.lastError"

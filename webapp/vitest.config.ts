@@ -10,7 +10,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['test/**/*.spec.ts'],
-    // Threads avoid forking child processes (cleaner under restricted sandboxes).
+    // Conformance tests mix heavy CSV reads and live API calls — run sequentially.
+    fileParallelism: false,
     pool: 'threads',
   },
 })

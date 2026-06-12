@@ -9,8 +9,11 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --exclude test/widConformance.spec.ts",
+    "test:watch": "vitest",
+    "test:conformance": "vitest run test/widConformance.spec.ts",
+    "wid:conformance": "node scripts/wid-conformance.mjs",
+    "wid:compare": "node scripts/wid-compare.mjs"
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",

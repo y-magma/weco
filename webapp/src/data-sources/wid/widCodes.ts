@@ -1,5 +1,5 @@
 /**
- * WID variable / age / population codes used by Version 1.
+ * WID variable / age / population codes used by the profile panel.
  * See spec/version1.md (Sémantique des préfixes, Schéma brut WID).
  *
  * A WID "indicator" is a 6-letter sixlet: 1 letter for the measure type
@@ -7,7 +7,11 @@
  * income/wealth concept (hweal = net personal wealth, ptinc = pre-tax income…).
  */
 
+import { buildGPercentiles } from '@src/data-sources/wid/percentiles'
+
 export type MeasureKind = 'average' | 'threshold' | 'other'
+
+export type WidVariableGroup = 'income' | 'wealth'
 
 export interface WidVariable {
   /** Six-letter code, e.g. `ahweal`. */
@@ -15,10 +19,16 @@ export interface WidVariable {
   label: string
   /** Measure kind derived from the first letter. */
   kind: MeasureKind
-  /** Income/wealth concept label. */
+  /** Stable key to pair average/threshold variants. */
   concept: string
   unit: string
+  group: WidVariableGroup
+  /** Label for v-select group-by. */
+  groupLabel: string
 }
+
+/** Number of g-percentiles requested from the API (WID standard grid). */
+export const WID_G_PERCENTILE_COUNT = buildGPercentiles().length
 
 /** First-letter prefix -> measure kind. */
 export function measureKind(sixlet: string): MeasureKind {
@@ -28,43 +38,55 @@ export function measureKind(sixlet: string): MeasureKind {
   return 'other'
 }
 
+const GROUP_LABELS: Record<WidVariableGroup, string> = {
+  wealth: 'Patrimoine',
+  income: 'Revenus',
+}
+
+function v(
+  sixlet: string,
+  label: string,
+  concept: string,
+  unit: string,
+  group: WidVariableGroup,
+): WidVariable {
+  return {
+    sixlet,
+    label,
+    kind: measureKind(sixlet),
+    concept,
+    unit,
+    group,
+    groupLabel: GROUP_LABELS[group],
+  }
+}
+
 /**
- * Variables exposed in Version 1. We keep matched average/threshold pairs so
- * the profile (a…) and CDF (t…) views share the same concept.
+ * Variables exposées dans le panneau de visualisation (V1).
+ * Paires moyenne / seuil pour le patrimoine net et le revenu avant impôt.
  */
-export const WID_V1_VARIABLES: WidVariable[] = [
-  {
-    sixlet: 'ahweal',
-    label: 'Patrimoine net moyen (average)',
-    kind: 'average',
-    concept: 'Net personal wealth',
-    unit: 'monnaie locale constante',
-  },
-  {
-    sixlet: 'thweal',
-    label: 'Patrimoine net — seuil (threshold)',
-    kind: 'threshold',
-    concept: 'Net personal wealth',
-    unit: 'monnaie locale constante',
-  },
-  {
-    sixlet: 'aptinc',
-    label: 'Revenu avant impôt moyen (average)',
-    kind: 'average',
-    concept: 'Pre-tax national income',
-    unit: 'monnaie locale constante',
-  },
-  {
-    sixlet: 'tptinc',
-    label: 'Revenu avant impôt — seuil (threshold)',
-    kind: 'threshold',
-    concept: 'Pre-tax national income',
-    unit: 'monnaie locale constante',
-  },
+export const WID_PROFILE_VARIABLES: WidVariable[] = [
+  v('ahweal', 'Patrimoine net moyen', 'hweal', 'monnaie locale constante', 'wealth'),
+  v('thweal', 'Patrimoine net — seuil', 'hweal', 'monnaie locale constante', 'wealth'),
+  v('aptinc', 'Revenu avant impôt moyen', 'ptinc', 'monnaie locale constante', 'income'),
+  v('tptinc', 'Revenu avant impôt — seuil', 'ptinc', 'monnaie locale constante', 'income'),
 ]
 
 export function findWidVariable(sixlet: string): WidVariable | undefined {
-  return WID_V1_VARIABLES.find((v) => v.sixlet === sixlet)
+  return WID_PROFILE_VARIABLES.find((item) => item.sixlet === sixlet)
+}
+
+export const WID_THRESHOLD_VARIABLES = WID_PROFILE_VARIABLES.filter((item) => item.kind === 'threshold')
+
+/** Retourne la variable seuil jumelle (même concept). */
+export function thresholdVariableFor(sixlet: string): string {
+  const current = findWidVariable(sixlet)
+  if (!current) return sixlet
+  if (current.kind === 'threshold') return sixlet
+  const pair = WID_PROFILE_VARIABLES.find(
+    (item) => item.concept === current.concept && item.kind === 'threshold',
+  )
+  return pair?.sixlet ?? sixlet
 }
 
 export interface CodeOption {

@@ -6,21 +6,15 @@ definePageMeta({
 const features = [
   {
     icon: 'mdi-chart-bar',
-    title: 'Boie à outils de visus',
-    text: 'Valeur d’une variable WID (moyenne a… ou seuil t…) à travers les 127 g-percentiles, avec bascule lin/log et zoom queue haute.',
-    to: '/profil',
+    title: 'Panneau de visualisation',
+    text: 'Trois types de boîtes à outils : série temporelle, nuage de 2 variables, profil sur les 127 g-percentiles.',
+    to: '/panneau',
   },
   {
-    icon: 'mdi-chart-scatter-plot',
-    title: 'Nuage 2 variables',
-    text: 'Relation entre deux variables jointes par percentile : un point = un g-percentile, mêmes age/pop.',
-    to: '/nuage',
-  },
-  {
-    icon: 'mdi-view-grid',
-    title: 'Multi-panneaux',
-    text: 'Plusieurs profils en parallèle pour comparer variables, pays ou années d’un coup d’œil.',
-    to: '/panneaux',
+    icon: 'mdi-view-grid-plus',
+    title: 'Grille de visualisations',
+    text: 'Composez une grille de panneaux de visualisation en parallèle — ajoutez autant de panneaux que nécessaire.',
+    to: '/grille',
   },
 ]
 </script>
@@ -35,12 +29,11 @@ const features = [
         <p class="text-body-1 text-medium-emphasis mb-6">
           Visualisez les données de
           <a href="https://wid.world/" target="_blank" rel="noopener">WID.world</a>
-          sur les 127 g-percentiles : profils moyens et seuils, nuages joints par
-          percentile et comparaisons multi-panneaux. Construit avec Nuxt, Vuetify
-          et ECharts.
+          sur les 127 g-percentiles : profils, grilles de visualisations
+          composables. Construit avec Nuxt, Vuetify et ECharts.
         </p>
         <div class="d-flex flex-wrap ga-3">
-          <v-btn color="primary" size="large" to="/profil">
+          <v-btn color="primary" size="large" to="/panneau">
             Ouvrir l’explorateur
           </v-btn>
           <v-btn variant="outlined" size="large" to="/spec">
@@ -53,9 +46,12 @@ const features = [
           <v-icon icon="mdi-database-search-outline" size="36" class="mb-4" />
           <h2 class="text-h6 mb-2">Version 1</h2>
           <p class="text-body-2">
-            Source unique WID.world, filtres age/pop obligatoires, tri des
-            g-percentiles par rang, échelles lin/log avec garde-fou sur les
-            valeurs négatives. Données d’exemple hors-ligne, live via clé API.
+            Données WID.world en direct (clé API). Panneau de visualisation :
+            profils moyen ou seuil sur les 127 g-percentiles, vues densité de
+            population et de probabilité, échelles lin/log, zoom sur la queue
+            de distribution. Grille de visualisations pour composer plusieurs
+            panneaux en parallèle. Filtres âge et population en paramètres
+            avancés (992 / j par défaut).
           </p>
         </v-card>
       </v-col>
@@ -66,7 +62,7 @@ const features = [
         v-for="feature in features"
         :key="feature.title"
         cols="12"
-        md="4"
+        md="6"
       >
         <v-card
           class="h-100 pa-5"

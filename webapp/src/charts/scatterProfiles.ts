@@ -1,5 +1,6 @@
-import type { EChartsOption } from 'echarts'
 import type { ProfileScatterPoint } from '@src/domain/joinProfiles'
+import type { EChartsOption } from 'echarts'
+import { formatCompactAxisValue } from '@src/charts/axisFormat'
 
 export interface ProfileScatterOptions {
   xLabel: string
@@ -47,7 +48,7 @@ export function buildProfileScatterOption(
           + `${yLabel}: ${v[1].toLocaleString('fr-FR')}`
       },
     },
-    grid: { left: 64, right: 24, top: 56, bottom: 64 },
+    grid: { left: 64, right: 24, top: 56, bottom: 88 },
     visualMap: {
       type: 'continuous',
       min: 0,
@@ -55,22 +56,33 @@ export function buildProfileScatterOption(
       dimension: 2,
       calculable: true,
       orient: 'horizontal',
-      left: 'center',
-      bottom: 0,
+      left: 64,
+      right: 24,
+      bottom: 8,
+      /** Horizontal bar: itemWidth = thickness, length follows left/right. */
+      itemWidth: 16,
+      handleSize: '120%',
       text: ['rang 100', 'rang 0'],
+      textGap: 10,
       inRange: { color: ['#1565C0', '#00897B', '#EF6C00'] },
     },
     xAxis: {
       type: logScaleX ? 'log' : 'value',
       name: xLabel,
       nameLocation: 'middle',
-      nameGap: 32,
-      scale: true,
+      nameGap: 28,
+      scale: !logScaleX,
+      axisLabel: {
+        formatter: (value: number) => formatCompactAxisValue(value),
+      },
     },
     yAxis: {
       type: logScaleY ? 'log' : 'value',
       name: yLabel,
-      scale: true,
+      scale: !logScaleY,
+      axisLabel: {
+        formatter: (value: number) => formatCompactAxisValue(value),
+      },
     },
     series: [
       {

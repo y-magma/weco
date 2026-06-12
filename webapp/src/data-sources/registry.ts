@@ -7,10 +7,6 @@ export function registerDataSource(source: DataSource): void {
   registry.set(source.id, source)
 }
 
-export function getDataSource(id: string): DataSource | undefined {
-  return registry.get(id)
-}
-
 export function listDataSources(): DataSource[] {
   return Array.from(registry.values())
 }

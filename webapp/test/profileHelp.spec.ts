@@ -24,6 +24,7 @@ describe('buildActiveCalculationHelp', () => {
       logScaleY: false,
       populationDensity: false,
       probabilityDensity: false,
+      lorenzCurve: false,
       profile: baseProfile,
     })
     expect(help.title).toBe('Comment sont calculées mes données ?')
@@ -37,9 +38,24 @@ describe('buildActiveCalculationHelp', () => {
       logScaleY: false,
       populationDensity: true,
       probabilityDensity: true,
+      lorenzCurve: false,
       profile: baseProfile,
     })
     expect(help.paragraphs.some((p) => p.includes('densité de probabilité'))).toBe(true)
     expect(help.paragraphs.some((p) => p.includes('Δ(rang'))).toBe(true)
+  })
+
+  it('describes Lorenz curve when enabled', () => {
+    const help = buildActiveCalculationHelp({
+      chartType: 'line',
+      logScaleX: false,
+      logScaleY: false,
+      populationDensity: false,
+      probabilityDensity: false,
+      lorenzCurve: true,
+      profile: baseProfile,
+    })
+    expect(help.paragraphs.some((p) => p.includes('courbe de Lorenz'))).toBe(true)
+    expect(help.paragraphs.some((p) => p.includes('masse'))).toBe(true)
   })
 })

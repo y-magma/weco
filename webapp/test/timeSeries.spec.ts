@@ -1,0 +1,40 @@
+import { describe, expect, it } from 'vitest'
+import { buildTimeSeriesOption } from '@src/charts/timeSeries'
+import type { DataSeries } from '@src/domain/types'
+
+const sampleSeries: DataSeries = {
+  id: 'FR-ahweal',
+  label: 'FR · Patrimoine net moyen',
+  points: [
+    { year: 2020, value: 150_000 },
+    { year: 2021, value: 1_500_000 },
+  ],
+}
+
+describe('buildTimeSeriesOption', () => {
+  it('formats the y-axis with compact labels', () => {
+    const option = buildTimeSeriesOption([sampleSeries], 'Test', { logScaleY: true })
+    const formatter = (option.yAxis as { axisLabel: { formatter: (v: number) => string } }).axisLabel.formatter
+    expect(formatter(10_000)).toBe('10k')
+    expect(formatter(1_000_000)).toBe('1M')
+  })
+
+  it('uses a log y-axis when logScaleY is set', () => {
+    const option = buildTimeSeriesOption([sampleSeries], 'Test', { logScaleY: true })
+    expect((option.yAxis as { type: string }).type).toBe('log')
+  })
+
+  it('drops non-positive values on a log axis', () => {
+    const series: DataSeries = {
+      ...sampleSeries,
+      points: [
+        { year: 2020, value: 0 },
+        { year: 2021, value: 100 },
+      ],
+    }
+    const option = buildTimeSeriesOption([series], 'Test', { logScaleY: true })
+    const data = (option.series as { data: (number | null)[] }[])[0]!.data
+    expect(data[0]).toBeNull()
+    expect(data[1]).toBe(100)
+  })
+})

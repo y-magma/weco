@@ -18,11 +18,9 @@ const drawerModel = computed<boolean>({
 
 const navItems = [
   { title: 'Home', to: '/', icon: 'mdi-home' },
-  { title: 'Boie à outils de visus', to: '/profil', icon: 'mdi-chart-bar' },
-  { title: 'Nuage 2 variables', to: '/nuage', icon: 'mdi-chart-scatter-plot' },
-  { title: 'Multi-panneaux', to: '/panneaux', icon: 'mdi-view-grid' },
-  { title: 'Spécification', to: '/spec', icon: 'mdi-file-document-multiple' },
-  { title: 'Dashboard', to: '/dashboard', icon: 'mdi-chart-line' },
+  { title: 'Panneau de visualisations', to: '/panneau', icon: 'mdi-chart-bar' },
+  { title: 'Grille de visualisations', to: '/grille', icon: 'mdi-view-grid-plus' },
+  { title: 'Spécifications', to: '/spec', icon: 'mdi-file-document-multiple' },
   { title: 'Data Sources', to: '/sources', icon: 'mdi-database' },
   { title: 'CSV Import', to: '/csv', icon: 'mdi-file-delimited' },
 ]
@@ -36,8 +34,8 @@ const navItems = [
       :permanent="mdAndUp"
     >
       <v-list-item
-        title="Economic Stress"
-        subtitle="Inequality dashboard"
+        title="Boîte à outils de visualisations"
+        subtitle="Distribution des richesses"
         class="py-4"
       />
 
@@ -61,7 +59,7 @@ const navItems = [
         @click="mobileDrawer = !mobileDrawer"
       />
       <v-app-bar-title class="text-body-1 font-weight-bold">
-        Economic Stress Dashboard
+        Boîte à outils de visualisations
       </v-app-bar-title>
       <v-spacer />
       <v-btn
@@ -82,7 +80,7 @@ const navItems = [
     </v-main>
 
     <v-footer app border class="text-caption text-medium-emphasis">
-      Open data dashboard — compare inequality metrics and stress hypotheses
+      Visualisation des données WID.world — panneaux et grilles de graphiques
     </v-footer>
   </v-app>
 </template>

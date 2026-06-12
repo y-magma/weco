@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildProfileDataZoom,
   buildProfileOption,
   buildRankBandItems,
   computeBandAxisBounds,
@@ -7,6 +8,7 @@ import {
   computeRankIntervalExtent,
   filterPointsByValueRange,
   computePdfBins,
+  computeLorenzPoints,
   formatRankAxisLabel,
   rankDisplayCoordinate,
   rankDisplayCoordinateUpper,
@@ -70,6 +72,22 @@ describe('computeRankIntervalExtent', () => {
       { percentile: 'p90p91', rank: 90, value: 200000 },
     ])
     expect(extent).toEqual({ rankLo: 50, rankHi: 91 })
+  })
+})
+
+describe('buildProfileDataZoom', () => {
+  it('uses a vertical slider for the value axis in the default view', () => {
+    const zooms = buildProfileDataZoom(false)
+    const valueSlider = zooms.find((z) => z.type === 'slider' && z.orient === 'vertical' && z.yAxisIndex === 0)
+    expect(valueSlider).toBeDefined()
+    expect(zooms.find((z) => z.type === 'slider' && z.xAxisIndex === 0)).toBeDefined()
+  })
+
+  it('uses a horizontal slider for the value axis in population-density view', () => {
+    const zooms = buildProfileDataZoom(true)
+    const valueSlider = zooms.find((z) => z.type === 'slider' && z.xAxisIndex === 0)
+    expect(valueSlider).toBeDefined()
+    expect(zooms.find((z) => z.type === 'slider' && z.orient === 'vertical' && z.yAxisIndex === 0)).toBeDefined()
   })
 })
 
@@ -164,6 +182,13 @@ describe('buildProfileOption', () => {
   it('uses a log axis when logScaleY is set', () => {
     const option = buildProfileOption(makeProfile(), { logScaleY: true })
     expect((option.yAxis as { type: string }).type).toBe('log')
+  })
+
+  it('formats the value axis with compact labels', () => {
+    const option = buildProfileOption(makeProfile(), { logScaleY: true })
+    const formatter = (option.yAxis as { axisLabel: { formatter: (v: number) => string } }).axisLabel.formatter
+    expect(formatter(1_000_000)).toBe('1M')
+    expect(formatter(10_000)).toBe('10k')
   })
 
   it('drops non-positive values on a log axis (guard)', () => {
@@ -392,6 +417,32 @@ describe('buildProfileOption — population density view', () => {
   })
 })
 
+describe('computeLorenzPoints', () => {
+  it('computes cumulative population and wealth shares from brackets', () => {
+    const points = computeLorenzPoints([
+      { percentile: 'p0p1', rank: 0, value: 0 },
+      { percentile: 'p50p51', rank: 50, value: 100 },
+      { percentile: 'p100', rank: 100, value: 200 },
+    ])
+    expect(points[0]).toEqual({ populationShare: 0, wealthShare: 0 })
+    expect(points[1]).toMatchObject({ populationShare: 50 })
+    expect(points[1]!.wealthShare).toBeCloseTo(25)
+    expect(points[2]).toMatchObject({ populationShare: 100, wealthShare: 100 })
+  })
+})
+
+describe('buildProfileOption — Lorenz curve', () => {
+  it('plots cumulative population vs cumulative wealth with an equality reference', () => {
+    const option = buildProfileOption(makeProfile(), { lorenzCurve: true })
+    expect((option.xAxis as { name: string }).name).toContain('population')
+    expect((option.yAxis as { name: string }).name).toContain('patrimoine')
+    const series = option.series as { name?: string, type: string }[]
+    expect(series).toHaveLength(2)
+    expect(series[0]!.name).toBe('Égalité parfaite')
+    expect(series[1]!.type).toBe('line')
+  })
+})
+
 describe('computePdfBins', () => {
   it('computes ΔF/Δx between consecutive percentile brackets', () => {
     const bins = computePdfBins(makeProfile().points)
@@ -435,5 +486,32 @@ describe('buildProfileOption — probability density view', () => {
       logScaleY: true,
     })
     expect((option.yAxis as { type: string }).type).toBe('log')
+    expect((option.yAxis as { scale: boolean }).scale).toBe(false)
+  })
+
+  it('draws PDF bins as wealth-span bands anchored at the density floor on log Y', () => {
+    const profile = makeProfile({
+      points: [
+        { percentile: 'p0p1', rank: 0, value: 1000 },
+        { percentile: 'p50p51', rank: 50, value: 50_000 },
+        { percentile: 'p90p91', rank: 90, value: 500_000 },
+      ],
+    })
+    const option = buildProfileOption(profile, {
+      populationDensity: true,
+      probabilityDensity: true,
+      chartType: 'bar',
+      logScaleY: true,
+    })
+    const yAxis = option.yAxis as { min: number, max: number, scale: boolean }
+    const series = (option.series as { type: string, data: { value: [number, number, number] }[] }[])[0]!
+    const densities = series.data.map((d) => d.value[2])
+
+    expect(series.type).toBe('custom')
+    expect(series.data[0]!.value[0]).toBe(1000)
+    expect(series.data[0]!.value[1]).toBe(50_000)
+    expect(yAxis.scale).toBe(false)
+    expect(yAxis.min).toBeLessThan(Math.min(...densities))
+    expect(yAxis.max).toBeGreaterThan(Math.max(...densities))
   })
 })

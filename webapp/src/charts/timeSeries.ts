@@ -1,12 +1,19 @@
 import type { DataSeries } from '@src/domain/types'
 import type { EChartsOption } from 'echarts'
+import { formatCompactAxisValue } from '@src/charts/axisFormat'
 
 const COLORS = ['#1565C0', '#00897B', '#EF6C00', '#6A1B9A']
+
+export interface TimeSeriesChartOptions {
+  logScaleY?: boolean
+}
 
 export function buildTimeSeriesOption(
   seriesList: DataSeries[],
   title = 'Time series comparison',
+  options: TimeSeriesChartOptions = {},
 ): EChartsOption {
+  const { logScaleY = false } = options
   const years = Array.from(
     new Set(seriesList.flatMap((series) => series.points.map((point) => point.year))),
   ).sort((a, b) => a - b)
@@ -42,11 +49,14 @@ export function buildTimeSeriesOption(
     xAxis: {
       type: 'category',
       data: years.map(String),
-      name: 'Year',
+      name: 'Année',
     },
     yAxis: {
-      type: 'value',
-      scale: true,
+      type: logScaleY ? 'log' : 'value',
+      scale: !logScaleY,
+      axisLabel: {
+        formatter: (value: number) => formatCompactAxisValue(value),
+      },
     },
     series: seriesList.map((series) => ({
       name: series.label,
@@ -55,7 +65,9 @@ export function buildTimeSeriesOption(
       showSymbol: false,
       data: years.map((year) => {
         const point = series.points.find((item) => item.year === year)
-        return point?.value ?? null
+        const value = point?.value ?? null
+        if (logScaleY && (value === null || value <= 0)) return null
+        return value
       }),
     })),
   }

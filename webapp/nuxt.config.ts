@@ -44,17 +44,31 @@ export default defineNuxtConfig({
     },
   },
 
+  routeRules: {
+    '/profil': { redirect: '/panneau/population' },
+    '/panneau-visualisation': { redirect: '/panneau' },
+    '/nuage': { redirect: '/panneau/variables' },
+    '/grille-visus': { redirect: '/grille' },
+    '/grille-visualisations': { redirect: '/grille' },
+  },
+
   nitro: {
     prerender: {
-      routes: ['/', '/profil', '/nuage', '/panneaux', '/spec', '/dashboard', '/sources', '/csv'],
+      routes: [
+        '/',
+        '/panneau',
+        '/panneau/population',
+        '/panneau/temps',
+        '/panneau/variables',
+        '/grille',
+        '/spec',
+        '/sources',
+        '/csv',
+      ],
     },
   },
 
   runtimeConfig: {
-    // Server-only: directory holding the local WID.world dump
-    // (`WID_data_<AREA>.csv`). Defaults to `webapp/data/WID_DATA` (a symlink to
-    // the full dump). Override with the `WID_DATA_DIR` env var.
-    widDataDir: process.env.WID_DATA_DIR || '',
     public: {
       widApiKey: process.env.NUXT_PUBLIC_WID_API_KEY || '',
       widApiBaseUrl:
@@ -65,12 +79,12 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Economic Stress Dashboard',
+      title: 'Boîte à outils de visualisations',
       meta: [
         {
           name: 'description',
           content:
-            'Compare economic inequality and stress hypothesis indicators from WID.world and other sources.',
+            'Visualisez les distributions WID.world sur les 127 g-percentiles : profils, grilles et import CSV.',
         },
       ],
     },

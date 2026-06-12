@@ -1,5 +1,6 @@
 import type { EChartsOption } from 'echarts'
-import { buildProfileOption, computeProfileValueExtent } from '@src/charts/profile'
+import type { Ref } from 'vue'
+import { buildProfileOption } from '@src/charts/profile'
 import {
   buildDrilldownPoints,
   clampDrillLevel,
@@ -15,20 +16,28 @@ import {
   WID_DEFAULT_AGE,
   WID_DEFAULT_POP,
   WID_POP_OPTIONS,
-  WID_V1_VARIABLES,
+  WID_THRESHOLD_VARIABLES,
+  WID_PROFILE_VARIABLES,
+  WID_G_PERCENTILE_COUNT,
+  thresholdVariableFor,
 } from '@src/data-sources/wid/widCodes'
 
-const YEARS = Array.from({ length: 2023 - 1980 + 1 }, (_, i) => 1980 + i).reverse()
+export interface WidProfileStateOptions {
+  /** Shared country list (avoids N parallel fetches in multi-panel grids). */
+  countries?: Ref<CountryOption[]>
+  initialVariable?: string
+}
 
 /**
- * Shared WID Version-1 controls + the average/threshold profile view.
+ * Independent profile toolbox state. Instantiate once per visualization panel.
  * See spec/version1.md (graphe #2).
  */
-export function useWidProfile() {
+export function createWidProfileState(options: WidProfileStateOptions = {}) {
   const { defaultSource } = useDataSources()
+  const sharedCountries = options.countries
 
   const countryCode = ref('FR')
-  const variable = ref('ahweal')
+  const variable = ref(options.initialVariable ?? 'ahweal')
   const year = ref(2021)
   const age = ref(WID_DEFAULT_AGE)
   const pop = ref(WID_DEFAULT_POP)
@@ -37,22 +46,44 @@ export function useWidProfile() {
   const logScaleX = ref(false)
   const populationDensity = ref(false)
   const probabilityDensity = ref(false)
-  const valueZoomRange = ref<[number, number]>([0, 1])
+  const lorenzCurve = ref(false)
   const drillLevel = ref(0)
   const showAllPercentiles = ref(false)
 
   const loading = ref(false)
+  const yearsLoading = ref(false)
   const error = ref<string | null>(null)
-  const sampleMode = ref(false)
 
-  const countries = ref<CountryOption[]>([])
+  const localCountries = ref<CountryOption[]>([])
+  const countries = sharedCountries ?? localCountries
+  const availableYears = ref<number[]>([])
   const profile = ref<PercentileProfile | null>(null)
   const profileOption = ref<EChartsOption | null>(null)
 
-  const variables = WID_V1_VARIABLES
+  const variables = computed(() =>
+    probabilityDensity.value ? WID_THRESHOLD_VARIABLES : WID_PROFILE_VARIABLES,
+  )
   const ageOptions = WID_AGE_OPTIONS
   const popOptions = WID_POP_OPTIONS
-  const years = YEARS
+  const years = computed(() => availableYears.value)
+  const yearRangeLabel = computed(() => {
+    const list = availableYears.value
+    if (list.length === 0) return ''
+    const min = list[list.length - 1]!
+    const max = list[0]!
+    return min === max ? `${max}` : `${min}–${max}`
+  })
+
+  const profilePointCount = computed(() => profile.value?.points.length ?? 0)
+  const profilePointCountLabel = computed(() => {
+    const n = profilePointCount.value
+    if (n === 0) return ''
+    if (n >= WID_G_PERCENTILE_COUNT) return `${n} g-percentiles`
+    return `${n} / ${WID_G_PERCENTILE_COUNT} g-percentiles`
+  })
+  const profilePartialData = computed(
+    () => profilePointCount.value > 0 && profilePointCount.value < WID_G_PERCENTILE_COUNT,
+  )
 
   const widSource = () => defaultSource.value as WidDataSource
 
@@ -76,44 +107,6 @@ export function useWidProfile() {
   )
   const canDrillDown = computed(() => currentDrillableCode.value !== null)
 
-  const profileValueExtent = computed(() =>
-    displayPoints.value.length ? computeProfileValueExtent(displayPoints.value) : null,
-  )
-
-  const valueZoomHint = computed(() =>
-    populationDensity.value || probabilityDensity.value
-      ? 'Recadre richesse (X) et population % (Y) sur la plage choisie.'
-      : 'Recadre valeur (Y) et population % (X) sur la plage choisie.',
-  )
-
-  const valueZoomStep = computed(() => {
-    const extent = profileValueExtent.value
-    if (!extent) return 1
-    const span = extent.max - extent.min
-    if (span <= 0) return 1
-    const raw = span / 200
-    const mag = 10 ** Math.floor(Math.log10(raw))
-    return Math.max(1, Math.ceil(raw / mag) * mag)
-  })
-
-  const valueZoomEnabled = computed(() => {
-    const extent = profileValueExtent.value
-    if (!extent) return false
-    const [lo, hi] = valueZoomRange.value
-    const eps = Math.max(valueZoomStep.value / 2, (extent.max - extent.min) * 1e-9)
-    return lo > extent.min + eps || hi < extent.max - eps
-  })
-
-  const syncValueZoomBounds = () => {
-    const extent = profileValueExtent.value
-    if (!extent) return
-    valueZoomRange.value = [extent.min, extent.max]
-  }
-
-  const resetValueZoom = () => {
-    syncValueZoomBounds()
-  }
-
   const drillTo = (level: number) => {
     drillLevel.value = clampDrillLevel(level)
   }
@@ -130,10 +123,36 @@ export function useWidProfile() {
   }
 
   const loadCountries = async () => {
+    if (countries.value.length > 0) return
+    countries.value = await widSource().listCountries()
+  }
+
+  const syncYearToAvailable = () => {
+    const list = availableYears.value
+    if (list.length === 0) return
+    if (!list.includes(year.value)) year.value = list[0]!
+  }
+
+  const refreshYears = async () => {
+    if (!countryCode.value) {
+      availableYears.value = []
+      return
+    }
+
+    yearsLoading.value = true
     try {
-      countries.value = await widSource().listCountries()
-    } catch {
-      countries.value = [{ code: 'FR', label: 'France' }]
+      availableYears.value = await widSource().listProfileYears({
+        countryCode: countryCode.value,
+        variable: variable.value,
+        age: age.value,
+        pop: pop.value,
+      })
+      syncYearToAvailable()
+    } catch (err) {
+      availableYears.value = []
+      error.value = err instanceof Error ? err.message : 'Échec du chargement des années disponibles'
+    } finally {
+      yearsLoading.value = false
     }
   }
 
@@ -142,9 +161,6 @@ export function useWidProfile() {
       profileOption.value = null
       return
     }
-    const valueRange = valueZoomEnabled.value
-      ? { min: valueZoomRange.value[0], max: valueZoomRange.value[1] }
-      : undefined
     const displayed: PercentileProfile = { ...profile.value, points: displayPoints.value }
     profileOption.value = buildProfileOption(displayed, {
       chartType: chartType.value,
@@ -152,7 +168,7 @@ export function useWidProfile() {
       logScaleX: logScaleX.value,
       populationDensity: populationDensity.value,
       probabilityDensity: probabilityDensity.value,
-      valueRange,
+      lorenzCurve: lorenzCurve.value,
     })
   }
 
@@ -161,43 +177,63 @@ export function useWidProfile() {
     error.value = null
     drillLevel.value = 0
     try {
-      const source = widSource()
-      sampleMode.value = source.isSampleMode()
-      profile.value = await source.fetchPercentileProfile({
+      profile.value = await widSource().fetchPercentileProfile({
         countryCode: countryCode.value,
         variable: variable.value,
         year: year.value,
         age: age.value,
         pop: pop.value,
       })
-      sampleMode.value = profile.value.sample
-      syncValueZoomBounds()
       rebuild()
     } catch (err) {
+      profile.value = null
+      profileOption.value = null
       error.value = err instanceof Error ? err.message : 'Échec du chargement du profil'
     } finally {
       loading.value = false
     }
   }
 
-  watch([countryCode, variable, year, age, pop], load)
+  const init = async () => {
+    try {
+      await loadCountries()
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Échec du chargement des pays'
+      return
+    }
+    await refreshYears()
+    if (availableYears.value.length > 0) await load()
+  }
+
+  watch([countryCode, variable, age, pop], async () => {
+    await refreshYears()
+    if (availableYears.value.length > 0) await load()
+  })
+
+  watch(year, () => {
+    if (availableYears.value.includes(year.value)) void load()
+  })
   watch(probabilityDensity, (enabled) => {
-    if (enabled) populationDensity.value = true
+    if (enabled) {
+      populationDensity.value = true
+      lorenzCurve.value = false
+      variable.value = thresholdVariableFor(variable.value)
+    }
   })
   watch(populationDensity, (enabled) => {
     if (!enabled) probabilityDensity.value = false
+    if (enabled) lorenzCurve.value = false
   })
-  watch([chartType, logScaleY, logScaleX, populationDensity, probabilityDensity], rebuild)
-  watch(valueZoomRange, rebuild, { deep: true })
-  watch([drillLevel, showAllPercentiles], () => {
-    syncValueZoomBounds()
-    rebuild()
+  watch(lorenzCurve, (enabled) => {
+    if (enabled) {
+      populationDensity.value = false
+      probabilityDensity.value = false
+      logScaleX.value = false
+      logScaleY.value = false
+    }
   })
-
-  onMounted(async () => {
-    await loadCountries()
-    await load()
-  })
+  watch([chartType, logScaleY, logScaleX, populationDensity, probabilityDensity, lorenzCurve], rebuild)
+  watch([drillLevel, showAllPercentiles], rebuild)
 
   return {
     countryCode,
@@ -210,20 +246,16 @@ export function useWidProfile() {
     logScaleX,
     populationDensity,
     probabilityDensity,
+    lorenzCurve,
     countries,
     variables,
     ageOptions,
     popOptions,
     years,
+    yearsLoading,
+    yearRangeLabel,
     loading,
     error,
-    sampleMode,
-    valueZoomRange,
-    valueZoomStep,
-    valueZoomEnabled,
-    profileValueExtent,
-    valueZoomHint,
-    resetValueZoom,
     drillLevel,
     drillBreadcrumb,
     currentDrillableCode,
@@ -235,6 +267,10 @@ export function useWidProfile() {
     handleChartClick,
     profile,
     profileOption,
+    profilePointCount,
+    profilePointCountLabel,
+    profilePartialData,
     load,
+    init,
   }
 }

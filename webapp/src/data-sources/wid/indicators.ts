@@ -1,16 +1,5 @@
 import type { IndicatorMeta } from '@src/domain/types'
 
-export const WID_COUNTRIES: { code: string; label: string }[] = [
-  { code: 'FR', label: 'France' },
-  { code: 'US', label: 'United States' },
-  { code: 'GB', label: 'United Kingdom' },
-  { code: 'DE', label: 'Germany' },
-  { code: 'BR', label: 'Brazil' },
-  { code: 'IN', label: 'India' },
-  { code: 'ZA', label: 'South Africa' },
-  { code: 'CN', label: 'China' },
-]
-
 export const WID_INDICATORS: IndicatorMeta[] = [
   {
     id: 'sptinc',
@@ -38,17 +27,6 @@ export const WID_INDICATORS: IndicatorMeta[] = [
     label: 'Average household wealth',
     description: 'Average net household wealth (PPP euros).',
     unit: 'EUR',
-    sourceId: 'wid',
-  },
-]
-
-export const WID_STRESS_PROXY_INDICATORS: IndicatorMeta[] = [
-  {
-    id: 'stress_index',
-    label: 'Social stress proxy (sample)',
-    description:
-      'Placeholder composite index for hypothesis testing until external stress data is connected.',
-    unit: 'index',
     sourceId: 'wid',
   },
 ]

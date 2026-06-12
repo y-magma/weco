@@ -71,12 +71,8 @@ export interface FetchProfileParams {
   pop: string
 }
 
-export interface ScatterPoint {
-  x: number
-  y: number
-  label?: string
-  year?: number
-}
+/** Profile filters without year — used to query available years from the API. */
+export type ListProfileYearsParams = Omit<FetchProfileParams, 'year'>
 
 export interface CountryOption {
   code: string
@@ -86,6 +82,18 @@ export interface CountryOption {
 export interface FetchSeriesParams {
   countryCode: string
   indicatorId: string
+  yearFrom?: number
+  yearTo?: number
+}
+
+export interface FetchVariableTimeSeriesParams {
+  countryCode: string
+  /** Six-letter variable, e.g. `ahweal`. */
+  variable: string
+  age: string
+  pop: string
+  /** WID percentile bracket, e.g. `p50p51`. Defaults to median bracket. */
+  percentile?: string
   yearFrom?: number
   yearTo?: number
 }

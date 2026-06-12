@@ -79,18 +79,16 @@ export type CsvReaderInput =
   | { type: 'string'; content: string }
   | { type: 'url'; url: string }
 
-export class CsvReaderFactory {
-  static create(input: CsvReaderInput, options?: CsvReaderOptions): CsvReader {
-    switch (input.type) {
-      case 'file':
-        return new FileCsvReader(input.file, options)
-      case 'string':
-        return new StringCsvReader(input.content, options)
-      case 'url':
-        return new UrlCsvReader(input.url, options)
-      default:
-        throw new Error('Unsupported CSV reader input')
-    }
+export function createCsvReader(input: CsvReaderInput, options?: CsvReaderOptions): CsvReader {
+  switch (input.type) {
+    case 'file':
+      return new FileCsvReader(input.file, options)
+    case 'string':
+      return new StringCsvReader(input.content, options)
+    case 'url':
+      return new UrlCsvReader(input.url, options)
+    default:
+      throw new Error('Unsupported CSV reader input')
   }
 }
 

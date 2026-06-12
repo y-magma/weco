@@ -3,6 +3,7 @@ import type { DataSeries, SeriesPoint } from '@src/domain/types'
 import { buildWidApiKeyHeader } from '@src/data-sources/wid/widApiKey'
 import { buildGPercentiles, parsePercentileRank } from '@src/data-sources/wid/percentiles'
 import { buildVariableCode } from '@src/data-sources/wid/widCodes'
+import { formatCountryLabel } from '@src/data-sources/wid/countryLabels'
 
 export interface WidClientConfig {
   baseUrl: string
@@ -102,6 +103,72 @@ export function parseProfileResponse(
   return rows
 }
 
+/** Representative g-percentiles used to probe the year span of a profile variable. */
+const PROFILE_YEAR_PROBE_PERCENTILES = ['p50p51', 'p0p1', 'p90p100'] as const
+
+/** Unique years from API rows, most recent first. */
+export function extractAvailableYears(rows: Array<{ year: number }>): number[] {
+  const years = new Set<number>()
+  for (const row of rows) {
+    if (Number.isFinite(row.year)) years.add(row.year)
+  }
+  return [...years].sort((a, b) => b - a)
+}
+
+/** Parse all year/value pairs from a `countries-variables` response. */
+export function parseSeriesResponse(response: Record<string, unknown>): WidProfileRow[] {
+  const rows: WidProfileRow[] = []
+  if (!response || typeof response !== 'object') return rows
+
+  for (const [fullCode, variablePayload] of Object.entries(response)) {
+    const parts = fullCode.split('_')
+    if (parts.length < 2) continue
+    const percentile = parts[1]!
+    const rank = parsePercentileRank(percentile)
+    if (Number.isNaN(rank)) continue
+
+    const countryEntries = Array.isArray(variablePayload)
+      ? variablePayload
+      : [variablePayload]
+
+    for (const countryEntry of countryEntries) {
+      if (!countryEntry || typeof countryEntry !== 'object') continue
+      for (const payload of Object.values(countryEntry as Record<string, unknown>)) {
+        const values = (payload as { values?: unknown[] })?.values
+        if (!Array.isArray(values)) continue
+        for (const entry of values) {
+          const parsed = parseWidValueEntry(entry)
+          if (!parsed) continue
+          rows.push({ percentile, rank, year: parsed[0], value: parsed[1] })
+        }
+      }
+    }
+  }
+
+  return rows
+}
+
+/**
+ * Parse `countries-available-variables` response into sorted country codes.
+ * Shape: `[{ "<sixlet>": { "<country>": [[percentile, age, pop], …], … } }]`
+ */
+export function parseAvailableCountriesResponse(response: unknown): string[] {
+  const codes = new Set<string>()
+  const entries = Array.isArray(response) ? response : [response]
+
+  for (const item of entries) {
+    if (!item || typeof item !== 'object') continue
+    for (const byCountry of Object.values(item as Record<string, unknown>)) {
+      if (!byCountry || typeof byCountry !== 'object') continue
+      for (const code of Object.keys(byCountry as Record<string, unknown>)) {
+        codes.add(code)
+      }
+    }
+  }
+
+  return [...codes].sort()
+}
+
 export class WidClient {
   private readonly baseUrl: string
   private readonly apiKeyHeader?: string
@@ -122,11 +189,14 @@ export class WidClient {
   }
 
   async listCountries(): Promise<{ code: string; label: string }[]> {
-    const response = await fetchJson<{ countries?: { code: string; label: string }[] }>(
-      `${this.baseUrl}/countries-variables`,
+    const response = await fetchJson<unknown>(
+      `${this.baseUrl}/countries-available-variables?countries=all&variables=ahweal`,
       { headers: this.headers() },
     )
-    return response.countries ?? []
+    return parseAvailableCountriesResponse(response).map((code) => ({
+      code,
+      label: formatCountryLabel(code),
+    }))
   }
 
   async fetchData(params: {
@@ -182,6 +252,68 @@ export class WidClient {
     }
 
     return rows.sort((a, b) => a.rank - b.rank)
+  }
+
+  /**
+   * List calendar years for which a profile variable has data (country / age / pop).
+   * Probes a few representative g-percentiles in one request and merges their spans.
+   */
+  async listProfileYears(params: {
+    area: string
+    sixlet: string
+    age: string
+    pop: string
+  }): Promise<number[]> {
+    const codes = PROFILE_YEAR_PROBE_PERCENTILES.map((percentile) =>
+      buildVariableCode(params.sixlet, percentile, params.age, params.pop),
+    )
+    const searchParams = new URLSearchParams()
+    searchParams.set('countries', params.area)
+    searchParams.set('variables', codes.join(','))
+    searchParams.set('years', 'all')
+
+    const response = await fetchJson<Record<string, unknown>>(
+      `${this.baseUrl}/countries-variables?${searchParams.toString()}`,
+      { headers: this.headers() },
+    )
+
+    return extractAvailableYears(parseSeriesResponse(response))
+  }
+
+  /** Fetch a single indicator/percentile time series for one country. */
+  async fetchIndicatorSeries(params: {
+    area: string
+    sixlet: string
+    age: string
+    pop: string
+    percentile: string
+    yearFrom?: number
+    yearTo?: number
+  }): Promise<{ year: number; value: number }[]> {
+    const code = buildVariableCode(
+      params.sixlet,
+      params.percentile,
+      params.age,
+      params.pop,
+    )
+    const searchParams = new URLSearchParams()
+    searchParams.set('countries', params.area)
+    searchParams.set('variables', code)
+    searchParams.set('years', 'all')
+
+    const response = await fetchJson<Record<string, unknown>>(
+      `${this.baseUrl}/countries-variables?${searchParams.toString()}`,
+      { headers: this.headers() },
+    )
+
+    return parseSeriesResponse(response)
+      .filter((row) => {
+        if (params.yearFrom != null && row.year < params.yearFrom) return false
+        if (params.yearTo != null && row.year > params.yearTo) return false
+        return true
+      })
+      .map((row) => ({ year: row.year, value: row.value }))
+      .sort((a, b) => a.year - b.year)
   }
 
   mapRowsToSeries(

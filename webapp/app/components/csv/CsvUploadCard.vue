@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CsvParseResult } from '@src/csv/CsvReaderFactory'
-import { CsvReaderFactory, mapCsvToSeries } from '@src/csv/CsvReaderFactory'
+import { createCsvReader, mapCsvToSeries } from '@src/csv/CsvReaderFactory'
 import { buildTimeSeriesOption } from '@src/charts/timeSeries'
 import type { EChartsOption } from 'echarts'
 
@@ -30,7 +30,7 @@ const onFileChange = async (files: File[] | File | null) => {
 
   loading.value = true
   try {
-    const reader = CsvReaderFactory.create({ type: 'file', file: file.value })
+    const reader = createCsvReader({ type: 'file', file: file.value })
     const result = await reader.parse()
     parseResult.value = result
     yearColumn.value = result.columns.find((column) =>

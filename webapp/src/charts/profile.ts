@@ -5,6 +5,7 @@ import type {
 } from 'echarts'
 import type { PercentilePoint, PercentileProfile } from '@src/domain/types'
 import { parsePercentileInterval } from '@src/data-sources/wid/percentiles'
+import { formatCompactAxisValue } from '@src/charts/axisFormat'
 
 export interface ProfileChartOptions {
   /** Visual encoding of the profile. */
@@ -23,6 +24,8 @@ export interface ProfileChartOptions {
    * F is the empirical CDF from consecutive percentile brackets.
    */
   probabilityDensity?: boolean
+  /** Lorenz curve: cumulative population % vs cumulative wealth %. */
+  lorenzCurve?: boolean
   /** Optional zoom on the value axis; rank axis is auto-fitted to visible brackets. */
   valueRange?: ValueRangeZoom
   title?: string
@@ -282,6 +285,59 @@ export function computePdfBins(
   return bins
 }
 
+export interface LorenzPoint {
+  populationShare: number
+  wealthShare: number
+}
+
+/**
+ * Empirical Lorenz curve from consecutive g-percentile brackets.
+ * Wealth in ]rankᵢ, rankᵢ₊₁] ≈ (Δrang/100) × moyenne(valeurᵢ, valeurᵢ₊₁).
+ */
+export function computeLorenzPoints(points: PercentilePoint[]): LorenzPoint[] {
+  const ordered = [...points]
+    .sort((a, b) => a.rank - b.rank)
+    .filter((point) => {
+      if (point.value === null || Number.isNaN(point.value)) return false
+      if (!Number.isFinite(point.rank) || point.rank < 0) return false
+      return point.value >= 0
+    })
+
+  if (ordered.length < 2) {
+    return [{ populationShare: 0, wealthShare: 0 }]
+  }
+
+  const brackets: { rankHi: number, amount: number }[] = []
+  let totalWealth = 0
+
+  for (let i = 0; i < ordered.length - 1; i++) {
+    const lo = ordered[i]!
+    const hi = ordered[i + 1]!
+    const deltaRank = hi.rank - lo.rank
+    if (deltaRank <= 0) continue
+    const midValue = (lo.value! + hi.value!) / 2
+    const amount = (deltaRank / 100) * midValue
+    brackets.push({ rankHi: hi.rank, amount })
+    totalWealth += amount
+  }
+
+  if (totalWealth <= 0 || brackets.length === 0) {
+    return [{ populationShare: 0, wealthShare: 0 }]
+  }
+
+  const result: LorenzPoint[] = [{ populationShare: 0, wealthShare: 0 }]
+  let cumWealth = 0
+  for (const bracket of brackets) {
+    cumWealth += bracket.amount
+    result.push({
+      populationShare: bracket.rankHi,
+      wealthShare: (cumWealth / totalWealth) * 100,
+    })
+  }
+
+  return result
+}
+
 function formatRankPercent(rank: number): string {
   if (!Number.isFinite(rank)) return ''
   const rounded = Math.round(rank)
@@ -338,7 +394,11 @@ function buildValueAxis(valueAxisName: string, logValue: boolean) {
   return {
     type: logValue ? ('log' as const) : ('value' as const),
     name: valueAxisName,
-    scale: true,
+    // `scale: true` on log axes mis-anchors bars/bands (baseline at the wrong end).
+    scale: !logValue,
+    axisLabel: {
+      formatter: (value: number) => formatCompactAxisValue(value),
+    },
   }
 }
 
@@ -347,7 +407,7 @@ function buildDensityAxis(unit: string | undefined, logDensity: boolean) {
   return {
     type: logDensity ? ('log' as const) : ('value' as const),
     name: `Densité de probabilité${unitSuffix}`,
-    scale: true,
+    scale: !logDensity,
     axisLabel: {
       formatter: (value: number) => {
         if (!Number.isFinite(value)) return ''
@@ -370,6 +430,25 @@ function cleanDensity(density: number, logOnDensity: boolean): number | null {
     return logOnDensity ? null : density
   }
   return density
+}
+
+/** Fit the density axis to the displayed PDF values (required on log Y). */
+function applyPdfDensityAxisExtent(
+  yAxis: ReturnType<typeof buildDensityAxis>,
+  densities: number[],
+  logOnDensity: boolean,
+) {
+  if (densities.length === 0) return
+  const dMin = Math.min(...densities)
+  const dMax = Math.max(...densities)
+  const span = dMax - dMin || dMax * 0.1 || 1
+  if (logOnDensity) {
+    yAxis.min = Math.max(1e-12, dMin / 2)
+    yAxis.max = dMax * 2
+  } else {
+    yAxis.min = Math.max(0, dMin - span * 0.1)
+    yAxis.max = dMax + span * 0.1
+  }
 }
 
 function formatBandInterval(i: number, k: number): string {
@@ -487,7 +566,7 @@ export function computeBandAxisBounds(
   let xMax: number | undefined
   let yMin: number | undefined
   let yMax: number | undefined
-  let xBase = 0
+  const xBase = 0
   let yBase = 0
 
   if (logOnRank) {
@@ -517,10 +596,58 @@ export function computeBandAxisBounds(
   return { xMin, xMax, yMin, yMax, xBase, yBase }
 }
 
+type GridPixelRect = { left: number, top: number, right: number, bottom: number }
+
+function gridPixelRect(params: CustomSeriesRenderItemParams): GridPixelRect | null {
+  const cs = params.coordSys as { x?: number, y?: number, width?: number, height?: number } | null
+  if (!cs || cs.x === undefined || cs.y === undefined || cs.width === undefined || cs.height === undefined) {
+    return null
+  }
+  return {
+    left: cs.x,
+    top: cs.y,
+    right: cs.x + cs.width,
+    bottom: cs.y + cs.height,
+  }
+}
+
+/** Clip a pixel rect to the plot grid (dataZoom can move axis limits without rebuilding yBase). */
+function clampRectToGrid(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  grid: GridPixelRect | null,
+) {
+  if (!grid) return { x, y, width, height }
+
+  let rectX = x
+  let rectY = y
+  let rectW = width
+  let rectH = height
+
+  if (rectX < grid.left) {
+    rectW -= grid.left - rectX
+    rectX = grid.left
+  }
+  if (rectX + rectW > grid.right) {
+    rectW = grid.right - rectX
+  }
+  if (rectY < grid.top) {
+    rectH -= grid.top - rectY
+    rectY = grid.top
+  }
+  if (rectY + rectH > grid.bottom) {
+    rectH = grid.bottom - rectY
+  }
+
+  return { x: rectX, y: rectY, width: rectW, height: rectH }
+}
+
 /** Horizontal bands: rank span on X, value on Y (default profile view). */
 export function createRenderRankBand(yBase: number) {
   return function renderRankBand(
-    _params: CustomSeriesRenderItemParams,
+    params: CustomSeriesRenderItemParams,
     api: CustomSeriesRenderItemAPI,
   ) {
     const xLo = api.value(0) as number
@@ -528,22 +655,22 @@ export function createRenderRankBand(yBase: number) {
     const y = api.value(2) as number
     if (!Number.isFinite(y)) return null
 
-    const base = api.coord([xLo, yBase])
     const top = api.coord([xLo, y])
     const right = api.coord([xHi, y])
+    const base = api.coord([xLo, yBase])
+    const grid = gridPixelRect(params)
 
-    const width = Math.max(right[0] - base[0], 1)
-    const height = Math.abs(base[1] - top[1])
-    if (width < 0.5 || height < 0.5) return null
+    // When Y is zoomed, yBase may lie below the visible axis min → clamp baseline to grid bottom.
+    const baseY = grid ? Math.min(base[1], grid.bottom) : base[1]
+    const rectY = Math.min(top[1], baseY)
+    const rectH = Math.max(baseY - rectY, 1)
+    const rectW = Math.max(right[0] - top[0], 1)
+    const clipped = clampRectToGrid(top[0], rectY, rectW, rectH, grid)
+    if (clipped.width < 0.5 || clipped.height < 0.5) return null
 
     return {
       type: 'rect' as const,
-      shape: {
-        x: base[0],
-        y: Math.min(top[1], base[1]),
-        width,
-        height: Math.max(height, 1),
-      },
+      shape: clipped,
       style: api.style(),
     }
   }
@@ -552,7 +679,7 @@ export function createRenderRankBand(yBase: number) {
 /** Vertical bands: value on X, rank span on Y (population-density view). */
 export function createRenderPopulationBand(xBase: number) {
   return function renderPopulationBand(
-    _params: CustomSeriesRenderItemParams,
+    params: CustomSeriesRenderItemParams,
     api: CustomSeriesRenderItemAPI,
   ) {
     const xVal = api.value(0) as number
@@ -562,22 +689,154 @@ export function createRenderPopulationBand(xBase: number) {
 
     const base = api.coord([xBase, yLo])
     const topRight = api.coord([xVal, yHi])
+    const grid = gridPixelRect(params)
 
-    const width = Math.max(topRight[0] - base[0], 1)
-    const height = Math.abs(topRight[1] - base[1])
-    if (width < 0.5 || height < 0.5) return null
+    // When X is zoomed, xBase may lie left of the visible axis min → clamp origin to grid left.
+    const baseX = grid ? Math.max(base[0], grid.left) : base[0]
+    const rectY = Math.min(base[1], topRight[1])
+    const rectH = Math.max(Math.abs(topRight[1] - base[1]), 1)
+    const rectW = Math.max(topRight[0] - baseX, 1)
+    const clipped = clampRectToGrid(baseX, rectY, rectW, rectH, grid)
+    if (clipped.width < 0.5 || clipped.height < 0.5) return null
 
     return {
       type: 'rect' as const,
-      shape: {
-        x: base[0],
-        y: Math.min(base[1], topRight[1]),
-        width,
-        height: Math.max(height, 1),
-      },
+      shape: clipped,
       style: api.style(),
     }
   }
+}
+
+/** One PDF histogram band on ]valueLo, valueHi] with height = density. */
+export interface PdfBandItem {
+  value: [number, number, number]
+  bin: PdfBin
+}
+
+export function buildPdfBandItems(
+  bins: PdfBin[],
+  options: { logOnValue?: boolean, logOnDensity?: boolean } = {},
+): PdfBandItem[] {
+  const { logOnValue = false, logOnDensity = false } = options
+  return bins.flatMap((bin) => {
+    const density = cleanDensity(bin.density, logOnDensity)
+    if (density === null) return []
+    if (logOnValue && (bin.valueLo <= 0 || bin.valueHi <= 0)) return []
+    return [{ value: [bin.valueLo, bin.valueHi, density] as [number, number, number], bin }]
+  })
+}
+
+/** Auto-scale axes for PDF band charts; yBase anchors bands at the density floor. */
+export function computePdfBandAxisBounds(
+  items: PdfBandItem[],
+  options: { logOnValue?: boolean, logOnDensity?: boolean } = {},
+): BandAxisBounds {
+  const { logOnValue = false, logOnDensity = false } = options
+  if (items.length === 0) return { xBase: 0, yBase: 0 }
+
+  const padLinear = (lo: number, hi: number, frac = 0.06) => {
+    const span = hi - lo || Math.abs(hi) * 0.1 || 1
+    return { lo: lo - span * frac, hi: hi + span * frac }
+  }
+
+  const xLo = Math.min(...items.map((item) => item.value[0]))
+  const xHi = Math.max(...items.map((item) => item.value[1]))
+  const dMin = Math.min(...items.map((item) => item.value[2]))
+  const dMax = Math.max(...items.map((item) => item.value[2]))
+
+  let xMin: number | undefined
+  let xMax: number | undefined
+  let yMin: number | undefined
+  let yMax: number | undefined
+  let xBase = 0
+  let yBase = 0
+
+  if (logOnValue) {
+    xMin = Math.max(1e-6, xLo / 1.5)
+    xMax = xHi * 1.5
+    xBase = xMin
+  } else {
+    const floor = xLo < 0 ? xLo : 0
+    const x = padLinear(floor, xHi)
+    xMin = x.lo
+    xMax = x.hi
+    xBase = 0
+  }
+
+  if (logOnDensity) {
+    yMin = Math.max(1e-12, dMin / 2)
+    yMax = dMax * 2
+    yBase = yMin
+  } else {
+    const y = padLinear(0, dMax)
+    yMin = 0
+    yMax = y.hi
+    yBase = 0
+  }
+
+  return { xMin, xMax, yMin, yMax, xBase, yBase }
+}
+
+/** Layout shared by grid margins and dataZoom sliders (keeps axis titles clear of the jauge). */
+export const PROFILE_CHART_LAYOUT = {
+  bottomSlider: 4,
+  bottomSliderHeight: 18,
+  /** Space below the plot for tick labels + axis name, above the horizontal slider. */
+  gridBottom: 90,
+} as const
+
+/** Native ECharts sliders: rank/population axis + value axis (horizontal or vertical). */
+export function buildProfileDataZoom(valueOnX: boolean) {
+  const rankOnX = !valueOnX
+  const { bottomSlider, bottomSliderHeight, gridBottom } = PROFILE_CHART_LAYOUT
+
+  const rankInside = rankOnX
+    ? { type: 'inside' as const, xAxisIndex: 0, filterMode: 'none' as const }
+    : { type: 'inside' as const, yAxisIndex: 0, filterMode: 'none' as const }
+
+  const valueInside = valueOnX
+    ? { type: 'inside' as const, xAxisIndex: 0, filterMode: 'none' as const }
+    : { type: 'inside' as const, yAxisIndex: 0, filterMode: 'none' as const }
+
+  const rankSlider = rankOnX
+    ? {
+        type: 'slider' as const,
+        xAxisIndex: 0,
+        height: bottomSliderHeight,
+        bottom: bottomSlider,
+        filterMode: 'none' as const,
+      }
+    : {
+        type: 'slider' as const,
+        orient: 'vertical' as const,
+        yAxisIndex: 0,
+        width: bottomSliderHeight,
+        left: 10,
+        top: 56,
+        bottom: gridBottom,
+        filterMode: 'none' as const,
+      }
+
+  const valueSlider = valueOnX
+    ? {
+        type: 'slider' as const,
+        xAxisIndex: 0,
+        height: bottomSliderHeight,
+        bottom: bottomSlider,
+        filterMode: 'none' as const,
+      }
+    : {
+        type: 'slider' as const,
+        orient: 'vertical' as const,
+        yAxisIndex: 0,
+        width: bottomSliderHeight,
+        left: 10,
+        top: 56,
+        bottom: gridBottom + bottomSliderHeight + bottomSlider,
+        filterMode: 'none' as const,
+      }
+
+  return [rankInside, valueInside, rankSlider, valueSlider]
 }
 
 /**
@@ -594,31 +853,99 @@ export function buildProfileOption(
     logScaleX = false,
     populationDensity = false,
     probabilityDensity = false,
+    lorenzCurve = false,
     valueRange,
     title,
   } = options
 
-  const showPdf = populationDensity && probabilityDensity
+  const showPdf = !lorenzCurve && populationDensity && probabilityDensity
   const ordered = [...profile.points].sort((a, b) => a.rank - b.rank)
   const zoomActive = isValueRangeZoomActive(valueRange)
   const chartPoints = zoomActive && valueRange
     ? filterPointsByValueRange(ordered, valueRange)
     : ordered
 
-  const valueAxisName = profile.unit ? `Valeur (${profile.unit})` : 'Valeur'
+  const valueAxisName = profile.unit ? `Valeur · ${profile.unit}` : 'Valeur'
   const logOnRank = populationDensity
     ? (showPdf ? false : logScaleY)
     : logScaleX
   const logOnValue = populationDensity ? logScaleX : logScaleY
   const logOnDensity = showPdf ? logScaleY : false
+  const valueOnX = !lorenzCurve && (populationDensity || showPdf)
 
   const base = {
     title: { text: title ?? profile.label, left: 'center', textStyle: { fontSize: 14 } },
-    grid: { left: 72, right: 24, top: 56, bottom: 72 },
-    dataZoom: [
-      { type: 'inside', start: 0, end: 100 },
-      { type: 'slider', start: 0, end: 100, height: 18, bottom: 16 },
-    ],
+    grid: {
+      left: valueOnX ? 72 : 88,
+      right: 24,
+      top: 56,
+      bottom: PROFILE_CHART_LAYOUT.gridBottom,
+    },
+    dataZoom: buildProfileDataZoom(valueOnX),
+  }
+
+  if (lorenzCurve) {
+    const lorenzPoints = computeLorenzPoints(chartPoints)
+    const seriesType = chartType === 'scatter' ? 'scatter' : 'line'
+
+    return {
+      ...base,
+      tooltip: {
+        trigger: 'item',
+        formatter: (params) => {
+          const p = params as { seriesName?: string, value?: [number, number] }
+          if (p.seriesName === 'Égalité parfaite') return ''
+          const pop = p.value?.[0]
+          const wealth = p.value?.[1]
+          if (pop === undefined || wealth === undefined) return ''
+          return [
+            `Population cumulée : ${formatRankPercent(pop)} %`,
+            `Patrimoine cumulé : ${formatRankPercent(wealth)} %`,
+          ].join('<br/>')
+        },
+      },
+      xAxis: {
+        type: 'value' as const,
+        name: 'Part cumulée de la population (%)',
+        nameLocation: 'middle' as const,
+        nameGap: 32,
+        min: 0,
+        max: 100,
+        axisLabel: {
+          formatter: (value: number) => `${formatRankPercent(value)} %`,
+        },
+      },
+      yAxis: {
+        type: 'value' as const,
+        name: 'Part cumulée du patrimoine (%)',
+        min: 0,
+        max: 100,
+        axisLabel: {
+          formatter: (value: number) => `${formatRankPercent(value)} %`,
+        },
+      },
+      series: [
+        {
+          name: 'Égalité parfaite',
+          type: 'line',
+          data: [[0, 0], [100, 100]],
+          symbol: 'none',
+          lineStyle: { type: 'dashed', color: '#9E9E9E', width: 1 },
+          tooltip: { show: false },
+          z: 0,
+        },
+        {
+          name: profile.variable,
+          type: seriesType,
+          data: lorenzPoints.map((point) => ({ value: [point.populationShare, point.wealthShare] as [number, number], point })),
+          showSymbol: seriesType !== 'line',
+          symbolSize: seriesType === 'scatter' ? 6 : undefined,
+          connectNulls: false,
+          step: seriesType === 'line' ? 'end' : undefined,
+          z: 1,
+        },
+      ],
+    }
   }
 
   if (showPdf) {
@@ -626,51 +953,62 @@ export function buildProfileOption(
     if (zoomActive && valueRange) {
       bins = filterPdfBinsByValueRange(bins, valueRange)
     }
-    const seriesType = chartType === 'scatter' ? 'scatter' : chartType === 'bar' ? 'bar' : 'line'
     const xAxis = buildValueAxis(valueAxisName, logOnValue)
     const yAxis = buildDensityAxis(profile.unit, logOnDensity)
 
+    const pdfTooltip = (params: unknown) => {
+      const p = params as { data?: { bin?: PdfBin } }
+      const bin = p?.data?.bin
+      if (!bin) return ''
+      return [
+        `${bin.percentileLo} → ${bin.percentileHi}`,
+        `Richesse: ${bin.valueLo.toLocaleString('fr-FR')} – ${bin.valueHi.toLocaleString('fr-FR')}`,
+        `Population: ${formatRankPercent(bin.rankLo)} % → ${formatRankPercent(bin.rankHi)} %`,
+        `Densité: ${bin.density.toExponential(3)}`,
+      ].join('<br/>')
+    }
+
+    if (chartType === 'bar') {
+      const bands = buildPdfBandItems(bins, { logOnValue, logOnDensity })
+      const bounds = computePdfBandAxisBounds(bands, { logOnValue, logOnDensity })
+      Object.assign(xAxis, { min: bounds.xMin, max: bounds.xMax })
+      Object.assign(yAxis, { min: bounds.yMin, max: bounds.yMax })
+      applyValueRangeZoom(xAxis, valueRange, logOnValue)
+
+      return {
+        ...base,
+        tooltip: { trigger: 'item', formatter: pdfTooltip },
+        xAxis,
+        yAxis,
+        series: [
+          {
+            name: profile.variable,
+            type: 'custom',
+            clip: true,
+            renderItem: createRenderRankBand(bounds.yBase),
+            data: bands.map((band) => ({ value: band.value, bin: band.bin })),
+            encode: { x: [0, 1], y: 2 },
+            itemStyle: { color: '#1565C0', opacity: 0.85 },
+          },
+        ],
+      }
+    }
+
+    const seriesType = chartType === 'scatter' ? 'scatter' : 'line'
     const data = bins
       .map((bin) => {
         const density = cleanDensity(bin.density, logOnDensity)
         if (density === null) return null
-
-        const x = seriesType === 'bar' ? bin.midpoint : bin.valueLo
-        return { bin, pair: [x, density] as [number, number] }
+        return { bin, pair: [bin.valueLo, density] as [number, number] }
       })
       .filter((entry): entry is { bin: PdfBin, pair: [number, number] } => entry !== null)
 
     applyValueRangeZoom(xAxis, valueRange, logOnValue)
-    if (zoomActive && data.length > 0) {
-      const densities = data.map((d) => d.pair[1])
-      const dMin = Math.min(...densities)
-      const dMax = Math.max(...densities)
-      const span = dMax - dMin || dMax * 0.1 || 1
-      if (logOnDensity) {
-        yAxis.min = Math.max(1e-12, dMin / 2)
-        yAxis.max = dMax * 2
-      } else {
-        yAxis.min = Math.max(0, dMin - span * 0.1)
-        yAxis.max = dMax + span * 0.1
-      }
-    }
+    applyPdfDensityAxisExtent(yAxis, data.map((d) => d.pair[1]), logOnDensity)
 
     return {
       ...base,
-      tooltip: {
-        trigger: 'item',
-        formatter: (params) => {
-          const p = params as { value?: [number, number], data?: { bin?: PdfBin } }
-          const bin = p?.data?.bin
-          if (!bin) return ''
-          return [
-            `${bin.percentileLo} → ${bin.percentileHi}`,
-            `Richesse: ${bin.valueLo.toLocaleString('fr-FR')} – ${bin.valueHi.toLocaleString('fr-FR')}`,
-            `Population: ${formatRankPercent(bin.rankLo)} % → ${formatRankPercent(bin.rankHi)} %`,
-            `Densité: ${bin.density.toExponential(3)}`,
-          ].join('<br/>')
-        },
-      },
+      tooltip: { trigger: 'item', formatter: pdfTooltip },
       xAxis,
       yAxis,
       series: [
@@ -682,7 +1020,6 @@ export function buildProfileOption(
           symbolSize: seriesType === 'scatter' ? 6 : undefined,
           connectNulls: false,
           step: seriesType === 'line' ? 'end' : undefined,
-          itemStyle: seriesType === 'bar' ? { borderRadius: [2, 2, 0, 0] } : undefined,
         },
       ],
     }
@@ -730,6 +1067,7 @@ export function buildProfileOption(
         {
           name: profile.variable,
           type: 'custom',
+          clip: true,
           renderItem: populationDensity
             ? createRenderPopulationBand(bounds.xBase)
             : createRenderRankBand(bounds.yBase),

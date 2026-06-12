@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { parseProfileResponse } from '@src/data-sources/wid/widClient'
+import {
+  extractAvailableYears,
+  parseAvailableCountriesResponse,
+  parseProfileResponse,
+  parseSeriesResponse,
+} from '@src/data-sources/wid/widClient'
 
 /** Minimal fixture mimicking the WID `countries-variables` response shape. */
 function fixture() {
@@ -61,5 +66,33 @@ describe('parseProfileResponse', () => {
     const rows = parseProfileResponse(live, 2021)
     expect(rows).toHaveLength(1)
     expect(rows[0]?.value).toBe(52000)
+  })
+})
+
+describe('parseAvailableCountriesResponse', () => {
+  it('collects country codes from nested variable maps', () => {
+    const codes = parseAvailableCountriesResponse([
+      { ahweal: { FR: [], US: [], DE: [] } },
+    ])
+    expect(codes).toEqual(['DE', 'FR', 'US'])
+  })
+})
+
+describe('parseSeriesResponse', () => {
+  it('keeps all years from the response', () => {
+    const rows = parseSeriesResponse(fixture())
+    expect(rows.length).toBeGreaterThanOrEqual(4)
+    expect(rows.some((r) => r.year === 2020 && r.percentile === 'p50p51')).toBe(true)
+    expect(rows.some((r) => r.year === 2021 && r.percentile === 'p50p51')).toBe(true)
+  })
+})
+
+describe('extractAvailableYears', () => {
+  it('returns unique years sorted most recent first', () => {
+    expect(extractAvailableYears(parseSeriesResponse(fixture()))).toEqual([2021, 2020])
+  })
+
+  it('returns an empty array when no rows', () => {
+    expect(extractAvailableYears([])).toEqual([])
   })
 })

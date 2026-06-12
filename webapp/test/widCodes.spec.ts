@@ -3,7 +3,8 @@ import {
   buildVariableCode,
   findWidVariable,
   measureKind,
-  WID_V1_VARIABLES,
+  thresholdVariableFor,
+  WID_PROFILE_VARIABLES,
 } from '@src/data-sources/wid/widCodes'
 
 describe('measureKind', () => {
@@ -34,7 +35,7 @@ describe('findWidVariable', () => {
     const v = findWidVariable('ahweal')
     expect(v).toBeDefined()
     expect(v?.kind).toBe('average')
-    expect(v?.concept).toBe('Net personal wealth')
+    expect(v?.concept).toBe('hweal')
   })
 
   it('returns undefined for an unknown sixlet', () => {
@@ -42,18 +43,35 @@ describe('findWidVariable', () => {
   })
 })
 
-describe('WID_V1_VARIABLES', () => {
+describe('thresholdVariableFor', () => {
+  it('maps an average variable to its threshold pair', () => {
+    expect(thresholdVariableFor('ahweal')).toBe('thweal')
+    expect(thresholdVariableFor('aptinc')).toBe('tptinc')
+  })
+
+  it('keeps a threshold variable unchanged', () => {
+    expect(thresholdVariableFor('thweal')).toBe('thweal')
+    expect(thresholdVariableFor('tptinc')).toBe('tptinc')
+  })
+
+})
+
+describe('WID_PROFILE_VARIABLES', () => {
   it('pairs each concept with an average and a threshold variable', () => {
-    const concepts = new Set(WID_V1_VARIABLES.map((v) => v.concept))
+    const concepts = new Set(WID_PROFILE_VARIABLES.map((v) => v.concept))
     for (const concept of concepts) {
-      const kinds = WID_V1_VARIABLES.filter((v) => v.concept === concept).map((v) => v.kind)
+      const kinds = WID_PROFILE_VARIABLES.filter((v) => v.concept === concept).map((v) => v.kind)
       expect(kinds).toContain('average')
       expect(kinds).toContain('threshold')
     }
   })
 
+  it('exposes exactly four profile variables', () => {
+    expect(WID_PROFILE_VARIABLES).toHaveLength(4)
+  })
+
   it('keeps sixlet/kind consistent', () => {
-    for (const v of WID_V1_VARIABLES) {
+    for (const v of WID_PROFILE_VARIABLES) {
       expect(measureKind(v.sixlet)).toBe(v.kind)
     }
   })
