@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { buildActiveCalculationHelp, buildDrillDownHelp, PROFILE_HELP } from '@src/charts/profileHelp'
-import type { CountryOption } from '@src/domain/types'
-import { WID_PROFILE_VARIABLES } from '@src/data-sources/wid/widCodes'
+import { buildActiveCalculationHelp, buildDrillDownHelp, PROFILE_HELP } from '~/visualization/profileHelp'
+import type { CountryOption } from '@domain/entities'
+import { WID_PROFILE_VARIABLES } from '@domain/catalog/widCodes'
 import type { PanneauType } from '~/composables/panneauTypes'
 
 const props = withDefaults(defineProps<{

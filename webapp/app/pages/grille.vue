@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { CountryOption } from '@src/domain/types'
-import type { WidDataSource } from '@src/data-sources/wid/widSource'
+import type { CountryOption } from '@domain/entities'
 import type { PanneauType } from '~/composables/panneauTypes'
 
 definePageMeta({ layout: 'default' })
@@ -12,12 +11,10 @@ interface GridPanel {
 
 let nextPanelId = 1
 
-const { defaultSource } = useDataSources()
+const app = useApplication()
 const panels = ref<GridPanel[]>([])
 const countries = ref<CountryOption[]>([])
 const countriesError = ref<string | null>(null)
-
-const widSource = () => defaultSource.value as WidDataSource
 
 function addPanel(type: PanneauType) {
   panels.value.push({ id: nextPanelId++, type })
@@ -31,7 +28,7 @@ provide('widCountries', countries)
 
 onMounted(async () => {
   try {
-    countries.value = await widSource().listCountries()
+    countries.value = await app.listCountries.execute()
   } catch (err) {
     countriesError.value = err instanceof Error ? err.message : 'Échec du chargement des pays'
   }

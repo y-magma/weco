@@ -1,8 +1,7 @@
 import type { EChartsOption } from 'echarts'
 import type { Ref } from 'vue'
-import { buildTimeSeriesOption } from '@src/charts/timeSeries'
-import type { CountryOption, DataSeries } from '@src/domain/types'
-import type { WidDataSource } from '@src/data-sources/wid/widSource'
+import { buildTimeSeriesOption } from '~/visualization/timeSeries'
+import type { CountryOption, DataSeries } from '@domain/entities'
 import {
   findWidVariable,
   WID_AGE_OPTIONS,
@@ -10,12 +9,11 @@ import {
   WID_DEFAULT_POP,
   WID_POP_OPTIONS,
   WID_PROFILE_VARIABLES,
-} from '@src/data-sources/wid/widCodes'
+} from '@domain/catalog/widCodes'
 
 export interface WidSeriesStateOptions {
   countries?: Ref<CountryOption[]>
   initialVariable?: string
-  /** Initial country codes when used in a multi-panel grid. */
   initialCountryCodes?: string[]
 }
 
@@ -26,12 +24,8 @@ const PERCENTILE_OPTIONS = [
   { value: 'p0p1', label: 'p0p1 — bas 1 %' },
 ]
 
-/**
- * Time series toolbox state: one WID variable over years at a fixed percentile.
- * Supports overlaying several countries on the same chart.
- */
 export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
-  const { defaultSource } = useDataSources()
+  const app = useApplication()
   const sharedCountries = options.countries
 
   const countryCodes = ref<string[]>(options.initialCountryCodes ?? ['FR'])
@@ -54,8 +48,6 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
   const ageOptions = WID_AGE_OPTIONS
   const popOptions = WID_POP_OPTIONS
   const percentileOptions = PERCENTILE_OPTIONS
-
-  const widSource = () => defaultSource.value as WidDataSource
 
   const variableMeta = computed(() => findWidVariable(variable.value))
 
@@ -93,41 +85,20 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
     loadWarning.value = null
 
     try {
-      const source = widSource()
-      const params = {
-        variable: variable.value,
-        age: age.value,
-        pop: pop.value,
-        percentile: percentile.value,
-      }
-
-      const results = await Promise.allSettled(
-        codes.map((countryCode) =>
-          source.fetchVariableTimeSeries({ ...params, countryCode }),
-        ),
-      )
-
-      const loaded: DataSeries[] = []
-      const failures: string[] = []
-
-      results.forEach((result, index) => {
-        const code = codes[index]!
-        if (result.status === 'fulfilled') {
-          loaded.push({
-            ...result.value,
-            label: countryLabel(code),
-          })
-        } else {
-          const message = result.reason instanceof Error
-            ? result.reason.message
-            : 'Échec du chargement'
-          failures.push(`${countryLabel(code)} : ${message}`)
-        }
+      const { series, failures } = await app.loadTimeSeries.execute({
+        countryCodes: codes,
+        params: {
+          variable: variable.value,
+          age: age.value,
+          pop: pop.value,
+          percentile: percentile.value,
+        },
+        countryLabel,
       })
 
-      seriesList.value = loaded
+      seriesList.value = series
 
-      if (loaded.length === 0) {
+      if (series.length === 0) {
         error.value = failures[0] ?? 'Échec du chargement des séries'
         chartOption.value = null
         return
@@ -150,7 +121,7 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
   const init = async () => {
     if (!sharedCountries) {
       try {
-        localCountries.value = await widSource().listCountries()
+        localCountries.value = await app.listCountries.execute()
       } catch {
         localCountries.value = [{ code: 'FR', label: 'France' }]
       }

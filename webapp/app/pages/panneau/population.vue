@@ -1,20 +1,17 @@
 <script setup lang="ts">
-import type { CountryOption } from '@src/domain/types'
-import type { WidDataSource } from '@src/data-sources/wid/widSource'
+import type { CountryOption } from '@domain/entities'
 
 definePageMeta({ layout: 'default' })
 
-const { defaultSource } = useDataSources()
+const app = useApplication()
 const countries = ref<CountryOption[]>([])
 const countriesError = ref<string | null>(null)
-
-const widSource = () => defaultSource.value as WidDataSource
 
 provide('widCountries', countries)
 
 onMounted(async () => {
   try {
-    countries.value = await widSource().listCountries()
+    countries.value = await app.listCountries.execute()
   } catch (err) {
     countriesError.value = err instanceof Error ? err.message : 'Échec du chargement des pays'
   }
@@ -29,7 +26,7 @@ onMounted(async () => {
       <v-col cols="12">
         <h1 class="text-h4 font-weight-bold mb-1">Variable vs population</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
-          Profil d’une variable WID sur les 127 g-percentiles, à pays et année fixés.
+          Profil WID sur les 127 g-percentiles : distribution d’une variable par part de population.
         </p>
       </v-col>
     </v-row>
@@ -43,9 +40,6 @@ onMounted(async () => {
       {{ countriesError }}
     </v-alert>
 
-    <PanneauVisualisation
-      :show-panel-title="false"
-      chart-height="460px"
-    />
+    <PanneauVisualisation chart-height="460px" />
   </div>
 </template>

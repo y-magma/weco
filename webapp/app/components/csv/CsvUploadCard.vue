@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { CsvParseResult } from '@src/csv/CsvReaderFactory'
-import { createCsvReader, mapCsvToSeries } from '@src/csv/CsvReaderFactory'
-import { buildTimeSeriesOption } from '@src/charts/timeSeries'
+import type { CsvParseResult } from '@application/bootstrap/csvAdapter'
+import { createCsvReader, mapCsvToSeries } from '@application/bootstrap/csvAdapter'
+import { buildTimeSeriesOption } from '~/visualization/timeSeries'
 import type { EChartsOption } from 'echarts'
 
 const emit = defineEmits<{

@@ -4,13 +4,9 @@ import {
   resolveSpecLink,
   type SpecBlock,
   type SpecDoc,
-} from '@src/spec/specDocs'
-import { renderMarkdown } from '@src/spec/renderMarkdown'
+} from '@application/bootstrap/specAdapter'
+import { renderMarkdown } from '@application/bootstrap/specAdapter'
 
-/**
- * State for the `/spec` page: the block tree, the currently selected document,
- * its rendered HTML, and in-app navigation for relative `.md` links.
- */
 export function useSpec() {
   const blocks = ref<SpecBlock[]>(getSpecBlocks())
 
@@ -22,47 +18,29 @@ export function useSpec() {
     ?? '',
   )
 
-  const current = computed<SpecDoc | null>(
-    () => docs.value.find((doc) => doc.id === selectedId.value) ?? null,
+  const selectedDoc = computed(() =>
+    docs.value.find((doc) => doc.id === selectedId.value) ?? null,
   )
 
-  const renderedHtml = computed<string>(() =>
-    current.value ? renderMarkdown(current.value.raw) : '',
-  )
+  const renderedHtml = computed(() => {
+    const doc = selectedDoc.value
+    if (!doc) return ''
+    return renderMarkdown(doc.raw)
+  })
 
-  const select = (id: string) => {
-    if (docs.value.some((doc) => doc.id === id)) {
-      selectedId.value = id
-    }
+  const selectDoc = (id: string) => {
+    selectedId.value = id
   }
 
-  /**
-   * Handle a click inside the rendered content: if it targets a relative `.md`
-   * link that maps to a known doc, navigate in-app instead of following it.
-   * Returns true when the click was handled.
-   */
-  const handleContentClick = (event: MouseEvent): boolean => {
-    const anchor = (event.target as HTMLElement | null)?.closest('a')
-    if (!anchor) return false
-    const href = anchor.getAttribute('href')
-    if (!href || !current.value) return false
-
-    const target = resolveSpecLink(current.value.id, href)
-    if (target && docs.value.some((doc) => doc.id === target)) {
-      event.preventDefault()
-      select(target)
-      return true
-    }
-    return false
-  }
+  const resolveLink = (href: string) => resolveSpecLink(href, selectedId.value)
 
   return {
     blocks,
     docs,
     selectedId,
-    current,
+    selectedDoc,
     renderedHtml,
-    select,
-    handleContentClick,
+    selectDoc,
+    resolveLink,
   }
 }

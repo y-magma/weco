@@ -113,9 +113,9 @@ webapp/
 
 ## Adding a data source
 
-1. Implement `DataSource` in `src/data-sources/Source.ts`
-2. Create adapter under `src/data-sources/<name>/`
-3. Register in `src/data-sources/registry.ts`
+1. Implement `DataSourcePort` in `src/domain/ports/DataSourcePort.ts`
+2. Create adapter under `src/infrastructure/data-sources/<name>/`
+3. Register in `src/infrastructure/data-sources/registry.ts`
 
 ## Data
 

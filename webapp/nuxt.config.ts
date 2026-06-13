@@ -1,7 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
 
-// https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
@@ -20,7 +19,9 @@ export default defineNuxtConfig({
   css: ['~/assets/main.scss'],
 
   alias: {
-    '@src': fileURLToPath(new URL('./src', import.meta.url)),
+    '@application': fileURLToPath(new URL('./src/application', import.meta.url)),
+    '@domain': fileURLToPath(new URL('./src/domain', import.meta.url)),
+    '@infrastructure': fileURLToPath(new URL('./src/infrastructure', import.meta.url)),
   },
 
   build: {

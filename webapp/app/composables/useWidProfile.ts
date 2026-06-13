@@ -1,6 +1,6 @@
 import type { EChartsOption } from 'echarts'
 import type { Ref } from 'vue'
-import { buildProfileOption } from '@src/charts/profile'
+import { buildProfileOption } from '~/visualization/profile'
 import {
   buildDrilldownPoints,
   clampDrillLevel,
@@ -8,9 +8,8 @@ import {
   drillLevelLabel,
   MAX_DRILL_LEVEL,
   nextDrillLevel,
-} from '@src/charts/drilldown'
-import type { CountryOption, PercentileProfile } from '@src/domain/types'
-import type { WidDataSource } from '@src/data-sources/wid/widSource'
+} from '~/visualization/drilldown'
+import type { CountryOption, PercentileProfile } from '@domain/entities'
 import {
   WID_AGE_OPTIONS,
   WID_DEFAULT_AGE,
@@ -20,20 +19,15 @@ import {
   WID_PROFILE_VARIABLES,
   WID_G_PERCENTILE_COUNT,
   thresholdVariableFor,
-} from '@src/data-sources/wid/widCodes'
+} from '@domain/catalog/widCodes'
 
 export interface WidProfileStateOptions {
-  /** Shared country list (avoids N parallel fetches in multi-panel grids). */
   countries?: Ref<CountryOption[]>
   initialVariable?: string
 }
 
-/**
- * Independent profile toolbox state. Instantiate once per visualization panel.
- * See spec/version1.md (graphe #2).
- */
 export function createWidProfileState(options: WidProfileStateOptions = {}) {
-  const { defaultSource } = useDataSources()
+  const app = useApplication()
   const sharedCountries = options.countries
 
   const countryCode = ref('FR')
@@ -85,8 +79,6 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
     () => profilePointCount.value > 0 && profilePointCount.value < WID_G_PERCENTILE_COUNT,
   )
 
-  const widSource = () => defaultSource.value as WidDataSource
-
   const displayPoints = computed(() => {
     if (!profile.value) return []
     if (showAllPercentiles.value) {
@@ -124,7 +116,7 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
 
   const loadCountries = async () => {
     if (countries.value.length > 0) return
-    countries.value = await widSource().listCountries()
+    countries.value = await app.listCountries.execute()
   }
 
   const syncYearToAvailable = () => {
@@ -141,7 +133,7 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
 
     yearsLoading.value = true
     try {
-      availableYears.value = await widSource().listProfileYears({
+      availableYears.value = await app.listProfileYears.execute({
         countryCode: countryCode.value,
         variable: variable.value,
         age: age.value,
@@ -177,7 +169,7 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
     error.value = null
     drillLevel.value = 0
     try {
-      profile.value = await widSource().fetchPercentileProfile({
+      profile.value = await app.loadProfile.execute({
         countryCode: countryCode.value,
         variable: variable.value,
         year: year.value,

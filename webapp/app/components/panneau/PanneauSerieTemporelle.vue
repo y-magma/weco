@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { CountryOption } from '@src/domain/types'
-import { WID_PROFILE_VARIABLES } from '@src/data-sources/wid/widCodes'
+import type { CountryOption } from '@domain/entities'
+import { WID_PROFILE_VARIABLES } from '@domain/catalog/widCodes'
 import type { PanneauType } from '~/composables/panneauTypes'
 
 const props = withDefaults(defineProps<{

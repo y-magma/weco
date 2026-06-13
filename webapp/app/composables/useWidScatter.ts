@@ -1,9 +1,8 @@
 import type { EChartsOption } from 'echarts'
 import type { Ref } from 'vue'
-import { buildProfileScatterOption } from '@src/charts/scatterProfiles'
-import { joinProfilesByPercentile, type ProfileScatterPoint } from '@src/domain/joinProfiles'
-import type { CountryOption, PercentileProfile } from '@src/domain/types'
-import type { WidDataSource } from '@src/data-sources/wid/widSource'
+import { buildProfileScatterOption } from '~/visualization/scatterProfiles'
+import type { ProfileScatterPoint } from '@domain/services/joinProfiles'
+import type { CountryOption } from '@domain/entities'
 import {
   findWidVariable,
   WID_AGE_OPTIONS,
@@ -11,7 +10,7 @@ import {
   WID_DEFAULT_POP,
   WID_POP_OPTIONS,
   WID_PROFILE_VARIABLES,
-} from '@src/data-sources/wid/widCodes'
+} from '@domain/catalog/widCodes'
 
 export interface WidScatterStateOptions {
   countries?: Ref<CountryOption[]>
@@ -19,12 +18,8 @@ export interface WidScatterStateOptions {
   initialVariableY?: string
 }
 
-/**
- * Scatter of two WID variables joined by percentile (graphe #6 de version1.md).
- * One point = one g-percentile, X = var1, Y = var2, same country/year/age/pop.
- */
 export function createWidScatterState(options: WidScatterStateOptions = {}) {
-  const { defaultSource } = useDataSources()
+  const app = useApplication()
   const sharedCountries = options.countries
 
   const countryCode = ref('FR')
@@ -58,8 +53,6 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
     return min === max ? `${max}` : `${min}–${max}`
   })
 
-  const widSource = () => defaultSource.value as WidDataSource
-
   const labelFor = (sixlet: string) => findWidVariable(sixlet)?.label ?? sixlet
 
   const rebuild = () => {
@@ -78,7 +71,7 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
   const refreshYears = async () => {
     yearsLoading.value = true
     try {
-      availableYears.value = await widSource().listProfileYears({
+      availableYears.value = await app.listProfileYears.execute({
         countryCode: countryCode.value,
         variable: variableX.value,
         age: age.value,
@@ -98,18 +91,17 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
     loading.value = true
     error.value = null
     try {
-      const source = widSource()
-      const params = {
-        countryCode: countryCode.value,
-        year: year.value,
-        age: age.value,
-        pop: pop.value,
-      }
-      const [xProfile, yProfile]: [PercentileProfile, PercentileProfile] = await Promise.all([
-        source.fetchPercentileProfile({ ...params, variable: variableX.value }),
-        source.fetchPercentileProfile({ ...params, variable: variableY.value }),
-      ])
-      points.value = joinProfilesByPercentile(xProfile, yProfile)
+      points.value = await app.loadScatter.execute({
+        variableX: variableX.value,
+        variableY: variableY.value,
+        params: {
+          countryCode: countryCode.value,
+          year: year.value,
+          age: age.value,
+          pop: pop.value,
+          variable: variableX.value,
+        },
+      })
       rebuild()
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Échec du chargement du nuage'
@@ -123,7 +115,7 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
   const init = async () => {
     if (!sharedCountries) {
       try {
-        localCountries.value = await widSource().listCountries()
+        localCountries.value = await app.listCountries.execute()
       } catch {
         localCountries.value = [{ code: 'FR', label: 'France' }]
       }
