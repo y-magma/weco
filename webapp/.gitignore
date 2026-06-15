@@ -13,6 +13,9 @@ node_modules
 logs
 *.log
 
+# Environment (secrets — use GitHub Actions secrets in CI)
+.env
+
 # Misc
 .DS_Store
 .fleet

@@ -46,6 +46,20 @@ npm run generate
 
 Output is written to `.output/public` for GitHub Pages, Netlify, or any static host.
 
+### GitHub Pages (automated)
+
+Each push to `main` that touches `webapp/` triggers
+[`.github/workflows/deploy-webapp.yml`](../.github/workflows/deploy-webapp.yml).
+
+**One-time setup** (repo [Settings → Pages](https://github.com/warielon/samuel-gscop-26/settings/pages)):
+
+1. **Build and deployment → Source** : `GitHub Actions`
+2. **Settings → Secrets → Actions** : add `NUXT_PUBLIC_WID_API_KEY` (same hex key as in `.env.example`)
+
+Live URL: **https://warielon.github.io/samuel-gscop-26/**
+
+Manual redeploy: **Actions → Deploy webapp to GitHub Pages → Run workflow**.
+
 ## Environment variables
 
 Copy `.env.example` to `.env`:

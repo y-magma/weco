@@ -78,6 +78,8 @@ export default defineNuxtConfig({
   },
 
   app: {
+    // GitHub Pages project site: set NUXT_APP_BASE_URL=/samuel-gscop-26/ in CI
+    baseURL: process.env.NUXT_APP_BASE_URL || '/',
     head: {
       title: 'Boîte à outils de visualisations',
       meta: [
