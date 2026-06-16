@@ -6,6 +6,6 @@
     to="/panneau"
     class="mb-3 px-0"
   >
-    Tous les types de panneaux
+    Tous les cas d'étude
   </v-btn>
 </template>

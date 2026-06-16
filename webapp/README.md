@@ -105,7 +105,7 @@ See [`STRUCTURE.md`](./STRUCTURE.md) for the full application map (pages, compos
 ```
 webapp/
 ├── app/                  # Nuxt UI (pages, layouts, components, composables)
-├── src/                  # Pure logic (charts, data-sources, domain, csv)
+├── lib/                  # Pure logic (charts, data-sources, domain, csv)
 ├── test/                 # Vitest unit tests
 ├── scripts/              # CLI conformance tools
 └── nuxt.config.ts
@@ -113,9 +113,9 @@ webapp/
 
 ## Adding a data source
 
-1. Implement `DataSourcePort` in `src/domain/ports/DataSourcePort.ts`
-2. Create adapter under `src/infrastructure/data-sources/<name>/`
-3. Register in `src/infrastructure/data-sources/registry.ts`
+1. Implement `DataSourcePort` in `lib/domain/ports/DataSourcePort.ts`
+2. Create adapter under `lib/infrastructure/data-sources/<name>/`
+3. Register in `lib/infrastructure/data-sources/registry.ts`
 
 ## Data
 

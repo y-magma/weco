@@ -26,7 +26,7 @@ onMounted(async () => {
       <v-col cols="12">
         <h1 class="text-h4 font-weight-bold mb-1">Série temporelle</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
-          Évolution d’une variable WID au fil des années, à un percentile fixé.
+          Suivre un indicateur année après année.
         </p>
       </v-col>
     </v-row>

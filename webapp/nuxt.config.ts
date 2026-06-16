@@ -19,9 +19,9 @@ export default defineNuxtConfig({
   css: ['~/assets/main.scss'],
 
   alias: {
-    '@application': fileURLToPath(new URL('./src/application', import.meta.url)),
-    '@domain': fileURLToPath(new URL('./src/domain', import.meta.url)),
-    '@infrastructure': fileURLToPath(new URL('./src/infrastructure', import.meta.url)),
+    '@application': fileURLToPath(new URL('./lib/application', import.meta.url)),
+    '@domain': fileURLToPath(new URL('./lib/domain', import.meta.url)),
+    '@infrastructure': fileURLToPath(new URL('./lib/infrastructure', import.meta.url)),
   },
 
   build: {
@@ -82,7 +82,7 @@ export default defineNuxtConfig({
     // GitHub Pages project site: set NUXT_APP_BASE_URL=/samuel-gscop-26/ in CI
     baseURL: process.env.NUXT_APP_BASE_URL || '/',
     head: {
-      title: 'Boîte à outils de visualisations',
+      title: 'Études de visualisation',
       meta: [
         {
           name: 'description',

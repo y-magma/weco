@@ -6,10 +6,80 @@ import type {
 import type { PercentilePoint, PercentileProfile } from '@domain/entities'
 import { parsePercentileInterval } from '@domain/services/percentiles'
 import { formatCompactAxisValue } from '~/visualization/axisFormat'
+import { buildChartToolbox } from '~/visualization/chartZoom'
+
+export type ProfileChartType = 'bar' | 'scatter' | 'line' | 'scatter-bar' | 'line-bar'
+
+export type ProfileChartLayer = 'bar' | 'scatter' | 'line'
+
+const CHART_LAYER_ORDER: ProfileChartLayer[] = ['bar', 'scatter', 'line']
+
+/** Map multi-select layers (max 2) to the internal chart encoding. */
+export function resolveProfileChartType(layers: ProfileChartLayer[]): ProfileChartType {
+  const unique = CHART_LAYER_ORDER.filter((layer) => layers.includes(layer))
+  if (unique.length === 0) return 'bar'
+
+  const hasBar = unique.includes('bar')
+  const hasScatter = unique.includes('scatter')
+  const hasLine = unique.includes('line')
+
+  if (hasBar && hasScatter) return 'scatter-bar'
+  if (hasBar && hasLine) return 'line-bar'
+  if (hasBar) return 'bar'
+  if (hasScatter && hasLine) return 'line'
+  if (hasScatter) return 'scatter'
+  return 'line'
+}
+
+/** Keep at least one layer selected; cap at two for overlay combinations. */
+export function normalizeChartTypeLayers(
+  next: ProfileChartLayer[],
+  prev: ProfileChartLayer[],
+): ProfileChartLayer[] {
+  if (next.length === 0) {
+    return prev.length > 0 ? prev : ['bar']
+  }
+
+  const unique = CHART_LAYER_ORDER.filter((layer) => next.includes(layer))
+  if (unique.length <= 2) return unique
+
+  const added = next.find((layer) => !prev.includes(layer))
+  if (!added) return unique.slice(0, 2)
+
+  if (added === 'bar') {
+    const other = prev.find((layer) => layer !== 'bar') ?? unique.find((layer) => layer !== 'bar')
+    return other ? ['bar', other] : ['bar']
+  }
+
+  if (unique.includes('bar')) {
+    return ['bar', added]
+  }
+
+  return [added]
+}
+
+export function chartTypeLayersEqual(a: ProfileChartLayer[], b: ProfileChartLayer[]): boolean {
+  return CHART_LAYER_ORDER.every((layer) => a.includes(layer) === b.includes(layer))
+}
+
+/** Opacity for band layers drawn behind line/scatter overlays. */
+export const PROFILE_BAND_WATERMARK_OPACITY = 0.18
+
+export function overlaySeriesType(chartType: ProfileChartType): 'scatter' | 'line' | null {
+  if (chartType === 'scatter-bar') return 'scatter'
+  if (chartType === 'line-bar') return 'line'
+  return null
+}
+
+export function primaryProfileSeriesType(chartType: ProfileChartType): 'bar' | 'scatter' | 'line' {
+  const overlay = overlaySeriesType(chartType)
+  if (overlay) return overlay
+  return chartType
+}
 
 export interface ProfileChartOptions {
   /** Visual encoding of the profile. */
-  chartType?: 'bar' | 'scatter' | 'line'
+  chartType?: ProfileChartType
   /** Log scale on the displayed X axis (rank spacing or value, depending on view). */
   logScaleX?: boolean
   /** Log scale on the displayed Y axis (value, rank spacing, or density). */
@@ -26,6 +96,11 @@ export interface ProfileChartOptions {
   probabilityDensity?: boolean
   /** Lorenz curve: cumulative population % vs cumulative wealth %. */
   lorenzCurve?: boolean
+  /**
+   * Fine-grained points for line/scatter overlays on top of aggregated bands.
+   * When omitted, the main profile points are used for every series.
+   */
+  overlayPoints?: PercentilePoint[]
   /** Optional zoom on the value axis; rank axis is auto-fitted to visible brackets. */
   valueRange?: ValueRangeZoom
   title?: string
@@ -364,6 +439,35 @@ function rankCoordinate(rank: number, logRank: boolean): number | null {
   return rank
 }
 
+/**
+ * Rank (%) where a line/scatter marker sits on the population axis.
+ * Average variables (a…) use the midpoint of ]i, k] ; thresholds (t…) keep the lower bound.
+ */
+export function plotRankForPoint(
+  point: PercentilePoint,
+  kind: PercentileProfile['kind'],
+): number {
+  if (kind === 'average') {
+    const bounds = parsePercentileInterval(point.percentile)
+    if (bounds) return (bounds.i + bounds.k) / 2
+  }
+  return point.rank
+}
+
+function profilePointRankTooltipLine(
+  point: PercentilePoint,
+  kind: PercentileProfile['kind'],
+): string {
+  const bounds = parsePercentileInterval(point.percentile)
+  if (kind === 'average' && bounds) {
+    return `Tranche de population: ${formatRankPercent(bounds.i)} → ${formatRankPercent(bounds.k)} %<br/>`
+  }
+  if (point.rank !== undefined) {
+    return `Part de population: ${formatRankPercent(point.rank)} %<br/>`
+  }
+  return ''
+}
+
 /** Lower/upper bound coordinates for ]i %, k %] bands (handles k = 100 % in log X). */
 function rankBandBound(
   bound: number,
@@ -381,9 +485,7 @@ function buildRankAxis(logRank: boolean) {
     name: 'Part de population (%)',
     nameLocation: 'middle' as const,
     nameGap: 32,
-    scale: logRank,
-    min: logRank ? rankDisplayCoordinate(0)! : 0,
-    max: logRank ? rankDisplayCoordinateUpper(100)! : 100,
+    scale: true,
     axisLabel: logRank
       ? { formatter: (value: number) => formatRankAxisLabel(value) }
       : { formatter: (value: number) => `${formatRankPercent(value)} %` },
@@ -781,18 +883,66 @@ export const PROFILE_CHART_LAYOUT = {
   gridBottom: 90,
 } as const
 
+/** Initial visible window for profile dataZoom (band-framed overlay views). */
+export interface ProfileDataZoomWindow {
+  rankStart?: number
+  rankEnd?: number
+  valueStart?: number
+  valueEnd?: number
+}
+
+/** Map band axis bounds to rank/value dataZoom windows (handles density axis swap). */
+export function bandDataZoomWindow(
+  bounds: BandAxisBounds,
+  populationDensity: boolean,
+): ProfileDataZoomWindow | undefined {
+  const hasRank = bounds.xMin != null || bounds.xMax != null
+    || bounds.yMin != null || bounds.yMax != null
+  if (!hasRank) return undefined
+
+  return populationDensity
+    ? {
+        valueStart: bounds.xMin,
+        valueEnd: bounds.xMax,
+        rankStart: bounds.yMin,
+        rankEnd: bounds.yMax,
+      }
+    : {
+        rankStart: bounds.xMin,
+        rankEnd: bounds.xMax,
+        valueStart: bounds.yMin,
+        valueEnd: bounds.yMax,
+      }
+}
+
+function dataZoomRange(
+  start?: number,
+  end?: number,
+): { start: number, end: number } | { startValue?: number, endValue?: number } {
+  if (start == null && end == null) return { start: 0, end: 100 }
+  return {
+    ...(start != null ? { startValue: start } : {}),
+    ...(end != null ? { endValue: end } : {}),
+  }
+}
+
 /** Native ECharts sliders: rank/population axis + value axis (horizontal or vertical). */
-export function buildProfileDataZoom(valueOnX: boolean) {
+export function buildProfileDataZoom(
+  valueOnX: boolean,
+  initialWindow?: ProfileDataZoomWindow,
+) {
   const rankOnX = !valueOnX
   const { bottomSlider, bottomSliderHeight, gridBottom } = PROFILE_CHART_LAYOUT
+  const rankRange = dataZoomRange(initialWindow?.rankStart, initialWindow?.rankEnd)
+  const valueRange = dataZoomRange(initialWindow?.valueStart, initialWindow?.valueEnd)
 
   const rankInside = rankOnX
-    ? { type: 'inside' as const, xAxisIndex: 0, filterMode: 'none' as const }
-    : { type: 'inside' as const, yAxisIndex: 0, filterMode: 'none' as const }
+    ? { type: 'inside' as const, xAxisIndex: 0, filterMode: 'filter' as const, ...rankRange }
+    : { type: 'inside' as const, yAxisIndex: 0, filterMode: 'filter' as const, ...rankRange }
 
   const valueInside = valueOnX
-    ? { type: 'inside' as const, xAxisIndex: 0, filterMode: 'none' as const }
-    : { type: 'inside' as const, yAxisIndex: 0, filterMode: 'none' as const }
+    ? { type: 'inside' as const, xAxisIndex: 0, filterMode: 'filter' as const, ...valueRange }
+    : { type: 'inside' as const, yAxisIndex: 0, filterMode: 'filter' as const, ...valueRange }
 
   const rankSlider = rankOnX
     ? {
@@ -800,7 +950,8 @@ export function buildProfileDataZoom(valueOnX: boolean) {
         xAxisIndex: 0,
         height: bottomSliderHeight,
         bottom: bottomSlider,
-        filterMode: 'none' as const,
+        filterMode: 'filter' as const,
+        ...rankRange,
       }
     : {
         type: 'slider' as const,
@@ -810,7 +961,8 @@ export function buildProfileDataZoom(valueOnX: boolean) {
         left: 10,
         top: 56,
         bottom: gridBottom,
-        filterMode: 'none' as const,
+        filterMode: 'filter' as const,
+        ...rankRange,
       }
 
   const valueSlider = valueOnX
@@ -819,7 +971,8 @@ export function buildProfileDataZoom(valueOnX: boolean) {
         xAxisIndex: 0,
         height: bottomSliderHeight,
         bottom: bottomSlider,
-        filterMode: 'none' as const,
+        filterMode: 'filter' as const,
+        ...valueRange,
       }
     : {
         type: 'slider' as const,
@@ -829,7 +982,8 @@ export function buildProfileDataZoom(valueOnX: boolean) {
         left: 10,
         top: 56,
         bottom: gridBottom + bottomSliderHeight + bottomSlider,
-        filterMode: 'none' as const,
+        filterMode: 'filter' as const,
+        ...valueRange,
       }
 
   return [rankInside, valueInside, rankSlider, valueSlider]
@@ -844,13 +998,14 @@ export function buildProfileOption(
   options: ProfileChartOptions = {},
 ): EChartsOption {
   const {
-    chartType = 'line',
+    chartType = 'bar',
     logScaleY = false,
     logScaleX = false,
     populationDensity = false,
     probabilityDensity = false,
     lorenzCurve = false,
     valueRange,
+    overlayPoints,
     title,
   } = options
 
@@ -877,12 +1032,13 @@ export function buildProfileOption(
       top: 56,
       bottom: PROFILE_CHART_LAYOUT.gridBottom,
     },
+    toolbox: buildChartToolbox(),
     dataZoom: buildProfileDataZoom(valueOnX),
   }
 
   if (lorenzCurve) {
     const lorenzPoints = computeLorenzPoints(chartPoints)
-    const seriesType = chartType === 'scatter' ? 'scatter' : 'line'
+    const seriesType = primaryProfileSeriesType(chartType) === 'scatter' ? 'scatter' : 'line'
 
     return {
       ...base,
@@ -937,7 +1093,6 @@ export function buildProfileOption(
           showSymbol: seriesType !== 'line',
           symbolSize: seriesType === 'scatter' ? 6 : undefined,
           connectNulls: false,
-          step: seriesType === 'line' ? 'end' : undefined,
           z: 1,
         },
       ],
@@ -964,11 +1119,9 @@ export function buildProfileOption(
       ].join('<br/>')
     }
 
-    if (chartType === 'bar') {
+    if (primaryProfileSeriesType(chartType) === 'bar') {
       const bands = buildPdfBandItems(bins, { logOnValue, logOnDensity })
       const bounds = computePdfBandAxisBounds(bands, { logOnValue, logOnDensity })
-      Object.assign(xAxis, { min: bounds.xMin, max: bounds.xMax })
-      Object.assign(yAxis, { min: bounds.yMin, max: bounds.yMax })
       applyValueRangeZoom(xAxis, valueRange, logOnValue)
 
       return {
@@ -990,7 +1143,7 @@ export function buildProfileOption(
       }
     }
 
-    const seriesType = chartType === 'scatter' ? 'scatter' : 'line'
+    const seriesType = primaryProfileSeriesType(chartType) === 'scatter' ? 'scatter' : 'line'
     const data = bins
       .map((bin) => {
         const density = cleanDensity(bin.density, logOnDensity)
@@ -1000,7 +1153,9 @@ export function buildProfileOption(
       .filter((entry): entry is { bin: PdfBin, pair: [number, number] } => entry !== null)
 
     applyValueRangeZoom(xAxis, valueRange, logOnValue)
-    applyPdfDensityAxisExtent(yAxis, data.map((d) => d.pair[1]), logOnDensity)
+    if (logOnDensity) {
+      applyPdfDensityAxisExtent(yAxis, data.map((d) => d.pair[1]), logOnDensity)
+    }
 
     return {
       ...base,
@@ -1015,13 +1170,15 @@ export function buildProfileOption(
           showSymbol: seriesType !== 'line',
           symbolSize: seriesType === 'scatter' ? 6 : undefined,
           connectNulls: false,
-          step: seriesType === 'line' ? 'end' : undefined,
         },
       ],
     }
   }
 
-  const seriesType = chartType === 'line' ? 'line' : chartType === 'scatter' ? 'scatter' : 'bar'
+  const overlayType = overlaySeriesType(chartType)
+  const overlayOrdered = overlayType
+    ? [...(overlayPoints ?? chartPoints)].sort((a, b) => a.rank - b.rank)
+    : chartPoints
 
   if (chartType === 'bar') {
     const bands = buildRankBandItems(chartPoints, { logOnRank, logOnValue, populationDensity })
@@ -1031,8 +1188,6 @@ export function buildProfileOption(
     const xAxis = populationDensity ? valueAxis : rankAxis
     const yAxis = populationDensity ? rankAxis : valueAxis
 
-    Object.assign(xAxis, { min: bounds.xMin, max: bounds.xMax })
-    Object.assign(yAxis, { min: bounds.yMin, max: bounds.yMax })
     applyDualAxisZoom(xAxis, yAxis, {
       valueRange,
       rankPoints: chartPoints,
@@ -1079,9 +1234,14 @@ export function buildProfileOption(
     }
   }
 
-  const data = chartPoints
+  const seriesPoints = overlayType ? overlayOrdered : chartPoints
+  const seriesChartPoints = zoomActive && valueRange
+    ? filterPointsByValueRange(seriesPoints, valueRange)
+    : seriesPoints
+
+  const data = seriesChartPoints
     .map((point) => {
-      const rankCoord = rankCoordinate(point.rank, logOnRank)
+      const rankCoord = rankCoordinate(plotRankForPoint(point, profile.kind), logOnRank)
       const valueCoord = cleanValue(point.value, logOnValue)
       if (rankCoord === null) return null
 
@@ -1098,15 +1258,86 @@ export function buildProfileOption(
   const valueAxis = buildValueAxis(valueAxisName, logOnValue)
   const xAxis = populationDensity ? valueAxis : rankAxis
   const yAxis = populationDensity ? rankAxis : valueAxis
-  // Auto-scale the rank axis to the displayed brackets, like the bar view does.
-  applyRankExtentZoom(rankAxis, computeRankIntervalExtent(chartPoints), logOnRank)
   applyDualAxisZoom(xAxis, yAxis, {
     valueRange,
-    rankPoints: chartPoints,
+    rankPoints: seriesPoints,
     logOnRank,
     logOnValue,
     populationDensity,
   })
+
+  if (overlayType) {
+    const bands = buildRankBandItems(chartPoints, { logOnRank, logOnValue, populationDensity })
+    const bounds = computeBandAxisBounds(bands, { logOnRank, logOnValue, populationDensity })
+    const overlayDataZoom = buildProfileDataZoom(
+      valueOnX,
+      bandDataZoomWindow(bounds, populationDensity),
+    )
+
+    return {
+      ...base,
+      dataZoom: overlayDataZoom,
+      tooltip: {
+        trigger: 'item',
+        formatter: (params) => {
+          const seriesType = (params as { seriesType?: string }).seriesType
+          if (seriesType === 'custom') {
+            const p = params as { name?: string, data?: { value?: [number, number, number] } }
+            const band = p?.data
+            const yVal = populationDensity ? band?.value?.[0] : band?.value?.[2]
+            const shown = yVal === null || yVal === undefined ? '—' : yVal.toLocaleString('fr-FR')
+            const code = p?.name ? `${p.name}<br/>` : ''
+            return `${code}${valueAxisName}: ${shown}`
+          }
+          const p = params as { value?: [number, number | null], data?: { point?: PercentilePoint } }
+          const point = p?.data?.point
+          const valueShown = point?.value === null || point?.value === undefined
+            ? '—'
+            : point.value.toLocaleString('fr-FR')
+          const percentileLine = point?.percentile ? `${point.percentile}<br/>` : ''
+          const rankLine = point ? profilePointRankTooltipLine(point, profile.kind) : ''
+          return `${percentileLine}${rankLine}${valueAxisName}: ${valueShown}`
+        },
+      },
+      xAxis,
+      yAxis,
+      series: [
+        {
+          name: 'Bandes',
+          type: 'custom',
+          clip: true,
+          z: 0,
+          renderItem: populationDensity
+            ? createRenderPopulationBand(bounds.xBase)
+            : createRenderRankBand(bounds.yBase),
+          data: bands.map((band) => ({
+            name: band.name,
+            value: band.value,
+            i: band.i,
+            k: band.k,
+          })),
+          encode: populationDensity
+            ? { x: 0, y: [1, 2] }
+            : { x: [0, 1], y: 2 },
+          itemStyle: { color: '#1565C0', opacity: PROFILE_BAND_WATERMARK_OPACITY },
+          emphasis: { itemStyle: { opacity: PROFILE_BAND_WATERMARK_OPACITY * 1.6 } },
+        },
+        {
+          name: profile.variable,
+          type: overlayType,
+          z: 2,
+          data: data.map(({ point, pair }) => ({ value: pair, point })),
+          showSymbol: overlayType !== 'line',
+          symbolSize: overlayType === 'scatter' ? 6 : undefined,
+          connectNulls: false,
+          lineStyle: overlayType === 'line' ? { width: 2, color: '#1565C0' } : undefined,
+          itemStyle: { color: '#1565C0' },
+        },
+      ],
+    }
+  }
+
+  const seriesType = chartType === 'line' ? 'line' : 'scatter'
 
   return {
     ...base,
@@ -1119,9 +1350,7 @@ export function buildProfileOption(
           ? '—'
           : point.value.toLocaleString('fr-FR')
         const percentileLine = point?.percentile ? `${point.percentile}<br/>` : ''
-        const rankLine = point?.rank !== undefined
-          ? `Part de population: ${formatRankPercent(point.rank)} %<br/>`
-          : ''
+        const rankLine = point ? profilePointRankTooltipLine(point, profile.kind) : ''
         return `${percentileLine}${rankLine}${valueAxisName}: ${valueShown}`
       },
     },
@@ -1132,11 +1361,10 @@ export function buildProfileOption(
         name: profile.variable,
         type: seriesType,
         data: data.map(({ point, pair }) => ({ value: pair, point })),
-        showSymbol: chartType !== 'line',
-        symbolSize: chartType === 'scatter' ? 6 : undefined,
+        showSymbol: seriesType !== 'line',
+        symbolSize: seriesType === 'scatter' ? 6 : undefined,
         connectNulls: false,
-        step: chartType === 'line' ? 'end' : undefined,
-        itemStyle: seriesType === 'bar' ? { borderRadius: [2, 2, 0, 0] } : undefined,
+        itemStyle: undefined,
       },
     ],
   }

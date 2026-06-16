@@ -11,8 +11,8 @@ export default withNuxt({
     }],
   },
 }, {
-  files: ['src/application/**/*.{ts}'],
-  ignores: ['src/application/bootstrap/**'],
+  files: ['lib/application/**/*.{ts}'],
+  ignores: ['lib/application/bootstrap/**'],
   rules: {
     'no-restricted-imports': ['error', {
       patterns: [
@@ -28,7 +28,7 @@ export default withNuxt({
     }],
   },
 }, {
-  files: ['src/domain/**/*.{ts}'],
+  files: ['lib/domain/**/*.{ts}'],
   rules: {
     'no-restricted-imports': ['error', {
       patterns: [{
@@ -38,7 +38,7 @@ export default withNuxt({
     }],
   },
 }, {
-  files: ['src/infrastructure/**/*.{ts}'],
+  files: ['lib/infrastructure/**/*.{ts}'],
   rules: {
     'no-restricted-imports': ['error', {
       patterns: [{

@@ -16,7 +16,9 @@
  * réutiliser les nombres des bornes sur les axes.
  */
 import type { PercentilePoint } from '@domain/entities'
-import { parsePercentileInterval } from '@domain/services/percentiles'
+import { buildPartitionPoints, formatBracketCode } from '~/visualization/populationPartition'
+
+export { aggregatePointValue, formatBracketCode } from '~/visualization/populationPartition'
 
 export interface DrillLevel {
   /** Borne basse de la zone affichée (en %). */
@@ -35,41 +37,10 @@ export const DRILL_LEVELS: DrillLevel[] = [
 
 export const MAX_DRILL_LEVEL = DRILL_LEVELS.length - 1
 
-const EPS = 1e-9
-
-/** Formate un nombre comme les codes WID (au plus 3 décimales, point décimal). */
-function fmt(n: number): string {
-  return Number(n.toFixed(3)).toString()
-}
-
-/** Construit un code de tranche `pLOpHI` (convention WID). */
-export function formatBracketCode(lo: number, hi: number): string {
-  return `p${fmt(lo)}p${fmt(hi)}`
-}
-
 /** Borne un index de niveau dans [0, MAX_DRILL_LEVEL]. */
 export function clampDrillLevel(level: number): number {
   if (!Number.isFinite(level)) return 0
   return Math.min(Math.max(Math.trunc(level), 0), MAX_DRILL_LEVEL)
-}
-
-/**
- * Valeur agrégée d'un ensemble de tranches, pondérée par la largeur de
- * population (k − i). Correct pour les moyennes `a…` ; approximation
- * raisonnable pour les seuils `t…`. Renvoie null si aucune valeur exploitable.
- */
-export function aggregatePointValue(points: PercentilePoint[]): number | null {
-  let weighted = 0
-  let weight = 0
-  for (const point of points) {
-    if (point.value === null || !Number.isFinite(point.value)) continue
-    const interval = parsePercentileInterval(point.percentile)
-    const w = interval ? interval.k - interval.i : 1
-    if (w <= 0) continue
-    weighted += point.value * w
-    weight += w
-  }
-  return weight > 0 ? weighted / weight : null
 }
 
 /**
@@ -83,26 +54,13 @@ export function buildDrilldownPoints(
 ): PercentilePoint[] {
   const { lo, step } = DRILL_LEVELS[clampDrillLevel(level)]!
   const count = Math.round((100 - lo) / step)
-  const result: PercentilePoint[] = []
+  const breakpoints: number[] = []
 
   for (let b = 0; b < count; b++) {
-    const a = Number((lo + b * step).toFixed(6))
-    const k = b === count - 1 ? 100 : Number((lo + (b + 1) * step).toFixed(6))
-
-    const underlying = allPoints.filter((point) => {
-      const interval = parsePercentileInterval(point.percentile)
-      if (!interval) return false
-      return interval.i >= a - EPS && interval.k <= k + EPS
-    })
-
-    result.push({
-      percentile: formatBracketCode(a, k),
-      rank: a,
-      value: aggregatePointValue(underlying),
-    })
+    breakpoints.push(b === count - 1 ? 100 : Number((lo + (b + 1) * step).toFixed(6)))
   }
 
-  return result
+  return buildPartitionPoints(allPoints, breakpoints, lo)
 }
 
 /**

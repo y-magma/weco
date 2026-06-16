@@ -24,9 +24,9 @@ onMounted(async () => {
 
     <v-row class="mb-2">
       <v-col cols="12">
-        <h1 class="text-h4 font-weight-bold mb-1">Variable vs population</h1>
+        <h1 class="text-h4 font-weight-bold mb-1">Inégalités et profil</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
-          Profil WID sur les 127 g-percentiles : distribution d’une variable par part de population.
+          Voir comment une mesure se répartit dans la population.
         </p>
       </v-col>
     </v-row>

@@ -84,9 +84,9 @@ const sourceStatuses = computed(() =>
     <v-card variant="tonal" color="primary" class="mt-6 pa-5">
       <h3 class="text-h6 mb-2">Adding a new source</h3>
       <ol class="text-body-2 pl-4">
-        <li>Create a module under <code>src/infrastructure/data-sources/&lt;name&gt;/</code></li>
+        <li>Create a module under <code>lib/infrastructure/data-sources/&lt;name&gt;/</code></li>
         <li>Implement the <code>DataSourcePort</code> interface</li>
-        <li>Register it in <code>src/infrastructure/data-sources/registry.ts</code></li>
+        <li>Register it in <code>lib/infrastructure/data-sources/registry.ts</code></li>
         <li>Expose indicators via <code>searchIndicators()</code> and series via <code>fetchSeries()</code></li>
       </ol>
     </v-card>

@@ -18,7 +18,7 @@ const drawerModel = computed<boolean>({
 
 const navItems = [
   { title: 'Home', to: '/', icon: 'mdi-home' },
-  { title: 'Panneau de visualisations', to: '/panneau', icon: 'mdi-chart-bar' },
+  { title: 'Cas d\'étude', to: '/panneau', icon: 'mdi-chart-bar' },
   { title: 'Grille de visualisations', to: '/grille', icon: 'mdi-view-grid-plus' },
   { title: 'Spécifications', to: '/spec', icon: 'mdi-file-document-multiple' },
   { title: 'Data Sources', to: '/sources', icon: 'mdi-database' },
@@ -34,7 +34,7 @@ const navItems = [
       :permanent="mdAndUp"
     >
       <v-list-item
-        title="Boîte à outils de visualisations"
+        title="Études de visualisation"
         subtitle="Distribution des richesses"
         class="py-4"
       />
@@ -59,7 +59,7 @@ const navItems = [
         @click="mobileDrawer = !mobileDrawer"
       />
       <v-app-bar-title class="text-body-1 font-weight-bold">
-        Boîte à outils de visualisations
+        Études de visualisation
       </v-app-bar-title>
       <v-spacer />
       <v-btn

@@ -27,13 +27,16 @@ describe('buildProfileScatterOption', () => {
     }
   })
 
-  it('positions the visualMap with explicit width below the x-axis name', () => {
+  it('positions the visualMap above the zoom slider below the x-axis name', () => {
     const option = buildProfileScatterOption(samplePoints, { xLabel: 'X', yLabel: 'Y' })
     const visualMap = option.visualMap as { left: number, right: number, bottom: number, itemWidth: number, itemHeight?: number }
     expect((option.grid as { bottom: number }).bottom).toBeGreaterThanOrEqual(80)
     expect(visualMap.left).toBe(64)
     expect(visualMap.right).toBe(24)
+    expect(visualMap.bottom).toBeGreaterThan(12)
     expect(visualMap.itemWidth).toBeGreaterThanOrEqual(12)
     expect(visualMap.itemHeight).toBeUndefined()
+    expect(option.toolbox).toBeDefined()
+    expect((option.dataZoom as unknown[]).length).toBeGreaterThanOrEqual(2)
   })
 })

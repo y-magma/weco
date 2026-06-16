@@ -1,8 +1,10 @@
 import type { PercentileProfile } from '@domain/entities'
 import { WID_G_PERCENTILE_COUNT } from '@domain/catalog/widCodes'
 
+import type { ProfileChartType } from '~/visualization/profile'
+
 export interface ProfileHelpContext {
-  chartType: 'bar' | 'scatter' | 'line'
+  chartType: ProfileChartType
   logScaleX: boolean
   logScaleY: boolean
   populationDensity: boolean
@@ -17,8 +19,11 @@ export const PROFILE_HELP = {
     paragraphs: [
       'Les 127 g-percentiles WID sont triés par rang croissant. Chaque point correspond à une tranche de population (ex. p50p51 = entre le 50e et le 51e percentile).',
       'Bandes : une bande par tranche, largeur = intervalle de population (ou de richesse en densité de probabilité), hauteur = valeur ou densité.',
-      'Nuage : un marqueur par tranche, sans liaison entre les points.',
-      'Ligne : courbe en escalier (step) — la valeur reste constante sur toute la largeur de la tranche de population, puis saute au niveau suivant.',
+      'Nuage : un marqueur par tranche, sans liaison entre les points. Variable moyenne (a…) : marqueur au centre de la tranche ]i, k] ; variable seuil (t…) : à la borne basse i.',
+      'Ligne : segments reliant les points consécutifs (courbe polyligne). Même règle de positionnement sur l’axe population que le nuage.',
+      'Vous pouvez sélectionner deux types en même temps : Bandes + Nuage ou Bandes + Ligne superposent les bandes en filigrane sous le nuage ou la ligne.',
+      'En superposition, les bandes suivent le découpage population choisi ; la ligne ou le nuage affiche toujours les tranches fines des données brutes (jusqu’à 127 g-percentiles).',
+      'À l’ouverture, les axes sont cadrés sur les bandes ; les curseurs de zoom permettent d’élargir la vue jusqu’à l’étendue complète de la ligne ou du nuage.',
     ],
   },
   populationDensity: {
@@ -26,7 +31,7 @@ export const PROFILE_HELP = {
     paragraphs: [
       'Les axes sont inversés par rapport au profil standard : abscisse = richesse (valeur de la variable), ordonnée = part de population (rang percentile en %).',
       'Chaque point (x, y) associe le seuil ou la moyenne de richesse x à la part y de la population située en dessous de ce niveau.',
-      'En mode Ligne, la courbe en escalier représente une fonction de répartition (CDF) empirique lorsque la variable est un seuil (préfixe t…, ex. thweal).',
+      'En mode Ligne, la courbe relie les points (x, y) consécutifs — lecture visuelle d’une fonction de répartition (CDF) empirique lorsque la variable est un seuil (préfixe t…, ex. thweal).',
       'Pour une variable moyenne (préfixe a…, ex. ahweal), il s’agit d’une transposition visuelle des mêmes données — ce n’est pas une CDF mathématique stricto sensu.',
     ],
   },
@@ -69,10 +74,20 @@ export const PROFILE_HELP = {
     ],
   },
   showAllPercentiles: {
-    title: '127 g-percentiles',
+    title: 'Tranches fines sur les plus riches',
     paragraphs: [
-      'Les 127 g-percentiles WID sont affichés d’un coup.',
-      'Décochez « 127 g-percentiles » pour revenir à la vue agrégée avec zoom progressif sur le sommet.',
+      'Les 127 g-percentiles WID sont affichés d’un coup, sans agrégation.',
+      'La grille WID est plus fine dans le haut de la distribution (sommet des plus riches).',
+      'Chaque point correspond à une tranche native de la base WID.',
+    ],
+  },
+  populationView: {
+    title: 'Tranches de population',
+    paragraphs: [
+      'Tranches fines sur les plus riches : affichage brut des 127 g-percentiles WID.',
+      'Tranches de 1 %, 10 % ou 25 % de pop : agrégation en intervalles réguliers ]0 %, step %], ]step %, 2×step %], … jusqu’à 100 %.',
+      'En tranches de 1 %, la tranche ]99 %, 100 %] reste agrégée ; un zoom progressif permet d’affiner le sommet de la distribution.',
+      'Tranches personnalisées : saisissez les bornes de fin de chaque intervalle (la borne suivante en est le début) jusqu’à 100 %. Seules les bornes présentes dans les données chargées sont acceptées.',
     ],
   },
   drillMaxLevel: {
@@ -144,7 +159,7 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
       'Vue active : densité de population (axes inversés, CDF empirique).',
       'Abscisse X = richesse (valeur). Ordonnée Y = part de population cumulée (rang percentile en %).',
       kind === 'threshold'
-        ? 'Variable seuil : la courbe en escalier est une vraie fonction de répartition F(x).'
+        ? 'Variable seuil : la courbe relie les points d’une fonction de répartition F(x) empirique.'
         : 'Variable moyenne : transposition visuelle — l’axe Y n’est pas une CDF mathématique exacte.',
     )
   } else {
@@ -154,11 +169,17 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
     )
   }
 
-  const typeLabels = { bar: 'bandes', scatter: 'nuage de points', line: 'ligne en escalier' }
+  const typeLabels: Record<ProfileChartType, string> = {
+    bar: 'bandes',
+    scatter: 'nuage de points',
+    line: 'ligne (segments entre points)',
+    'scatter-bar': 'nuage de points avec bandes en filigrane',
+    'line-bar': 'ligne avec bandes en filigrane',
+  }
   if (!lorenzCurve) {
     paragraphs.push(`Encodage graphique : ${typeLabels[chartType]}.`)
   } else {
-    paragraphs.push('Encodage graphique : courbe en escalier (référence d’égalité parfaite en pointillés).')
+    paragraphs.push('Encodage graphique : courbe polyligne (référence d’égalité parfaite en pointillés).')
   }
 
   if (logScaleX) {
@@ -187,8 +208,22 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
     paragraphs.push('Axes linéaires 0–100 % (échelles log désactivées en mode Lorenz).')
   }
 
-  if (!logScaleX && !logScaleY && !populationDensity && !probabilityDensity && !lorenzCurve && chartType === 'line') {
-    paragraphs.push('Sans option log : axes linéaires. Courbe en escalier : valeur constante par tranche de percentile.')
+  if (!lorenzCurve && !probabilityDensity
+    && (chartType === 'line' || chartType === 'scatter' || chartType === 'line-bar' || chartType === 'scatter-bar')) {
+    if (kind === 'average') {
+      paragraphs.push(
+        'Position sur l’axe population : centre de la tranche ]i, k] (ex. p50p51 → 50,5 %) pour les variables moyenne (a…).',
+      )
+    } else if (kind === 'threshold') {
+      paragraphs.push(
+        'Position sur l’axe population : borne basse i de la tranche (ex. p50p51 → 50 %) pour les variables seuil (t…).',
+      )
+    }
+  }
+
+  if (!logScaleX && !logScaleY && !populationDensity && !probabilityDensity && !lorenzCurve
+    && (chartType === 'line' || chartType === 'line-bar')) {
+    paragraphs.push('Sans option log : axes linéaires. Segments reliant les points consécutifs de chaque tranche de percentile.')
   }
 
   return {

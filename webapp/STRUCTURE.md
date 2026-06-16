@@ -7,15 +7,15 @@ navigateur (clé API requise).
 ## Architecture en 4 couches
 
 ```
-Graphique (app/) → Application (src/application/) → Domaine (src/domain/) → Infrastructure (src/infrastructure/)
+Graphique (app/) → Application (lib/application/) → Domaine (lib/domain/) → Infrastructure (lib/infrastructure/)
 ```
 
 | Couche | Dossier | Rôle |
 |--------|---------|------|
 | **Graphique** | `app/` | Pages, composants Vue, mappers ECharts (`app/visualization/`), composables minces |
-| **Application** | `src/application/` | Use cases, bootstrap (composition root) |
-| **Domaine** | `src/domain/` | Entités, services purs, catalogue WID, ports (`DataSourcePort`) |
-| **Infrastructure** | `src/infrastructure/` | HTTP, cache, adaptateur WID, CSV, chargement spec |
+| **Application** | `lib/application/` | Use cases, bootstrap (composition root) |
+| **Domaine** | `lib/domain/` | Entités, services purs, catalogue WID, ports (`DataSourcePort`) |
+| **Infrastructure** | `lib/infrastructure/` | HTTP, cache, adaptateur WID, CSV, chargement spec |
 
 **Alias TypeScript** : `@application`, `@domain`, `@infrastructure` (`nuxt.config.ts` + `vitest.config.ts`).
 
@@ -32,7 +32,7 @@ webapp/
 │   │   └── application.client.ts     # Injection du container applicatif
 │   └── assets/
 │
-├── src/
+├── lib/
 │   ├── application/
 │   │   ├── use-cases/                # ListCountries, LoadProfile, LoadTimeSeries…
 │   │   └── bootstrap/                # container, csvAdapter, specAdapter
@@ -101,7 +101,7 @@ Les composables **n'appellent jamais l'infrastructure directement** — uniqueme
 
 ---
 
-## 2. Couche application — `src/application/`
+## 2. Couche application — `lib/application/`
 
 | Use case | Rôle |
 |----------|------|
@@ -115,7 +115,7 @@ Le **bootstrap** (`bootstrap/container.ts`) initialise le registre WID et instan
 
 ---
 
-## 3. Couche domaine — `src/domain/`
+## 3. Couche domaine — `lib/domain/`
 
 | Sous-dossier | Contenu |
 |--------------|---------|
@@ -128,7 +128,7 @@ Code **100 % pur** (pas de Vue, pas de fetch, pas d'ECharts).
 
 ---
 
-## 4. Couche infrastructure — `src/infrastructure/`
+## 4. Couche infrastructure — `lib/infrastructure/`
 
 | Sous-dossier | Contenu |
 |--------------|---------|
@@ -176,9 +176,9 @@ npm run test:conformance # API vs dump CSV
 
 ## 7. Ajouter une source de données
 
-1. Implémenter `DataSourcePort` (`src/domain/ports/DataSourcePort.ts`)
-2. Créer l'adaptateur sous `src/infrastructure/data-sources/<nom>/`
-3. Enregistrer dans `src/infrastructure/data-sources/registry.ts`
+1. Implémenter `DataSourcePort` (`lib/domain/ports/DataSourcePort.ts`)
+2. Créer l'adaptateur sous `lib/infrastructure/data-sources/<nom>/`
+3. Enregistrer dans `lib/infrastructure/data-sources/registry.ts`
 4. Les use cases et composants graphiques restent **inchangés** si le mapping vers les entités domaine est compatible
 
 ---

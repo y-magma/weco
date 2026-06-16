@@ -24,9 +24,9 @@ onMounted(async () => {
 
     <v-row class="mb-2">
       <v-col cols="12">
-        <h1 class="text-h4 font-weight-bold mb-1">Variable vs variable</h1>
+        <h1 class="text-h4 font-weight-bold mb-1">Relation entre 2 indicateurs</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
-          Nuage de points : relation entre deux variables WID, jointes par percentile.
+          Repérer si deux indicateurs varient de concert.
         </p>
       </v-col>
     </v-row>

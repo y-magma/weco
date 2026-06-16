@@ -43,7 +43,7 @@ function toggleExpanded() {
         :icon="expanded ? 'mdi-chevron-up' : 'mdi-chevron-down'"
         variant="text"
         size="small"
-        :aria-label="expanded ? 'Replier la boîte à outils' : 'Déplier la boîte à outils'"
+        :aria-label="expanded ? 'Replier les filtres' : 'Déplier les filtres'"
         @click.stop="toggleExpanded"
       />
 

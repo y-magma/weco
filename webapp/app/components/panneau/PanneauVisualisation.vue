@@ -1,5 +1,14 @@
 <script setup lang="ts">
 import { buildActiveCalculationHelp, buildDrillDownHelp, PROFILE_HELP } from '~/visualization/profileHelp'
+import { resolveProfileChartType } from '~/visualization/profile'
+import {
+  describeCustomIntervals,
+  formatBoundaryLabel,
+  parseBoundaryInput,
+  POPULATION_VIEW_OPTIONS,
+  selectableCustomBoundaries,
+  validateNextCustomBreakpoint,
+} from '~/visualization/populationPartition'
 import type { CountryOption } from '@domain/entities'
 import { WID_PROFILE_VARIABLES } from '@domain/catalog/widCodes'
 import type { PanneauType } from '~/composables/panneauTypes'
@@ -38,7 +47,7 @@ const {
   year,
   age,
   pop,
-  chartType,
+  chartTypeLayers,
   logScaleY,
   logScaleX,
   populationDensity,
@@ -56,16 +65,87 @@ const {
   drillBreadcrumb,
   currentDrillableCode,
   canDrillDown,
-  showAllPercentiles,
+  supportsDrillDown,
+  populationViewMode,
+  customBreakpoints,
+  availableBoundaries,
+  customPartitionValidation,
+  customPartitionComplete,
   drillTo,
   drillDownTop,
   handleChartClick,
   profile,
   profileOption,
-  profilePointCountLabel,
-  profilePartialData,
   load,
 } = state
+
+const customBreakpointInput = ref('')
+const customBreakpointError = ref<string | null>(null)
+
+const selectableBoundaries = computed(() =>
+  selectableCustomBoundaries(customBreakpoints.value, availableBoundaries.value),
+)
+
+const selectableBoundaryItems = computed(() =>
+  selectableBoundaries.value.map((value) => ({
+    value,
+    title: formatBoundaryLabel(value),
+  })),
+)
+
+const customIntervalLabels = computed(() =>
+  describeCustomIntervals(customBreakpoints.value),
+)
+
+const nextBoundaryHint = computed(() => {
+  const last = customBreakpoints.value.length > 0
+    ? customBreakpoints.value[customBreakpoints.value.length - 1]!
+    : 0
+  return `Prochaine borne de fin (après ${formatBoundaryLabel(last)})`
+})
+
+const addCustomBreakpoint = (raw: string | number | { value: number, title?: string }) => {
+  let value: number | null
+  if (typeof raw === 'object' && raw !== null && 'value' in raw) {
+    value = raw.value
+  } else if (typeof raw === 'number') {
+    value = raw
+  } else {
+    value = parseBoundaryInput(String(raw))
+  }
+  if (value === null) {
+    customBreakpointError.value = 'Saisissez un pourcentage entre 0 et 100.'
+    return
+  }
+  const validation = validateNextCustomBreakpoint(
+    value,
+    customBreakpoints.value,
+    availableBoundaries.value,
+  )
+  if (!validation.valid) {
+    customBreakpointError.value = validation.error
+    return
+  }
+  customBreakpoints.value = [...customBreakpoints.value, value]
+  customBreakpointInput.value = ''
+  customBreakpointError.value = null
+}
+
+const removeLastCustomBreakpoint = () => {
+  customBreakpoints.value = customBreakpoints.value.slice(0, -1)
+  customBreakpointError.value = null
+}
+
+const resetCustomBreakpoints = () => {
+  customBreakpoints.value = []
+  customBreakpointInput.value = ''
+  customBreakpointError.value = null
+}
+
+watch(populationViewMode, () => {
+  customBreakpointInput.value = ''
+  customBreakpointError.value = null
+})
 
 const chartTypes = [
   { value: 'bar', label: 'Bandes' },
@@ -74,7 +154,7 @@ const chartTypes = [
 ]
 
 const activeCalculationHelp = computed(() => buildActiveCalculationHelp({
-  chartType: chartType.value,
+  chartType: resolveProfileChartType(chartTypeLayers.value),
   logScaleX: logScaleX.value,
   logScaleY: logScaleY.value,
   populationDensity: populationDensity.value,
@@ -103,7 +183,7 @@ onMounted(() => {
         v-if="showPanelTitle && !collapsible"
         class="text-subtitle-2 font-weight-medium mb-2"
       >
-        Panneau de visualisation
+        Étude
       </div>
 
       <v-row dense class="panel-filters-row align-start">
@@ -187,23 +267,34 @@ onMounted(() => {
                 Réglages
               </v-expansion-panel-title>
               <v-expansion-panel-text>
-                <div class="d-flex align-center ga-1 mb-1">
-                  <span class="text-caption text-medium-emphasis">Type</span>
-                  <ProfileHelpButton
-                    :title="PROFILE_HELP.chartType.title"
-                    :paragraphs="PROFILE_HELP.chartType.paragraphs"
-                  />
-                </div>
-                <v-btn-toggle v-model="chartType" mandatory density="compact" divided class="mb-3">
-                  <v-btn
-                    v-for="type in chartTypes"
-                    :key="type.value"
-                    :value="type.value"
-                    size="x-small"
+                <div class="d-flex align-center ga-2 mb-3 chart-type-row">
+                  <div class="d-flex align-center ga-1 chart-type-row__label">
+                    <span class="text-body-2 text-medium-emphasis">Type</span>
+                    <ProfileHelpButton
+                      :title="PROFILE_HELP.chartType.title"
+                      :paragraphs="PROFILE_HELP.chartType.paragraphs"
+                    />
+                  </div>
+                  <v-btn-toggle
+                    v-model="chartTypeLayers"
+                    multiple
+                    mandatory
+                    density="compact"
+                    divided
+                    color="primary"
+                    variant="outlined"
+                    class="chart-type-toggle"
                   >
-                    {{ type.label }}
-                  </v-btn>
-                </v-btn-toggle>
+                    <v-btn
+                      v-for="type in chartTypes"
+                      :key="type.value"
+                      :value="type.value"
+                      size="small"
+                    >
+                      {{ type.label }}
+                    </v-btn>
+                  </v-btn-toggle>
+                </div>
 
                 <div class="d-flex align-center mb-1">
                   <v-switch
@@ -314,18 +405,31 @@ onMounted(() => {
         <v-chip v-if="profile?.unit" size="x-small" variant="tonal">
           Unité : {{ profile.unit }}
         </v-chip>
-        <v-chip
-          v-if="profilePointCountLabel"
-          size="x-small"
-          :color="profilePartialData ? 'warning' : undefined"
-          variant="tonal"
-        >
-          {{ profilePointCountLabel }}
-        </v-chip>
       </div>
 
       <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-2">
-        <div v-if="!showAllPercentiles" class="d-flex align-center flex-wrap ga-1">
+        <div class="d-flex align-center flex-wrap ga-2 population-view-row">
+          <v-select
+            v-model="populationViewMode"
+            :items="POPULATION_VIEW_OPTIONS"
+            item-title="label"
+            item-value="value"
+            label="Tranches de population"
+            density="compact"
+            hide-details
+            class="population-view-select"
+          />
+          <ProfileHelpButton
+            :title="PROFILE_HELP.populationView.title"
+            :paragraphs="PROFILE_HELP.populationView.paragraphs"
+            hint="Modes de découpage en tranches de population"
+          />
+        </div>
+
+        <div
+          v-if="supportsDrillDown"
+          class="d-flex align-center flex-wrap ga-1"
+        >
           <template v-for="(crumb, idx) in drillBreadcrumb" :key="crumb.level">
             <v-icon v-if="idx > 0" size="x-small" icon="mdi-chevron-right" class="text-medium-emphasis" />
             <v-chip
@@ -350,18 +454,17 @@ onMounted(() => {
             hint="Niveau de zoom maximal atteint"
           />
         </div>
-        <div v-else class="d-flex align-center ga-1">
-          <span class="text-body-2 font-weight-medium">Vue détaillée — 127 g-percentiles</span>
+        <div v-else-if="populationViewMode === 'all'" class="d-flex align-center ga-1">
+          <span class="text-body-2 font-weight-medium">Tranches fines sur les plus riches</span>
           <ProfileHelpButton
             :title="PROFILE_HELP.showAllPercentiles.title"
             :paragraphs="PROFILE_HELP.showAllPercentiles.paragraphs"
-            hint="Affichage des 127 g-percentiles"
+            hint="Affichage des 127 g-percentiles WID"
           />
         </div>
 
-        <div class="d-flex align-center ga-2">
+        <div v-if="canDrillDown" class="d-flex align-center ga-2">
           <v-btn
-            v-if="canDrillDown"
             size="x-small"
             variant="tonal"
             color="primary"
@@ -370,24 +473,117 @@ onMounted(() => {
           >
             Zoomer sur {{ currentDrillableCode }}
           </v-btn>
-          <v-switch
-            v-model="showAllPercentiles"
-            label="127 g-percentiles"
-            color="primary"
-            density="compact"
-            hide-details
-          />
-          <ProfileHelpButton
-            v-if="!showAllPercentiles"
-            :title="PROFILE_HELP.showAllPercentiles.title"
-            :paragraphs="PROFILE_HELP.showAllPercentiles.paragraphs"
-            hint="Afficher les 127 g-percentiles"
-          />
         </div>
       </div>
 
+      <v-expand-transition>
+        <div
+          v-if="populationViewMode === 'custom'"
+          class="custom-partition-panel mb-3 pa-3 rounded border"
+        >
+          <div class="text-body-2 font-weight-medium mb-2">
+            Tranches personnalisées
+          </div>
+          <p class="text-body-2 text-medium-emphasis mb-3">
+            Saisissez les bornes de <strong>fin</strong> de chaque intervalle d'observation. Terminez par <strong>100 %</strong>.            
+            <br>
+            Exemple : 50, 90, 100 → ]0 %, 50 %], ]50 %, 90 %], ]90 %, 100 %].
+          </p>
+
+          <div v-if="customIntervalLabels.length > 0" class="d-flex flex-wrap ga-1 mb-3">
+            <v-chip
+              v-for="(label, idx) in customIntervalLabels"
+              :key="idx"
+              size="small"
+              variant="tonal"
+              color="primary"
+            >
+              {{ label }}
+            </v-chip>
+          </div>
+
+          <v-row dense align="center">
+            <v-col cols="12" sm="6" md="4">
+              <v-combobox
+                v-model="customBreakpointInput"
+                :items="selectableBoundaryItems"
+                item-title="title"
+                item-value="value"
+                :label="nextBoundaryHint"
+                :error-messages="customBreakpointError ? [customBreakpointError] : []"
+                :disabled="customPartitionComplete || selectableBoundaries.length === 0"
+                density="compact"
+                hide-details="auto"
+                clearable
+                @keydown.enter.prevent="addCustomBreakpoint(customBreakpointInput)"
+              />
+            </v-col>
+            <v-col cols="auto">
+              <v-btn
+                size="small"
+                color="primary"
+                variant="tonal"
+                :disabled="customPartitionComplete || !customBreakpointInput"
+                @click="addCustomBreakpoint(customBreakpointInput)"
+              >
+                Ajouter
+              </v-btn>
+            </v-col>
+            <v-col cols="auto">
+              <v-btn
+                size="small"
+                variant="text"
+                :disabled="customBreakpoints.length === 0"
+                @click="removeLastCustomBreakpoint"
+              >
+                Annuler dernière
+              </v-btn>
+            </v-col>
+            <v-col cols="auto">
+              <v-btn
+                size="small"
+                variant="text"
+                :disabled="customBreakpoints.length === 0"
+                @click="resetCustomBreakpoints"
+              >
+                Réinitialiser
+              </v-btn>
+            </v-col>
+          </v-row>
+
+          <v-alert
+            v-if="customPartitionComplete"
+            type="success"
+            density="compact"
+            variant="tonal"
+            class="mt-3"
+          >
+            Découpage complet — {{ customIntervalLabels.length }} intervalle(s).
+          </v-alert>
+          <v-alert
+            v-else-if="customBreakpoints.length > 0 && customPartitionValidation.error"
+            type="warning"
+            density="compact"
+            variant="tonal"
+            class="mt-3"
+          >
+            {{ customPartitionValidation.error }}
+          </v-alert>
+          <v-alert
+            v-else-if="!customPartitionComplete && profile"
+            type="info"
+            density="compact"
+            variant="tonal"
+            class="mt-3"
+          >
+            Le graphique s'affichera une fois le découpage terminé par la borne 100 %.
+            {{ selectableBoundaries.length }} borne(s) disponible(s) dans les données.
+          </v-alert>
+        </div>
+      </v-expand-transition>
+
       <EChart
-        :key="`${lorenzCurve}-${populationDensity}-${probabilityDensity}-${chartType}-${drillLevel}-${showAllPercentiles}`"
+        :key="`${lorenzCurve}-${populationDensity}-${probabilityDensity}-${chartTypeLayers.join('+')}-${populationViewMode}-${drillLevel}-${customBreakpoints.join(',')}`"
         :option="profileOption"
         :loading="loading"
         :error="panelError"
@@ -408,5 +604,42 @@ onMounted(() => {
   flex: 1 1 0;
   min-width: 9.5rem;
   max-width: none;
+}
+
+.chart-type-row {
+  flex-wrap: wrap;
+}
+
+.chart-type-row__label {
+  flex-shrink: 0;
+}
+
+.chart-type-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+}
+
+.chart-type-toggle :deep(.v-btn) {
+  font-size: 0.875rem;
+  letter-spacing: 0.01em;
+}
+
+.chart-type-toggle :deep(.v-btn--selected) {
+  font-weight: 600;
+}
+
+.population-view-row {
+  min-width: 12rem;
+}
+
+.population-view-select {
+  min-width: 16rem;
+  max-width: 22rem;
+}
+
+.custom-partition-panel {
+  border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgba(var(--v-theme-surface-variant), 0.15);
 }
 </style>

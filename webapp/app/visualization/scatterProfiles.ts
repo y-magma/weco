@@ -1,6 +1,15 @@
 import type { ProfileScatterPoint } from '@domain/services/joinProfiles'
 import type { EChartsOption } from 'echarts'
 import { formatCompactAxisValue } from '~/visualization/axisFormat'
+import {
+  buildChartAxisDataZoom,
+  buildChartToolbox,
+  CHART_ZOOM_SLIDER_BOTTOM,
+  CHART_ZOOM_SLIDER_HEIGHT,
+} from '~/visualization/chartZoom'
+
+const SCATTER_VISUAL_MAP_BOTTOM = CHART_ZOOM_SLIDER_BOTTOM + CHART_ZOOM_SLIDER_HEIGHT + 6
+const SCATTER_GRID_BOTTOM = 88
 
 export interface ProfileScatterOptions {
   xLabel: string
@@ -48,7 +57,9 @@ export function buildProfileScatterOption(
           + `${yLabel}: ${v[1].toLocaleString('fr-FR')}`
       },
     },
-    grid: { left: 64, right: 24, top: 56, bottom: 88 },
+    grid: { left: 64, right: 24, top: 56, bottom: SCATTER_GRID_BOTTOM },
+    toolbox: buildChartToolbox(),
+    dataZoom: buildChartAxisDataZoom(),
     visualMap: {
       type: 'continuous',
       min: 0,
@@ -58,7 +69,7 @@ export function buildProfileScatterOption(
       orient: 'horizontal',
       left: 64,
       right: 24,
-      bottom: 8,
+      bottom: SCATTER_VISUAL_MAP_BOTTOM,
       /** Horizontal bar: itemWidth = thickness, length follows left/right. */
       itemWidth: 16,
       handleSize: '120%',

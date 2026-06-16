@@ -6,8 +6,8 @@ definePageMeta({
 const features = [
   {
     icon: 'mdi-chart-bar',
-    title: 'Panneau de visualisation',
-    text: 'Trois types de boîtes à outils : série temporelle, nuage de 2 variables, profil sur les 127 g-percentiles.',
+    title: 'Cas d\'étude',
+    text: 'Trois types d\'études : série temporelle, relation entre deux indicateurs, inégalités et profil.',
     to: '/panneau',
   },
   {
@@ -46,7 +46,7 @@ const features = [
           <v-icon icon="mdi-database-search-outline" size="36" class="mb-4" />
           <h2 class="text-h6 mb-2">Version 1</h2>
           <p class="text-body-2">
-            Données WID.world en direct (clé API). Panneau de visualisation :
+            Données WID.world en direct (clé API). Cas d'étude :
             profils moyen ou seuil sur les 127 g-percentiles, vues densité de
             population et de probabilité, échelles lin/log, zoom sur la queue
             de distribution. Grille de visualisations pour composer plusieurs

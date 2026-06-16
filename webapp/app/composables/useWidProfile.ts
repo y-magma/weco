@@ -1,6 +1,13 @@
 import type { EChartsOption } from 'echarts'
 import type { Ref } from 'vue'
-import { buildProfileOption } from '~/visualization/profile'
+import {
+  buildProfileOption,
+  normalizeChartTypeLayers,
+  resolveProfileChartType,
+  chartTypeLayersEqual,
+  overlaySeriesType,
+  type ProfileChartLayer,
+} from '~/visualization/profile'
 import {
   buildDrilldownPoints,
   clampDrillLevel,
@@ -9,6 +16,15 @@ import {
   MAX_DRILL_LEVEL,
   nextDrillLevel,
 } from '~/visualization/drilldown'
+import {
+  buildPartitionPoints,
+  buildStepBreakpoints,
+  extractAvailableBoundaries,
+  isCustomPartitionComplete,
+  stepFromMode,
+  validateCustomBreakpoints,
+  type PopulationViewMode,
+} from '~/visualization/populationPartition'
 import type { CountryOption, PercentileProfile } from '@domain/entities'
 import {
   WID_AGE_OPTIONS,
@@ -35,14 +51,15 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
   const year = ref(2021)
   const age = ref(WID_DEFAULT_AGE)
   const pop = ref(WID_DEFAULT_POP)
-  const chartType = ref<'bar' | 'scatter' | 'line'>('line')
+  const chartTypeLayers = ref<ProfileChartLayer[]>(['bar'])
   const logScaleY = ref(false)
   const logScaleX = ref(false)
   const populationDensity = ref(false)
   const probabilityDensity = ref(false)
   const lorenzCurve = ref(false)
+  const populationViewMode = ref<PopulationViewMode>('step1')
+  const customBreakpoints = ref<number[]>([])
   const drillLevel = ref(0)
-  const showAllPercentiles = ref(false)
 
   const loading = ref(false)
   const yearsLoading = ref(false)
@@ -79,23 +96,63 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
     () => profilePointCount.value > 0 && profilePointCount.value < WID_G_PERCENTILE_COUNT,
   )
 
-  const displayPoints = computed(() => {
-    if (!profile.value) return []
-    if (showAllPercentiles.value) {
-      return [...profile.value.points].sort((a, b) => a.rank - b.rank)
-    }
-    return buildDrilldownPoints(profile.value.points, drillLevel.value)
-  })
-
-  const drillBreadcrumb = computed(() =>
-    Array.from({ length: drillLevel.value + 1 }, (_, level) => ({
-      level,
-      label: drillLevelLabel(level),
-    })),
+  const availableBoundaries = computed(() =>
+    profile.value ? extractAvailableBoundaries(profile.value.points) : [0, 100],
   )
 
+  const customPartitionValidation = computed(() =>
+    validateCustomBreakpoints(customBreakpoints.value, availableBoundaries.value),
+  )
+
+  const customPartitionComplete = computed(() =>
+    isCustomPartitionComplete(customBreakpoints.value) && customPartitionValidation.value.valid,
+  )
+
+  const supportsDrillDown = computed(() =>
+    populationViewMode.value === 'step1' && !customPartitionComplete.value,
+  )
+
+  const displayPoints = computed(() => {
+    if (!profile.value) return []
+    const points = profile.value.points
+    const mode = populationViewMode.value
+
+    if (mode === 'all') {
+      return [...points].sort((a, b) => a.rank - b.rank)
+    }
+
+    if (mode === 'custom') {
+      if (!customPartitionComplete.value) return []
+      return buildPartitionPoints(points, customBreakpoints.value)
+    }
+
+    const step = stepFromMode(mode)
+    if (step === 1 && drillLevel.value > 0) {
+      return buildDrilldownPoints(points, drillLevel.value)
+    }
+    if (step !== null) {
+      return buildPartitionPoints(points, buildStepBreakpoints(step))
+    }
+
+    return []
+  })
+
+  /** Points fins pour la superposition ligne/nuage (127 g-percentiles bruts). */
+  const overlayDisplayPoints = computed(() => {
+    if (!profile.value) return []
+    return [...profile.value.points].sort((a, b) => a.rank - b.rank)
+  })
+
+  const drillBreadcrumb = computed(() => {
+    if (!supportsDrillDown.value) return []
+    return Array.from({ length: drillLevel.value + 1 }, (_, level) => ({
+      level,
+      label: drillLevelLabel(level),
+    }))
+  })
+
   const currentDrillableCode = computed(() =>
-    showAllPercentiles.value ? null : drillableCode(drillLevel.value),
+    supportsDrillDown.value ? drillableCode(drillLevel.value) : null,
   )
   const canDrillDown = computed(() => currentDrillableCode.value !== null)
 
@@ -108,6 +165,7 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
   }
 
   const handleChartClick = (params: unknown) => {
+    if (!supportsDrillDown.value) return
     const data = (params as { data?: { name?: string, point?: { percentile?: string } } })?.data
     const code = data?.name ?? data?.point?.percentile
     const target = nextDrillLevel(drillLevel.value, code)
@@ -154,13 +212,17 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
       return
     }
     const displayed: PercentileProfile = { ...profile.value, points: displayPoints.value }
+    const chartType = resolveProfileChartType(chartTypeLayers.value)
     profileOption.value = buildProfileOption(displayed, {
-      chartType: chartType.value,
+      chartType,
       logScaleY: logScaleY.value,
       logScaleX: logScaleX.value,
       populationDensity: populationDensity.value,
       probabilityDensity: probabilityDensity.value,
       lorenzCurve: lorenzCurve.value,
+      overlayPoints: overlaySeriesType(chartType)
+        ? overlayDisplayPoints.value
+        : undefined,
     })
   }
 
@@ -224,8 +286,24 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
       logScaleY.value = false
     }
   })
-  watch([chartType, logScaleY, logScaleX, populationDensity, probabilityDensity, lorenzCurve], rebuild)
-  watch([drillLevel, showAllPercentiles], rebuild)
+  watch(chartTypeLayers, (next, prev) => {
+    const normalized = normalizeChartTypeLayers(next, prev.length > 0 ? prev : ['bar'])
+    if (!chartTypeLayersEqual(normalized, next)) {
+      chartTypeLayers.value = normalized
+    }
+  }, { deep: true })
+  watch([chartTypeLayers, logScaleY, logScaleX, populationDensity, probabilityDensity, lorenzCurve], rebuild)
+  watch([drillLevel, populationViewMode, customBreakpoints], rebuild, { deep: true })
+
+  watch(populationViewMode, (mode) => {
+    drillLevel.value = 0
+    if (mode !== 'custom') customBreakpoints.value = []
+  })
+
+  watch(profile, () => {
+    customBreakpoints.value = []
+    drillLevel.value = 0
+  })
 
   return {
     countryCode,
@@ -233,7 +311,7 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
     year,
     age,
     pop,
-    chartType,
+    chartTypeLayers,
     logScaleY,
     logScaleX,
     populationDensity,
@@ -248,11 +326,16 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
     yearRangeLabel,
     loading,
     error,
+    populationViewMode,
+    customBreakpoints,
+    availableBoundaries,
+    customPartitionValidation,
+    customPartitionComplete,
     drillLevel,
     drillBreadcrumb,
     currentDrillableCode,
     canDrillDown,
-    showAllPercentiles,
+    supportsDrillDown,
     maxDrillLevel: MAX_DRILL_LEVEL,
     drillTo,
     drillDownTop,

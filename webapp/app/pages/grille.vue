@@ -41,8 +41,8 @@ onMounted(async () => {
       <v-col cols="12">
         <h1 class="text-h4 font-weight-bold mb-1">Grille de visualisations</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
-          Composez une grille de panneaux en parallèle — séries temporelles,
-          nuages de variables ou profils sur les g-percentiles. 
+          Composez plusieurs études en parallèle — série temporelle,
+          relation entre deux indicateurs ou inégalités et profil.
         </p>
       </v-col>
     </v-row>

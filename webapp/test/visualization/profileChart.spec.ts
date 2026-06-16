@@ -10,10 +10,13 @@ import {
   computePdfBins,
   computeLorenzPoints,
   formatRankAxisLabel,
+  plotRankForPoint,
   rankDisplayCoordinate,
   rankDisplayCoordinateUpper,
   rankFromDisplayCoordinate,
   rankFromTopLogCoordinate,
+  normalizeChartTypeLayers,
+  resolveProfileChartType,
   rankTopLogCoordinate,
 } from '~/visualization/profile'
 import type { PercentileProfile } from '@domain/entities'
@@ -43,7 +46,9 @@ function makeProfile(overrides: Partial<PercentileProfile> = {}): PercentileProf
 type SeriesDatum = { value: [number, number | null] }
 
 function seriesData(option: ReturnType<typeof buildProfileOption>): SeriesDatum[] {
-  const series = (option.series as { data: SeriesDatum[] }[])[0]!
+  const seriesList = option.series as { type?: string, data: SeriesDatum[] }[]
+  const overlay = seriesList.find((series) => series.type === 'scatter' || series.type === 'line')
+  const series = overlay ?? seriesList[0]!
   return series.data
 }
 
@@ -75,7 +80,37 @@ describe('computeRankIntervalExtent', () => {
   })
 })
 
+describe('resolveProfileChartType', () => {
+  it('maps single layers to bar, scatter or line', () => {
+    expect(resolveProfileChartType(['bar'])).toBe('bar')
+    expect(resolveProfileChartType(['scatter'])).toBe('scatter')
+    expect(resolveProfileChartType(['line'])).toBe('line')
+  })
+
+  it('maps bandes + nuage or bandes + ligne to overlay modes', () => {
+    expect(resolveProfileChartType(['bar', 'scatter'])).toBe('scatter-bar')
+    expect(resolveProfileChartType(['scatter', 'bar'])).toBe('scatter-bar')
+    expect(resolveProfileChartType(['bar', 'line'])).toBe('line-bar')
+  })
+})
+
+describe('normalizeChartTypeLayers', () => {
+  it('keeps at least one layer selected', () => {
+    expect(normalizeChartTypeLayers([], ['scatter'])).toEqual(['scatter'])
+  })
+
+  it('limits selection to two layers, preferring bandes in overlays', () => {
+    expect(normalizeChartTypeLayers(['bar', 'scatter', 'line'], ['bar', 'scatter'])).toEqual(['bar', 'line'])
+    expect(normalizeChartTypeLayers(['scatter', 'line', 'bar'], ['scatter', 'line'])).toEqual(['bar', 'scatter'])
+  })
+})
+
 describe('buildProfileDataZoom', () => {
+  it('filters data so the orthogonal axis can autoscale when zooming', () => {
+    const zooms = buildProfileDataZoom(false)
+    expect(zooms.every((z) => z.filterMode === 'filter')).toBe(true)
+  })
+
   it('uses a vertical slider for the value axis in the default view', () => {
     const zooms = buildProfileDataZoom(false)
     const valueSlider = zooms.find((z) => z.type === 'slider' && z.orient === 'vertical' && z.yAxisIndex === 0)
@@ -162,15 +197,21 @@ describe('buildRankBandItems', () => {
 })
 
 describe('buildProfileOption', () => {
-  it('orders points by rank on a linear X axis', () => {
+  it('includes the shared chart toolbox', () => {
     const option = buildProfileOption(makeProfile())
+    expect(option.toolbox).toBeDefined()
+    expect((option.toolbox as { feature?: { dataZoom?: unknown } }).feature?.dataZoom).toEqual({ yAxisIndex: 'none' })
+  })
+
+  it('orders points by rank on a linear X axis (average → interval midpoint)', () => {
+    const option = buildProfileOption(makeProfile(), { chartType: 'scatter' })
     expect((option.xAxis as { type: string }).type).toBe('value')
-    expect(seriesPairs(option).map((pair) => pair[0])).toEqual([0, 20, 50, 90])
+    expect(seriesPairs(option).map((pair) => pair[0])).toEqual([0.5, 20.5, 50.5, 90.5])
   })
 
   it('keeps explicit gaps (null) as null', () => {
-    const option = buildProfileOption(makeProfile())
-    const gap = seriesPairs(option).find((pair) => pair[0] === 20)!
+    const option = buildProfileOption(makeProfile(), { chartType: 'scatter' })
+    const gap = seriesPairs(option).find((pair) => pair[0] === 20.5)!
     expect(gap[1]).toBeNull()
   })
 
@@ -192,8 +233,8 @@ describe('buildProfileOption', () => {
   })
 
   it('drops non-positive values on a log axis (guard)', () => {
-    const option = buildProfileOption(makeProfile(), { logScaleY: true })
-    const bottom = seriesPairs(option).find((pair) => pair[0] === 0)!
+    const option = buildProfileOption(makeProfile(), { chartType: 'scatter', logScaleY: true })
+    const bottom = seriesPairs(option).find((pair) => pair[0] === 0.5)!
     expect(bottom[1]).toBeNull()
   })
 
@@ -204,10 +245,76 @@ describe('buildProfileOption', () => {
     expect((scatter.series as { type: string }[])[0]!.type).toBe('scatter')
   })
 
-  it('draws a step line by default', () => {
+  it('draws watermark bands behind scatter or line overlays', () => {
+    const scatterBar = buildProfileOption(makeProfile(), { chartType: 'scatter-bar' })
+    const lineBar = buildProfileOption(makeProfile(), { chartType: 'line-bar' })
+    const scatterSeries = scatterBar.series as { type: string, z?: number, itemStyle?: { opacity?: number } }[]
+    const lineSeries = lineBar.series as { type: string, z?: number }[]
+
+    expect(scatterSeries).toHaveLength(2)
+    expect(scatterSeries[0]!.type).toBe('custom')
+    expect(scatterSeries[0]!.z).toBe(0)
+    expect(scatterSeries[0]!.itemStyle?.opacity).toBeLessThan(0.3)
+    expect(scatterSeries[1]!.type).toBe('scatter')
+    expect(scatterSeries[1]!.z).toBe(2)
+
+    expect(lineSeries).toHaveLength(2)
+    expect(lineSeries[1]!.type).toBe('line')
+    expect(lineSeries[1]!.z).toBe(2)
+  })
+
+  it('keeps fine overlay points while bands use aggregated brackets', () => {
+    const fine = makeProfile().points
+    const aggregated = [
+      { percentile: 'p0p25', rank: 0, value: 12 },
+      { percentile: 'p25p50', rank: 25, value: 37 },
+      { percentile: 'p50p75', rank: 50, value: 62 },
+      { percentile: 'p75p100', rank: 75, value: 87 },
+    ]
+    const profile = makeProfile({ points: aggregated })
+    const option = buildProfileOption(profile, {
+      chartType: 'line-bar',
+      overlayPoints: fine,
+    })
+    const series = option.series as { type: string, data: unknown[] }[]
+
+    expect(series[0]!.data).toHaveLength(4)
+    expect(series[1]!.data).toHaveLength(fine.length)
+  })
+
+  it('frames initial dataZoom on band bounds in overlay mode', () => {
+    const fine = [
+      { percentile: 'p0p1', rank: 0, value: 1000 },
+      { percentile: 'p50p51', rank: 50, value: 50000 },
+      { percentile: 'p90p91', rank: 90, value: 500000 },
+    ]
+    const aggregated = [
+      { percentile: 'p0p50', rank: 0, value: 20000 },
+      { percentile: 'p50p100', rank: 50, value: 200000 },
+    ]
+    const profile = makeProfile({ points: aggregated })
+    const option = buildProfileOption(profile, {
+      chartType: 'line-bar',
+      overlayPoints: fine,
+    })
+    const zoom = option.dataZoom as { yAxisIndex?: number, startValue?: number, endValue?: number }[]
+    const valueSlider = zoom.find((z) => z.yAxisIndex === 0 && z.endValue != null)
+
+    expect(valueSlider).toBeDefined()
+    expect(valueSlider!.endValue!).toBeLessThan(500000)
+    expect(valueSlider!.endValue!).toBeGreaterThan(150000)
+  })
+
+  it('draws bands by default', () => {
     const option = buildProfileOption(makeProfile())
-    expect((option.series as { type: string, step?: string }[])[0]!.type).toBe('line')
-    expect((option.series as { step?: string }[])[0]!.step).toBe('end')
+    expect((option.series as { type: string }[])[0]!.type).toBe('custom')
+  })
+
+  it('draws a connected line in line mode', () => {
+    const option = buildProfileOption(makeProfile(), { chartType: 'line' })
+    const series = (option.series as { type: string, step?: string }[])[0]!
+    expect(series.type).toBe('line')
+    expect(series.step).toBeUndefined()
   })
 
   it('labels the value axis with the unit', () => {
@@ -222,16 +329,15 @@ describe('buildProfileOption', () => {
     expect(series.data).toHaveLength(3)
   })
 
-  it('auto-scales the rank axis to the displayed brackets (line view)', () => {
-    const option = buildProfileOption(makeProfile())
+  it('enables rank-axis autoscale for interactive zoom (line view)', () => {
+    const option = buildProfileOption(makeProfile(), { chartType: 'line' })
     expect((option.xAxis as { name: string }).name).toBe('Part de population (%)')
-    // brackets span ]0,1] … ]90,91] → axis fits 0 → ~91 (padded), not the full 100
-    expect((option.xAxis as { min: number }).min).toBe(0)
-    expect((option.xAxis as { max: number }).max).toBeGreaterThan(91)
-    expect((option.xAxis as { max: number }).max).toBeLessThanOrEqual(100)
+    expect((option.xAxis as { scale: boolean }).scale).toBe(true)
+    expect((option.xAxis as { min?: number }).min).toBeUndefined()
+    expect((option.xAxis as { max?: number }).max).toBeUndefined()
   })
 
-  it('rescales the rank axis to a drilled top-tail subset (line view)', () => {
+  it('fits the rank axis when a value-range drill zoom is active (line view)', () => {
     const topTail = makeProfile({
       points: [
         { percentile: 'p99p99.1', rank: 99, value: 1_000_000 },
@@ -239,14 +345,17 @@ describe('buildProfileOption', () => {
         { percentile: 'p99.9p100', rank: 99.9, value: 5_000_000 },
       ],
     })
-    const option = buildProfileOption(topTail, { chartType: 'line' })
+    const option = buildProfileOption(topTail, {
+      chartType: 'line',
+      valueRange: { min: 1_500_000, max: 6_000_000 },
+    })
     const xAxis = option.xAxis as { min: number, max: number }
     expect(xAxis.min).toBeGreaterThanOrEqual(98)
     expect(xAxis.min).toBeLessThan(99.5)
     expect(xAxis.max).toBe(100)
   })
 
-  it('reaches 100 % when a bracket touches the top (scatter view)', () => {
+  it('does not lock the rank axis to 0–100 % before zoom (scatter view)', () => {
     const full = makeProfile({
       points: [
         { percentile: 'p0p1', rank: 0, value: 10 },
@@ -254,12 +363,13 @@ describe('buildProfileOption', () => {
       ],
     })
     const option = buildProfileOption(full, { chartType: 'scatter' })
-    const xAxis = option.xAxis as { min: number, max: number }
-    expect(xAxis.min).toBe(0)
-    expect(xAxis.max).toBe(100)
+    const xAxis = option.xAxis as { min?: number, max?: number, scale: boolean }
+    expect(xAxis.scale).toBe(true)
+    expect(xAxis.min).toBeUndefined()
+    expect(xAxis.max).toBeUndefined()
   })
 
-  it('extends the log rank axis to the ]99.999 %, 100 %] cap when a bracket reaches 100 %', () => {
+  it('uses log rank coordinates without fixed axis caps (log X)', () => {
     const full = makeProfile({
       points: [
         { percentile: 'p0p1', rank: 0, value: 10 },
@@ -267,7 +377,9 @@ describe('buildProfileOption', () => {
       ],
     })
     const option = buildProfileOption(full, { logScaleX: true })
-    expect((option.xAxis as { max: number }).max).toBeCloseTo(rankDisplayCoordinateUpper(100)!)
+    expect((option.xAxis as { scale: boolean }).scale).toBe(true)
+    expect((option.xAxis as { min?: number }).min).toBeUndefined()
+    expect((option.xAxis as { max?: number }).max).toBeUndefined()
   })
 })
 
@@ -347,31 +459,42 @@ describe('formatRankAxisLabel', () => {
   })
 })
 
+describe('plotRankForPoint', () => {
+  it('uses the midpoint of ]i, k] for average variables', () => {
+    expect(plotRankForPoint({ percentile: 'p50p51', rank: 50, value: 1 }, 'average')).toBe(50.5)
+    expect(plotRankForPoint({ percentile: 'p0p1', rank: 0, value: 1 }, 'average')).toBe(0.5)
+  })
+
+  it('keeps the lower bound for threshold variables', () => {
+    expect(plotRankForPoint({ percentile: 'p50p51', rank: 50, value: 1 }, 'threshold')).toBe(50)
+  })
+})
+
 describe('buildProfileOption — log X scale', () => {
   it('keeps rank % as the X axis label while spacing in log space', () => {
-    const option = buildProfileOption(makeProfile(), { logScaleX: true })
+    const option = buildProfileOption(makeProfile(), { chartType: 'scatter', logScaleX: true })
     expect((option.xAxis as { type: string }).type).toBe('value')
     expect((option.xAxis as { name: string }).name).toBe('Part de population (%)')
     expect((option.xAxis as { scale: boolean }).scale).toBe(true)
-    expect((option.xAxis as { min: number }).min).toBeCloseTo(-2)
+    expect((option.xAxis as { min?: number }).min).toBeUndefined()
     expect((option.xAxis as { axisLabel: { formatter: (v: number) => string } }).axisLabel.formatter(-1)).toBe('90 %')
   })
 
-  it('emits [x, y] pairs with x = rankDisplayCoordinate, increasing with rank', () => {
-    const option = buildProfileOption(makeProfile(), { logScaleX: true })
+  it('emits [x, y] pairs with x = rankDisplayCoordinate(midpoint), increasing with rank', () => {
+    const option = buildProfileOption(makeProfile(), { chartType: 'scatter', logScaleX: true })
     const pairs = seriesPairs(option)
     expect(pairs).toHaveLength(4)
-    expect(pairs[0]![0]).toBeCloseTo(rankDisplayCoordinate(0)!)
-    expect(pairs.at(-1)![0]).toBeCloseTo(rankDisplayCoordinate(90)!)
+    expect(pairs[0]![0]).toBeCloseTo(rankDisplayCoordinate(0.5)!)
+    expect(pairs.at(-1)![0]).toBeCloseTo(rankDisplayCoordinate(90.5)!)
     for (let i = 1; i < pairs.length; i++) {
       expect(pairs[i]![0]).toBeGreaterThan(pairs[i - 1]![0])
     }
   })
 
   it('still applies the ≤0 guard on a log Y in log X mode', () => {
-    const option = buildProfileOption(makeProfile(), { logScaleX: true, logScaleY: true })
+    const option = buildProfileOption(makeProfile(), { chartType: 'scatter', logScaleX: true, logScaleY: true })
     const pairs = seriesPairs(option)
-    const bottom = pairs.find((pair) => pair[0] === rankDisplayCoordinate(0))!
+    const bottom = pairs.find((pair) => pair[0] === rankDisplayCoordinate(0.5))!
     expect(bottom[1]).toBeNull()
   })
 
@@ -381,27 +504,40 @@ describe('buildProfileOption — log X scale', () => {
         { percentile: 'p99.999p100', rank: 99.999, value: 1_000_000 },
         { percentile: 'p100', rank: 100, value: 2_000_000 },
       ],
-    }), { logScaleX: true })
+    }), { chartType: 'scatter', logScaleX: true })
     expect(seriesPairs(option)).toHaveLength(1)
-    expect(seriesPairs(option)[0]![0]).toBeCloseTo(rankDisplayCoordinate(99.999)!)
+    expect(seriesPairs(option)[0]![0]).toBeCloseTo(rankDisplayCoordinate(99.9995)!)
+  })
+})
+
+describe('buildProfileOption — threshold variable positioning', () => {
+  it('plots scatter points at the lower bound of each bracket', () => {
+    const option = buildProfileOption(makeProfile({
+      kind: 'threshold',
+      variable: 'thweal',
+      points: [
+        { percentile: 'p50p51', rank: 50, value: 50000 },
+        { percentile: 'p0p1', rank: 0, value: 1000 },
+      ],
+    }), { chartType: 'scatter' })
+    expect(seriesPairs(option).map((pair) => pair[0])).toEqual([0, 50])
   })
 })
 
 describe('buildProfileOption — population density view', () => {
-  it('swaps axes: X = value, Y = population share', () => {
-    const option = buildProfileOption(makeProfile(), { populationDensity: true })
+  it('swaps axes: X = value, Y = population share (average → interval midpoint)', () => {
+    const option = buildProfileOption(makeProfile(), { chartType: 'scatter', populationDensity: true })
     expect((option.xAxis as { name: string }).name).toContain('EUR')
     expect((option.yAxis as { name: string }).name).toBe('Part de population (%)')
     const pairs = seriesPairs(option)
-    // rank 0 excluded (negative value kept? -1000 is valid x)
-    expect(pairs.find((pair) => pair[1] === 0)).toEqual([-1000, 0])
-    expect(pairs.find((pair) => pair[1] === 90)).toEqual([200000, 90])
-    // null value at rank 20 is dropped entirely
-    expect(pairs.some((pair) => pair[1] === 20)).toBe(false)
+    expect(pairs.find((pair) => pair[1] === 0.5)).toEqual([-1000, 0.5])
+    expect(pairs.find((pair) => pair[1] === 90.5)).toEqual([200000, 90.5])
+    expect(pairs.some((pair) => pair[1] === 20.5)).toBe(false)
   })
 
   it('routes logScaleX to the value axis and logScaleY to the rank axis', () => {
     const option = buildProfileOption(makeProfile(), {
+      chartType: 'scatter',
       populationDensity: true,
       logScaleX: true,
       logScaleY: true,
@@ -409,11 +545,10 @@ describe('buildProfileOption — population density view', () => {
     expect((option.xAxis as { type: string }).type).toBe('log')
     expect((option.yAxis as { scale: boolean }).scale).toBe(true)
     const pairs = seriesPairs(option)
-    // rank 0 dropped: value -1000 fails log guard on X
     expect(pairs.some((pair) => pair[0] === -1000)).toBe(false)
     const rank90 = pairs.find((pair) => pair[0] === 200000)!
     expect(rank90[0]).toBe(200000)
-    expect(rank90[1]).toBeCloseTo(rankDisplayCoordinate(90)!)
+    expect(rank90[1]).toBeCloseTo(rankDisplayCoordinate(90.5)!)
   })
 })
 
@@ -503,7 +638,7 @@ describe('buildProfileOption — probability density view', () => {
       chartType: 'bar',
       logScaleY: true,
     })
-    const yAxis = option.yAxis as { min: number, max: number, scale: boolean }
+    const yAxis = option.yAxis as { min?: number, max?: number, scale: boolean }
     const series = (option.series as { type: string, data: { value: [number, number, number] }[] }[])[0]!
     const densities = series.data.map((d) => d.value[2])
 
@@ -511,7 +646,8 @@ describe('buildProfileOption — probability density view', () => {
     expect(series.data[0]!.value[0]).toBe(1000)
     expect(series.data[0]!.value[1]).toBe(50_000)
     expect(yAxis.scale).toBe(false)
-    expect(yAxis.min).toBeLessThan(Math.min(...densities))
-    expect(yAxis.max).toBeGreaterThan(Math.max(...densities))
+    expect(yAxis.min).toBeUndefined()
+    expect(yAxis.max).toBeUndefined()
+    expect(Math.min(...densities)).toBeGreaterThan(0)
   })
 })
