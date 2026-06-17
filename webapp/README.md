@@ -32,7 +32,7 @@ Unit tests run with [Vitest](https://vitest.dev/) on the pure logic of the WID
 data layer and chart builders (no network, browser, or Vue component needed).
 
 ```bash
-npm test            # single run (~117 tests, excludes live conformance)
+npm test            # single run
 npm run test:watch  # watch mode
 ```
 
@@ -72,31 +72,11 @@ cp .env.example .env
 |----------|-------------|
 | `NUXT_PUBLIC_WID_API_KEY` | **Required** for live data. Hex key from the official R `wid` package (`sysdata.rda`). |
 | `NUXT_PUBLIC_WID_API_BASE_URL` | WID API base URL (default: AWS prod endpoint). |
-| `WID_REFERENCE_DATA_DIR` | Golden CSV dump for **conformance tests only** (`WID_data_<AREA>.csv`). |
 
 The running app fetches all chart data from the **live WID.world API** (browser →
 `countries-variables` / `countries-available-variables`). Without a valid API key,
 or when a request returns no data, pages show an explicit error message instead
 of synthetic fallback data.
-
-### Conformance tests (API vs local CSV)
-
-The local CSV dump is kept as a **reference** to validate the API, not to power the app:
-
-```bash
-# Vitest battery (6 profile cases, ~2 min)
-npm run test:conformance
-
-# CLI report
-npm run wid:conformance
-
-# Side-by-side CSV vs API for 127 g-percentiles (strict !==)
-npm run wid:compare
-npm run wid:compare -- --country FR --variable ahweal --year 2021 --diffs-only
-npm run wid:compare -- --json --out /tmp/wid-compare.json
-```
-
-Set `WID_REFERENCE_DATA_DIR` to the directory with `WID_data_*.csv` files.
 
 ## Project structure
 
@@ -107,7 +87,6 @@ webapp/
 ├── app/                  # Nuxt UI (pages, layouts, components, composables)
 ├── lib/                  # Pure logic (charts, data-sources, domain, csv)
 ├── test/                 # Vitest unit tests
-├── scripts/              # CLI conformance tools
 └── nuxt.config.ts
 ```
 

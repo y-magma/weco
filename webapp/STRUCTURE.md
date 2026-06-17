@@ -53,7 +53,6 @@ webapp/
 │   ├── application/
 │   ├── infrastructure/
 │   └── visualization/
-├── scripts/
 └── public/
 ```
 
@@ -134,7 +133,7 @@ Code **100 % pur** (pas de Vue, pas de fetch, pas d'ECharts).
 |--------------|---------|
 | `http/` | `fetchJson`, `fetchText` |
 | `cache/` | Cache mémoire TTL |
-| `data-sources/wid/` | `WidClient`, `WidDataSource`, conformité |
+| `data-sources/wid/` | `WidClient`, `WidDataSource` |
 | `data-sources/registry.ts` | Enregistrement des sources |
 | `csv/` | `CsvReaderFactory` (PapaParse) |
 | `spec/` | Chargement Markdown depuis `spec/` du dépôt |
@@ -161,15 +160,14 @@ panneau/population.vue
 ## 6. Tests
 
 ```bash
-npm test                 # 119 tests (hors conformité live)
-npm run test:conformance # API vs dump CSV
+npm test
 ```
 
 | Dossier | Cible |
 |---------|-------|
 | `test/domain/` | Services et catalogue |
 | `test/application/` | Use cases |
-| `test/infrastructure/` | Client WID, conformité |
+| `test/infrastructure/` | Client WID |
 | `test/visualization/` | Mappers ECharts |
 
 ---

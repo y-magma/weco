@@ -1,4 +1,4 @@
-/** Generated from data/WID_DATA/WID_countries.csv — do not edit by hand. */
+/** Country display names (WID alpha-2 codes). */
 export const WID_COUNTRY_NAMES: Record<string, string> = {
   "AD": "Andorra",
   "AE": "United Arab Emirates",

@@ -23,8 +23,6 @@ Organisés par couche d'architecture.
 |---------|-------|
 | `widClient.spec.ts` | `@infrastructure/data-sources/wid/widClient` |
 | `widApiKey.spec.ts` | `@infrastructure/data-sources/wid/widApiKey` |
-| `conformance.spec.ts` | `@infrastructure/data-sources/wid/conformance` |
-| `widConformance.spec.ts` | Intégration live (exclu de `npm test`) |
 
 ## visualization/
 
