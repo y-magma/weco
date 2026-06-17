@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { CountryOption } from '@domain/entities'
 import type { PanneauType } from '~/composables/panneauTypes'
 
 definePageMeta({ layout: 'default' })
@@ -11,10 +10,8 @@ interface GridPanel {
 
 let nextPanelId = 1
 
-const app = useApplication()
 const panels = ref<GridPanel[]>([])
-const countries = ref<CountryOption[]>([])
-const countriesError = ref<string | null>(null)
+const { countriesError } = useWidCountriesProvider()
 
 function addPanel(type: PanneauType) {
   panels.value.push({ id: nextPanelId++, type })
@@ -23,16 +20,6 @@ function addPanel(type: PanneauType) {
 function removePanel(id: number) {
   panels.value = panels.value.filter((panel) => panel.id !== id)
 }
-
-provide('widCountries', countries)
-
-onMounted(async () => {
-  try {
-    countries.value = await app.listCountries.execute()
-  } catch (err) {
-    countriesError.value = err instanceof Error ? err.message : 'Échec du chargement des pays'
-  }
-})
 </script>
 
 <template>

@@ -87,7 +87,7 @@ const sourceStatuses = computed(() =>
         <li>Create a module under <code>lib/infrastructure/data-sources/&lt;name&gt;/</code></li>
         <li>Implement the <code>DataSourcePort</code> interface</li>
         <li>Register it in <code>lib/infrastructure/data-sources/registry.ts</code></li>
-        <li>Expose indicators via <code>searchIndicators()</code> and series via <code>fetchSeries()</code></li>
+        <li>Implement the methods used by the application use cases (<code>listCountries</code>, <code>fetchPercentileProfile</code>, …)</li>
       </ol>
     </v-card>
   </div>

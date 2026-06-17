@@ -8,7 +8,7 @@ import {
   readReferenceProfile,
   widReferenceDumpAvailable,
 } from '@infrastructure/data-sources/wid/widLocalCsv'
-import { loadWebappDotEnv, widApiKeyFromEnv } from './helpers/testEnv'
+import { loadWebappDotEnv, widApiKeyFromEnv } from '../helpers/testEnv'
 
 loadWebappDotEnv()
 

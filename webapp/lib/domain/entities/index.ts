@@ -11,26 +11,6 @@ export interface DataSeries {
   metadata?: Record<string, string | number | boolean>
 }
 
-export interface IndicatorMeta {
-  id: string
-  label: string
-  description?: string
-  unit?: string
-  sourceId: string
-}
-
-export interface DistributionPoint {
-  percentile: string
-  value: number
-}
-
-export interface DistributionSeries {
-  id: string
-  label: string
-  year: number
-  points: DistributionPoint[]
-}
-
 /** A single g-percentile observation of a WID variable. */
 export interface PercentilePoint {
   /** WID percentile code, e.g. `p90p91`. */
@@ -79,13 +59,6 @@ export interface CountryOption {
   label: string
 }
 
-export interface FetchSeriesParams {
-  countryCode: string
-  indicatorId: string
-  yearFrom?: number
-  yearTo?: number
-}
-
 export interface FetchVariableTimeSeriesParams {
   countryCode: string
   /** Six-letter variable, e.g. `ahweal`. */
@@ -96,15 +69,4 @@ export interface FetchVariableTimeSeriesParams {
   percentile?: string
   yearFrom?: number
   yearTo?: number
-}
-
-export interface FetchDistributionParams {
-  countryCode: string
-  indicatorId: string
-  year?: number
-}
-
-export interface SearchIndicatorsParams {
-  query?: string
-  countryCode?: string
 }

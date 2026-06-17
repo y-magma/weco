@@ -1,156 +1,207 @@
 import type { EChartsOption } from 'echarts'
 import type { Ref } from 'vue'
-import { buildTimeSeriesOption } from '~/visualization/timeSeries'
+import { buildStackedTimeSeriesOption, type CountryTrancheSeries } from '~/visualization/timeSeries'
 import type { CountryOption, DataSeries } from '@domain/entities'
 import {
-  findWidVariable,
-  WID_AGE_OPTIONS,
-  WID_DEFAULT_AGE,
-  WID_DEFAULT_POP,
-  WID_POP_OPTIONS,
-  WID_PROFILE_VARIABLES,
-} from '@domain/catalog/widCodes'
+  breakpointsForMode,
+  buildTimeSeriesTranches,
+  standardPopulationBoundaries,
+  TIME_SERIES_PARTITION_OPTIONS,
+  type TimeSeriesPartitionMode,
+  type TimeSeriesTranche,
+} from '~/visualization/timeSeriesPartition'
+import {
+  isCustomPartitionComplete as isPopulationPartitionComplete,
+  validateCustomBreakpoints,
+} from '~/visualization/populationPartition'
+import { WidDemographicFilters, WidPanelScope, yearCountLabel } from '~/composables/widPanelBase'
 
 export interface WidSeriesStateOptions {
   countries?: Ref<CountryOption[]>
   initialVariable?: string
-  initialCountryCodes?: string[]
+  initialCountryCode?: string
 }
 
-const PERCENTILE_OPTIONS = [
-  { value: 'p50p51', label: 'p50p51 — médiane (50–51 %)' },
-  { value: 'p90p100', label: 'p90p100 — top 10 %' },
-  { value: 'p99p100', label: 'p99p100 — top 1 %' },
-  { value: 'p0p1', label: 'p0p1 — bas 1 %' },
-]
-
 export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
-  const app = useApplication()
-  const sharedCountries = options.countries
+  const scope = new WidPanelScope(useApplication(), options.countries)
+  const filters = new WidDemographicFilters(options.initialVariable)
 
-  const countryCodes = ref<string[]>(options.initialCountryCodes ?? ['FR'])
-  const variable = ref(options.initialVariable ?? 'ahweal')
-  const age = ref(WID_DEFAULT_AGE)
-  const pop = ref(WID_DEFAULT_POP)
-  const percentile = ref('p50p51')
-  const logScaleY = ref(false)
+  const countryCode = ref(options.initialCountryCode ?? 'FR')
+  const partitionMode = ref<TimeSeriesPartitionMode>('wealth')
+  const customBreakpoints = ref<number[]>([])
 
-  const loading = ref(false)
-  const error = ref<string | null>(null)
-  const loadWarning = ref<string | null>(null)
-
-  const localCountries = ref<CountryOption[]>([])
-  const countries = sharedCountries ?? localCountries
-  const seriesList = ref<DataSeries[]>([])
+  const trancheSeriesByCountry = ref<CountryTrancheSeries[]>([])
   const chartOption = ref<EChartsOption | null>(null)
 
-  const variables = WID_PROFILE_VARIABLES
-  const ageOptions = WID_AGE_OPTIONS
-  const popOptions = WID_POP_OPTIONS
-  const percentileOptions = PERCENTILE_OPTIONS
+  const partitionOptions = TIME_SERIES_PARTITION_OPTIONS
+  const availableBoundaries = standardPopulationBoundaries()
 
-  const variableMeta = computed(() => findWidVariable(variable.value))
+  const customPartitionValidation = computed(() =>
+    validateCustomBreakpoints(customBreakpoints.value, availableBoundaries),
+  )
 
-  const countryLabel = (code: string) =>
-    countries.value.find((item) => item.code === code)?.label ?? code
+  const customPartitionComplete = computed(() =>
+    isPopulationPartitionComplete(customBreakpoints.value) && customPartitionValidation.value.valid,
+  )
 
-  const yearCountLabel = computed(() => {
-    const counts = seriesList.value.map((series) => series.points.length)
-    if (counts.length === 0) return ''
-    const min = Math.min(...counts)
-    const max = Math.max(...counts)
-    return min === max ? `${max} années` : `${min}–${max} années`
+  const activeBreakpoints = computed(() => {
+    if (partitionMode.value === 'custom') {
+      return customPartitionComplete.value ? customBreakpoints.value : []
+    }
+    return breakpointsForMode(partitionMode.value, customBreakpoints.value)
+  })
+
+  const activeTranches = computed<TimeSeriesTranche[]>(() => {
+    if (activeBreakpoints.value.length === 0) return []
+    return buildTimeSeriesTranches(activeBreakpoints.value, partitionMode.value)
+  })
+
+  const trancheCountLabel = computed(() => {
+    const count = activeTranches.value.length
+    return count > 0 ? `${count} tranches` : ''
   })
 
   const rebuild = () => {
-    if (seriesList.value.length === 0) {
+    if (trancheSeriesByCountry.value.length === 0) {
       chartOption.value = null
       return
     }
-    const meta = variableMeta.value
-    const title = meta?.label ?? variable.value
-    chartOption.value = buildTimeSeriesOption(seriesList.value, title, {
-      logScaleY: logScaleY.value,
-    })
+    const meta = filters.variableMeta.value
+    const title = meta?.label ?? filters.variable.value
+    const subtitle = `${trancheSeriesByCountry.value[0]!.countryLabel} · par tranche de population`
+    chartOption.value = buildStackedTimeSeriesOption(trancheSeriesByCountry.value, title, subtitle, meta?.unit)
+  }
+
+  const organizeSeries = (
+    tranches: TimeSeriesTranche[],
+    codes: string[],
+    series: DataSeries[],
+  ): CountryTrancheSeries[] => {
+    const byKey = new Map<string, DataSeries>()
+    for (const item of series) {
+      byKey.set(item.id, item)
+    }
+
+    return codes.map((code) => ({
+      countryCode: code,
+      countryLabel: scope.countryLabel(code),
+      tranches: tranches.map((tranche) => {
+        const id = `${code}-${filters.variable.value}-${tranche.code}-${filters.age.value}-${filters.pop.value}`
+        const match = byKey.get(id)
+        const byYear = new Map<number, number>()
+        for (const point of match?.points ?? []) {
+          byYear.set(point.year, point.value)
+        }
+        return { tranche, byYear }
+      }),
+    }))
   }
 
   const load = async () => {
-    const codes = countryCodes.value.length > 0 ? countryCodes.value : ['FR']
-    if (countryCodes.value.length === 0) {
-      countryCodes.value = codes
+    const code = countryCode.value || 'FR'
+    if (!countryCode.value) {
+      countryCode.value = code
     }
 
-    loading.value = true
-    error.value = null
-    loadWarning.value = null
+    const tranches = activeTranches.value
+    if (tranches.length === 0) {
+      scope.error.value = partitionMode.value === 'custom'
+        ? (customPartitionValidation.value.error ?? 'Définissez les tranches personnalisées jusqu’à 100 %.')
+        : 'Aucune tranche sélectionnée'
+      trancheSeriesByCountry.value = []
+      chartOption.value = null
+      return
+    }
+
+    scope.loading.value = true
+    scope.error.value = null
+    scope.loadWarning.value = null
 
     try {
-      const { series, failures } = await app.loadTimeSeries.execute({
-        countryCodes: codes,
-        params: {
-          variable: variable.value,
-          age: age.value,
-          pop: pop.value,
-          percentile: percentile.value,
-        },
-        countryLabel,
-      })
+      const requests = tranches.map((tranche) =>
+        scope.app.loadTimeSeries.execute({
+          countryCodes: [code],
+          params: {
+            variable: filters.variable.value,
+            age: filters.age.value,
+            pop: filters.pop.value,
+            percentile: tranche.code,
+          },
+          countryLabel: scope.countryLabel.bind(scope),
+        }),
+      )
 
-      seriesList.value = series
+      const results = await Promise.all(requests)
+      const allSeries: DataSeries[] = []
+      const failures: string[] = []
 
-      if (series.length === 0) {
-        error.value = failures[0] ?? 'Échec du chargement des séries'
+      for (const result of results) {
+        allSeries.push(...result.series)
+        failures.push(...result.failures)
+      }
+
+      if (allSeries.length === 0) {
+        scope.error.value = failures[0] ?? 'Échec du chargement des séries'
+        trancheSeriesByCountry.value = []
         chartOption.value = null
         return
       }
 
+      trancheSeriesByCountry.value = organizeSeries(tranches, [code], allSeries)
+
       if (failures.length > 0) {
-        loadWarning.value = failures.join(' · ')
+        scope.loadWarning.value = failures.join(' · ')
       }
 
       rebuild()
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Échec du chargement des séries'
-      seriesList.value = []
+      scope.error.value = err instanceof Error ? err.message : 'Échec du chargement des séries'
+      trancheSeriesByCountry.value = []
       chartOption.value = null
     } finally {
-      loading.value = false
+      scope.loading.value = false
     }
   }
 
   const init = async () => {
-    if (!sharedCountries) {
-      try {
-        localCountries.value = await app.listCountries.execute()
-      } catch {
-        localCountries.value = [{ code: 'FR', label: 'France' }]
-      }
-    }
+    await scope.initCountries()
     await load()
   }
 
-  watch([countryCodes, variable, age, pop, percentile], load, { deep: true })
-  watch(logScaleY, rebuild)
+  watch(
+    [countryCode, filters.variable, filters.age, filters.pop, partitionMode, customBreakpoints],
+    load,
+    { deep: true },
+  )
 
   return {
-    countryCodes,
-    variable,
-    age,
-    pop,
-    percentile,
-    logScaleY,
-    countries,
-    variables,
-    ageOptions,
-    popOptions,
-    percentileOptions,
-    loading,
-    error,
-    loadWarning,
-    seriesList,
+    countryCode,
+    variable: filters.variable,
+    age: filters.age,
+    pop: filters.pop,
+    partitionMode,
+    customBreakpoints,
+    countries: scope.countries,
+    variables: filters.variables,
+    ageOptions: filters.ageOptions,
+    popOptions: filters.popOptions,
+    partitionOptions,
+    availableBoundaries,
+    customPartitionValidation,
+    customPartitionComplete,
+    activeTranches,
+    loading: scope.loading,
+    error: scope.error,
+    loadWarning: scope.loadWarning,
+    trancheSeriesByCountry,
     chartOption,
-    variableMeta,
-    yearCountLabel,
+    variableMeta: filters.variableMeta,
+    yearCountLabel: computed(() =>
+      yearCountLabel(trancheSeriesByCountry.value.flatMap((country) =>
+        country.tranches.flatMap((layer) => layer.byYear.size),
+      )),
+    ),
+    trancheCountLabel,
     load,
     init,
   }

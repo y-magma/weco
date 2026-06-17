@@ -43,7 +43,7 @@ withDefaults(
   },
 )
 
-const emit = defineEmits<{ chartClick: [params: unknown] }>()
+const emit = defineEmits<{ chartClick: [params: unknown], dataZoom: [params: unknown] }>()
 </script>
 
 <template>
@@ -75,6 +75,7 @@ const emit = defineEmits<{ chartClick: [params: unknown] }>()
         autoresize
         class="chart-instance"
         @click="(params: unknown) => emit('chartClick', params)"
+        @datazoom="(params: unknown) => emit('dataZoom', params)"
       />
     </div>
 

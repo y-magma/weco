@@ -5,7 +5,7 @@ import {
   describeCustomIntervals,
   formatBoundaryLabel,
   parseBoundaryInput,
-  POPULATION_VIEW_OPTIONS,
+  PROFILE_POPULATION_VIEW_OPTIONS,
   selectableCustomBoundaries,
   validateNextCustomBreakpoint,
 } from '~/visualization/populationPartition'
@@ -37,6 +37,8 @@ const countries = inject<Ref<CountryOption[]>>('widCountries')
 if (!countries) {
   throw new Error('PanneauVisualisation requires a widCountries provider')
 }
+
+const paramsInSidebar = inject<Ref<boolean>>('paramsInSidebar', ref(false))
 
 const initialVariable = WID_PROFILE_VARIABLES[props.panelIndex ?? 0]?.sixlet ?? 'ahweal'
 const state = createWidProfileState({ countries, initialVariable })
@@ -70,6 +72,7 @@ const {
   customBreakpoints,
   availableBoundaries,
   customPartitionValidation,
+  customPartitionReady,
   customPartitionComplete,
   drillTo,
   drillDownTop,
@@ -171,7 +174,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="panneau-visualisation">
+  <div
+    class="panneau-visualisation"
+    :class="{ 'panneau--sidebar-mode': paramsInSidebar }"
+  >
+    <div class="panneau__filters">
     <PanneauFiltersShell
       :collapsible="collapsible"
       :panel-type="panelType ?? (collapsible ? 'population' : undefined)"
@@ -380,7 +387,7 @@ onMounted(() => {
           <ProfileHelpButton
             :title="activeCalculationHelp.title"
             :paragraphs="activeCalculationHelp.paragraphs"
-            label="Comment sont calculées mes données ?"
+            label="Calcul des données"
             hint="Récapitulatif selon les options actives"
           />
           <v-btn
@@ -396,7 +403,9 @@ onMounted(() => {
         </v-col>
       </v-row>
     </PanneauFiltersShell>
+    </div>
 
+    <div class="panneau__chart">
     <v-card variant="outlined" class="pa-3">
       <div class="d-flex flex-wrap ga-2 mb-2">
         <v-chip v-if="profile" size="x-small" color="primary" variant="tonal">
@@ -411,7 +420,7 @@ onMounted(() => {
         <div class="d-flex align-center flex-wrap ga-2 population-view-row">
           <v-select
             v-model="populationViewMode"
-            :items="POPULATION_VIEW_OPTIONS"
+            :items="PROFILE_POPULATION_VIEW_OPTIONS"
             item-title="label"
             item-value="value"
             label="Tranches de population"
@@ -481,14 +490,16 @@ onMounted(() => {
           v-if="populationViewMode === 'custom'"
           class="custom-partition-panel mb-3 pa-3 rounded border"
         >
-          <div class="text-body-2 font-weight-medium mb-2">
-            Tranches personnalisées
+          <div class="d-flex align-center ga-1 mb-2">
+            <span class="text-body-2 font-weight-medium">Tranches personnalisées</span>
+            <ProfileHelpButton
+              title="Tranches personnalisées"
+              :paragraphs="[
+                'Saisissez les bornes de fin de chaque intervalle d\'observation (0–100 %). Il n\'est pas nécessaire d\'aller jusqu\'à 100 %.',
+                'Exemple : 50, 90, 100 → ]0 %, 50 %], ]50 %, 90 %], ]90 %, 100 %].',
+              ]"
+            />
           </div>
-          <p class="text-body-2 text-medium-emphasis mb-3">
-            Saisissez les bornes de <strong>fin</strong> de chaque intervalle d'observation. Terminez par <strong>100 %</strong>.            
-            <br>
-            Exemple : 50, 90, 100 → ]0 %, 50 %], ]50 %, 90 %], ]90 %, 100 %].
-          </p>
 
           <div v-if="customIntervalLabels.length > 0" class="d-flex flex-wrap ga-1 mb-3">
             <v-chip
@@ -511,7 +522,7 @@ onMounted(() => {
                 item-value="value"
                 :label="nextBoundaryHint"
                 :error-messages="customBreakpointError ? [customBreakpointError] : []"
-                :disabled="customPartitionComplete || selectableBoundaries.length === 0"
+                :disabled="selectableBoundaries.length === 0"
                 density="compact"
                 hide-details="auto"
                 clearable
@@ -523,7 +534,7 @@ onMounted(() => {
                 size="small"
                 color="primary"
                 variant="tonal"
-                :disabled="customPartitionComplete || !customBreakpointInput"
+                :disabled="!customBreakpointInput"
                 @click="addCustomBreakpoint(customBreakpointInput)"
               >
                 Ajouter
@@ -552,13 +563,16 @@ onMounted(() => {
           </v-row>
 
           <v-alert
-            v-if="customPartitionComplete"
+            v-if="customPartitionReady"
             type="success"
             density="compact"
             variant="tonal"
             class="mt-3"
           >
-            Découpage complet — {{ customIntervalLabels.length }} intervalle(s).
+            Découpage prêt — {{ customIntervalLabels.length }} intervalle(s).
+            <span v-if="!customPartitionComplete">
+              Vous pouvez ajouter d'autres bornes ou étendre jusqu'à 100 %.
+            </span>
           </v-alert>
           <v-alert
             v-else-if="customBreakpoints.length > 0 && customPartitionValidation.error"
@@ -570,13 +584,13 @@ onMounted(() => {
             {{ customPartitionValidation.error }}
           </v-alert>
           <v-alert
-            v-else-if="!customPartitionComplete && profile"
+            v-else-if="!customPartitionReady && profile"
             type="info"
             density="compact"
             variant="tonal"
             class="mt-3"
           >
-            Le graphique s'affichera une fois le découpage terminé par la borne 100 %.
+            Ajoutez au moins une borne de fin pour afficher le graphique.
             {{ selectableBoundaries.length }} borne(s) disponible(s) dans les données.
           </v-alert>
         </div>
@@ -591,6 +605,7 @@ onMounted(() => {
         @chart-click="handleChartClick"
       />
     </v-card>
+    </div>
   </div>
 </template>
 
@@ -641,5 +656,38 @@ onMounted(() => {
 .custom-partition-panel {
   border-color: rgba(var(--v-border-color), var(--v-border-opacity));
   background: rgba(var(--v-theme-surface-variant), 0.15);
+}
+
+/* ── Sidebar mode: filters left, chart right ── */
+.panneau--sidebar-mode {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.panneau--sidebar-mode .panneau__filters {
+  width: 310px;
+  min-width: 310px;
+  flex-shrink: 0;
+}
+
+.panneau--sidebar-mode .panneau__chart {
+  flex: 1;
+  min-width: 0;
+}
+
+.panneau--sidebar-mode .panneau__filters :deep(.panel-filters-row) {
+  flex-wrap: wrap !important;
+  overflow-x: visible !important;
+}
+
+.panneau--sidebar-mode .panneau__filters :deep(.panel-filters-row__item) {
+  flex: 1 1 100% !important;
+  min-width: 0 !important;
+}
+
+.panneau--sidebar-mode .panneau__filters :deep(.v-col:not(.v-col-auto)) {
+  flex: 0 0 100% !important;
+  max-width: 100% !important;
 }
 </style>

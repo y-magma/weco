@@ -5,8 +5,19 @@ import type {
 } from 'echarts'
 import type { PercentilePoint, PercentileProfile } from '@domain/entities'
 import { parsePercentileInterval } from '@domain/services/percentiles'
-import { formatCompactAxisValue } from '~/visualization/axisFormat'
 import { buildChartToolbox } from '~/visualization/chartZoom'
+import {
+  applyDualAxisZoom as applyScaleDualAxisZoom,
+  applyPdfDensityAxisExtent,
+  buildEchartsAxis,
+  formatStoredAxisValue,
+  isValueRangeZoomActive,
+  pdfValueAxisBounds,
+  resolveProfileAxisScales,
+  type AxisScale,
+  type RankAxisScale,
+  type ValueRangeZoom,
+} from '~/visualization/axisScale'
 
 export type ProfileChartType = 'bar' | 'scatter' | 'line' | 'scatter-bar' | 'line-bar'
 
@@ -106,18 +117,16 @@ export interface ProfileChartOptions {
   title?: string
 }
 
-export interface ValueRangeZoom {
-  min?: number | null
-  max?: number | null
-}
-
-export function isValueRangeZoomActive(range?: ValueRangeZoom): boolean {
-  if (!range) return false
-  const { min, max } = range
-  if (min == null && max == null) return false
-  if (min != null && max != null && min >= max) return false
-  return true
-}
+export type { ValueRangeZoom } from '~/visualization/axisScale'
+export {
+  formatRankAxisLabel,
+  isValueRangeZoomActive,
+  rankDisplayCoordinate,
+  rankDisplayCoordinateUpper,
+  rankFromDisplayCoordinate,
+  rankFromTopLogCoordinate,
+  rankTopLogCoordinate,
+} from '~/visualization/axisScale'
 
 /** Min / max over finite point values (ignores null). */
 export function computeProfileValueExtent(
@@ -172,49 +181,32 @@ export function computeRankIntervalExtent(
   return { rankLo, rankHi }
 }
 
-/** Fit the population (rank) axis to visible brackets. */
+/** Fit the population (rank) axis to visible brackets. @deprecated use RankAxisScale.applyRankExtent */
 export function applyRankExtentZoom(
   axis: { min?: number, max?: number },
   extent: { rankLo: number, rankHi: number } | null,
   logOnRank: boolean,
 ): void {
-  if (!extent) return
-  const pad = (lo: number, hi: number) => {
-    const span = hi - lo || 0.1
-    return { lo: lo - span * 0.08, hi: hi + span * 0.08 }
-  }
-
-  if (logOnRank) {
-    const lo = rankBandBound(extent.rankLo, true, 'lower')
-    const hi = rankBandBound(extent.rankHi, true, 'upper')
-    if (lo != null) axis.min = lo
-    if (hi != null) axis.max = hi
-    return
-  }
-
-  const p = pad(extent.rankLo, extent.rankHi)
-  axis.min = Math.max(0, p.lo)
-  axis.max = extent.rankHi >= 100 ? 100 : Math.min(100, p.hi)
+  const rankScale = logOnRank
+    ? resolveProfileAxisScales({ logScaleX: true, logScaleY: false, populationDensity: false, showPdf: false }).rank
+    : resolveProfileAxisScales({ logScaleX: false, logScaleY: false, populationDensity: false, showPdf: false }).rank
+  rankScale.applyRankExtent(axis, extent)
 }
 
-/** Apply [min, max] on the value axis (log-safe). */
+/** Apply [min, max] on the value axis. @deprecated use AxisScale.applyZoom */
 export function applyValueRangeZoom(
   axis: { min?: number, max?: number },
   range: ValueRangeZoom | undefined,
   logOnValue: boolean,
+  symLogOnValue = false,
 ): void {
   if (!isValueRangeZoomActive(range)) return
-  const rawMin = range!.min
-  const rawMax = range!.max
-
-  let min = rawMin
-  let max = rawMax
-  if (logOnValue) {
-    if (min != null) min = Math.max(1e-6, min)
-    if (max != null && min != null) max = Math.max(max, min * 1.001)
-  }
-  if (min != null) axis.min = min
-  if (max != null) axis.max = max
+  const scale = symLogOnValue
+    ? resolveProfileAxisScales({ logScaleX: false, logScaleY: true, populationDensity: false, showPdf: false }).value
+    : logOnValue
+      ? resolveProfileAxisScales({ logScaleX: false, logScaleY: true, populationDensity: true, showPdf: false }).value
+      : resolveProfileAxisScales({ logScaleX: false, logScaleY: false, populationDensity: false, showPdf: false }).value
+  scale.applyZoom(axis, range!)
 }
 
 /** Value zoom + auto-fit of the population axis (swapped in density view). */
@@ -224,20 +216,15 @@ export function applyDualAxisZoom(
   options: {
     valueRange?: ValueRangeZoom
     rankPoints: PercentilePoint[]
-    logOnRank: boolean
-    logOnValue: boolean
+    rankScale: RankAxisScale
+    valueScale: AxisScale
     populationDensity: boolean
   },
 ): void {
-  if (!isValueRangeZoomActive(options.valueRange)) return
-  const rankAxis = options.populationDensity ? yAxis : xAxis
-  const valueAxis = options.populationDensity ? xAxis : yAxis
-  applyValueRangeZoom(valueAxis, options.valueRange, options.logOnValue)
-  applyRankExtentZoom(
-    rankAxis,
-    computeRankIntervalExtent(options.rankPoints),
-    options.logOnRank,
-  )
+  applyScaleDualAxisZoom(xAxis, yAxis, {
+    ...options,
+    rankIntervalExtent: computeRankIntervalExtent(options.rankPoints),
+  })
 }
 
 function filterPdfBinsByValueRange(bins: PdfBin[], range: ValueRangeZoom): PdfBin[] {
@@ -279,62 +266,25 @@ export interface PdfBin {
 }
 
 /**
- * log₁₀(100 − rank) for a percentile rank in percent.
- * Returns null when rank ≥ 100 (no finite coordinate at the top).
- */
-export function rankTopLogCoordinate(rank: number): number | null {
-  if (!Number.isFinite(rank) || rank >= 100) return null
-  const distance = 100 - rank
-  if (distance <= 0) return null
-  return Math.log10(distance)
-}
-
-/** Inverse of `rankTopLogCoordinate`: log-space tick → rank in percent. */
-export function rankFromTopLogCoordinate(logValue: number): number {
-  return 100 - 10 ** logValue
-}
-
-/** Plot coordinate with log spacing from 100 % and 0 % on the left. */
-export function rankDisplayCoordinate(rank: number): number | null {
-  const log = rankTopLogCoordinate(rank)
-  return log === null ? null : -log
-}
-
-/** Inverse of `rankDisplayCoordinate`: axis tick → rank in percent. */
-export function rankFromDisplayCoordinate(displayValue: number): number {
-  return rankFromTopLogCoordinate(-displayValue)
-}
-
-/**
- * Display coordinate for the **upper** bound k of ]i %, k %] on a log rank axis.
- * k = 100 % has no finite log₁₀(100 − k); extrapolate one bracket-width beyond
- * 99.999 % so the top band ]99.999 %, 100 %] remains visible.
- */
-export function rankDisplayCoordinateUpper(k: number): number | null {
-  if (!Number.isFinite(k)) return null
-  if (k < 100) return rankDisplayCoordinate(k)
-
-  const anchor = rankDisplayCoordinate(99.999)
-  const prev = rankDisplayCoordinate(99.99)
-  if (anchor === null || prev === null) return anchor
-  return anchor + (anchor - prev)
-}
-
-/**
  * Empirical PDF bins: ΔF/Δx between consecutive valid percentile points.
  * F = rank / 100, so density = (rankHi − rankLo) / (100 × (valueHi − valueLo)).
  */
 export function computePdfBins(
   points: PercentilePoint[],
-  options: { logOnValue?: boolean } = {},
+  options: { valueScale?: AxisScale } = {},
 ): PdfBin[] {
-  const { logOnValue = false } = options
+  const valueScale = options.valueScale ?? resolveProfileAxisScales({
+    logScaleX: false,
+    logScaleY: false,
+    populationDensity: false,
+    showPdf: false,
+  }).value
   const ordered = [...points]
     .sort((a, b) => a.rank - b.rank)
     .filter((point) => {
       if (point.value === null || Number.isNaN(point.value)) return false
       if (!Number.isFinite(point.rank) || point.rank >= 100) return false
-      if (logOnValue && point.value <= 0) return false
+      if (!valueScale.acceptsRaw(point.value)) return false
       return true
     })
 
@@ -422,23 +372,6 @@ function formatRankPercent(rank: number): string {
   return rank.toLocaleString('fr-FR', { maximumFractionDigits: 3 })
 }
 
-/** Format a rank-axis tick (display space) as a population-share label. */
-export function formatRankAxisLabel(displayValue: number): string {
-  const upperCap = rankDisplayCoordinateUpper(100)
-  if (upperCap !== null && Math.abs(displayValue - upperCap) < 1e-6) {
-    return '100 %'
-  }
-  const rank = rankFromDisplayCoordinate(displayValue)
-  if (!Number.isFinite(rank) || rank < 0 || rank >= 100) return ''
-  return `${formatRankPercent(rank)} %`
-}
-
-function rankCoordinate(rank: number, logRank: boolean): number | null {
-  if (!Number.isFinite(rank)) return null
-  if (logRank) return rankDisplayCoordinate(rank)
-  return rank
-}
-
 /**
  * Rank (%) where a line/scatter marker sits on the population axis.
  * Average variables (a…) use the midpoint of ]i, k] ; thresholds (t…) keep the lower bound.
@@ -468,91 +401,6 @@ function profilePointRankTooltipLine(
   return ''
 }
 
-/** Lower/upper bound coordinates for ]i %, k %] bands (handles k = 100 % in log X). */
-function rankBandBound(
-  bound: number,
-  logRank: boolean,
-  side: 'lower' | 'upper',
-): number | null {
-  if (!Number.isFinite(bound)) return null
-  if (!logRank) return bound
-  return side === 'upper' ? rankDisplayCoordinateUpper(bound) : rankDisplayCoordinate(bound)
-}
-
-function buildRankAxis(logRank: boolean) {
-  return {
-    type: 'value' as const,
-    name: 'Part de population (%)',
-    nameLocation: 'middle' as const,
-    nameGap: 32,
-    scale: true,
-    axisLabel: logRank
-      ? { formatter: (value: number) => formatRankAxisLabel(value) }
-      : { formatter: (value: number) => `${formatRankPercent(value)} %` },
-  }
-}
-
-function buildValueAxis(valueAxisName: string, logValue: boolean) {
-  return {
-    type: logValue ? ('log' as const) : ('value' as const),
-    name: valueAxisName,
-    // `scale: true` on log axes mis-anchors bars/bands (baseline at the wrong end).
-    scale: !logValue,
-    axisLabel: {
-      formatter: (value: number) => formatCompactAxisValue(value),
-    },
-  }
-}
-
-function buildDensityAxis(unit: string | undefined, logDensity: boolean) {
-  const unitSuffix = unit ? ` · 1/${unit}` : ''
-  return {
-    type: logDensity ? ('log' as const) : ('value' as const),
-    name: `Densité de probabilité${unitSuffix}`,
-    scale: !logDensity,
-    axisLabel: {
-      formatter: (value: number) => {
-        if (!Number.isFinite(value)) return ''
-        if (value === 0) return '0'
-        if (Math.abs(value) >= 0.01) return value.toLocaleString('fr-FR', { maximumFractionDigits: 4 })
-        return value.toExponential(1)
-      },
-    },
-  }
-}
-
-function cleanValue(value: number | null, logOnValue: boolean): number | null {
-  if (value === null || Number.isNaN(value)) return null
-  if (logOnValue && value <= 0) return null
-  return value
-}
-
-function cleanDensity(density: number, logOnDensity: boolean): number | null {
-  if (!Number.isFinite(density) || density <= 0) {
-    return logOnDensity ? null : density
-  }
-  return density
-}
-
-/** Fit the density axis to the displayed PDF values (required on log Y). */
-function applyPdfDensityAxisExtent(
-  yAxis: ReturnType<typeof buildDensityAxis>,
-  densities: number[],
-  logOnDensity: boolean,
-) {
-  if (densities.length === 0) return
-  const dMin = Math.min(...densities)
-  const dMax = Math.max(...densities)
-  const span = dMax - dMin || dMax * 0.1 || 1
-  if (logOnDensity) {
-    yAxis.min = Math.max(1e-12, dMin / 2)
-    yAxis.max = dMax * 2
-  } else {
-    yAxis.min = Math.max(0, dMin - span * 0.1)
-    yAxis.max = dMax + span * 0.1
-  }
-}
-
 /**
  * Build band items for each `pᵢpₖ` bracket on ]i %, k %].
  * Default view: X = rank span, Y = value. Population-density view: X = value, Y = rank span.
@@ -560,12 +408,12 @@ function applyPdfDensityAxisExtent(
 export function buildRankBandItems(
   points: PercentilePoint[],
   options: {
-    logOnRank?: boolean
-    logOnValue?: boolean
+    rankScale: RankAxisScale
+    valueScale: AxisScale
     populationDensity?: boolean
-  } = {},
+  },
 ): RankBandItem[] {
-  const { logOnRank = false, logOnValue = false, populationDensity = false } = options
+  const { rankScale, valueScale, populationDensity = false } = options
   const ordered = [...points].sort((a, b) => a.rank - b.rank)
   const items: RankBandItem[] = []
 
@@ -573,27 +421,18 @@ export function buildRankBandItems(
     const bounds = parsePercentileInterval(point.percentile)
     if (!bounds) continue
     const { i, k } = bounds
-    const yValue = cleanValue(point.value, logOnValue)
-    if (yValue === null) continue
+    if (point.value === null || Number.isNaN(point.value)) continue
+    const plotValue = valueScale.toPlotCoord(point.value)
+    if (plotValue === null) continue
 
-    const rankLo = rankBandBound(i, logOnRank, 'lower')
-    const rankHi = rankBandBound(k, logOnRank, 'upper')
+    const rankLo = rankScale.rankBound(i, 'lower')
+    const rankHi = rankScale.rankBound(k, 'upper')
     if (rankLo === null || rankHi === null) continue
 
     if (populationDensity) {
-      items.push({
-        name: point.percentile,
-        i,
-        k,
-        value: [yValue, rankLo, rankHi],
-      })
+      items.push({ name: point.percentile, i, k, value: [plotValue, rankLo, rankHi] })
     } else {
-      items.push({
-        name: point.percentile,
-        i,
-        k,
-        value: [rankLo, rankHi, yValue],
-      })
+      items.push({ name: point.percentile, i, k, value: [rankLo, rankHi, plotValue] })
     }
   }
   return items
@@ -603,95 +442,31 @@ export function buildRankBandItems(
 export function computeBandAxisBounds(
   items: RankBandItem[],
   options: {
-    logOnRank?: boolean
-    logOnValue?: boolean
+    rankScale: RankAxisScale
+    valueScale: AxisScale
     populationDensity?: boolean
-  } = {},
+  },
 ): BandAxisBounds {
-  const { logOnRank = false, logOnValue = false, populationDensity = false } = options
+  const { rankScale, valueScale, populationDensity = false } = options
   if (items.length === 0) return { xBase: 0, yBase: 0 }
-
-  const padLinear = (lo: number, hi: number, frac = 0.06) => {
-    const span = hi - lo || Math.abs(hi) * 0.1 || 1
-    return { lo: lo - span * frac, hi: hi + span * frac }
-  }
 
   if (populationDensity) {
     const xLo = Math.min(...items.map((item) => item.value[0]))
     const xHi = Math.max(...items.map((item) => item.value[0]))
     const yLo = Math.min(...items.map((item) => item.value[1]))
     const yHi = Math.max(...items.map((item) => item.value[2]))
-
-    let xMin: number | undefined
-    let xMax: number | undefined
-    let yMin: number | undefined
-    let yMax: number | undefined
-    let xBase = 0
-    let yBase = 0
-
-    if (logOnValue) {
-      xMin = Math.max(1e-6, xLo / 2)
-      xMax = xHi * 2
-      xBase = xMin
-    } else {
-      const floor = xLo < 0 ? xLo : 0
-      const x = padLinear(floor, xHi)
-      xMin = x.lo
-      xMax = x.hi
-      xBase = 0
-    }
-
-    if (logOnRank) {
-      yMin = yLo
-      yMax = yHi
-      yBase = yMin
-    } else {
-      const y = padLinear(yLo, yHi)
-      yMin = y.lo
-      yMax = y.hi
-      yBase = yLo
-    }
-
-    return { xMin, xMax, yMin, yMax, xBase, yBase }
+    const x = valueScale.axisBounds(xLo, xHi)
+    const y = rankScale.axisBounds(yLo, yHi, { rankDensityY: true })
+    return { xMin: x.min, xMax: x.max, yMin: y.min, yMax: y.max, xBase: x.base, yBase: y.base }
   }
 
   const xLo = Math.min(...items.map((item) => item.value[0]))
   const xHi = Math.max(...items.map((item) => item.value[1]))
   const yLo = Math.min(...items.map((item) => item.value[2]))
   const yHi = Math.max(...items.map((item) => item.value[2]))
-
-  let xMin: number | undefined
-  let xMax: number | undefined
-  let yMin: number | undefined
-  let yMax: number | undefined
-  const xBase = 0
-  let yBase = 0
-
-  if (logOnRank) {
-    xMin = xLo
-    xMax = xHi
-  } else {
-    const x = padLinear(xLo, xHi)
-    xMin = x.lo
-    xMax = Math.min(100, x.hi)
-  }
-
-  if (logOnValue) {
-    const floor = yLo / 2
-    const ceil = yHi * 2
-    yMin = Math.max(1e-6, floor)
-    yMax = ceil
-    yBase = yMin
-  } else {
-    // Bars always grow from 0 on a linear value axis — never from yMin.
-    const floor = yLo < 0 ? yLo : 0
-    const y = padLinear(floor, yHi)
-    yMin = y.lo
-    yMax = y.hi
-    yBase = 0
-  }
-
-  return { xMin, xMax, yMin, yMax, xBase, yBase }
+  const x = rankScale.axisBounds(xLo, xHi, { capRankAt100: true })
+  const y = valueScale.axisBounds(yLo, yHi)
+  return { xMin: x.min, xMax: x.max, yMin: y.min, yMax: y.max, xBase: 0, yBase: y.base }
 }
 
 type GridPixelRect = { left: number, top: number, right: number, bottom: number }
@@ -759,9 +534,10 @@ export function createRenderRankBand(yBase: number) {
     const grid = gridPixelRect(params)
 
     // When Y is zoomed, yBase may lie below the visible axis min → clamp baseline to grid bottom.
+    const valueY = top[1]
     const baseY = grid ? Math.min(base[1], grid.bottom) : base[1]
-    const rectY = Math.min(top[1], baseY)
-    const rectH = Math.max(baseY - rectY, 1)
+    const rectY = Math.min(valueY, baseY)
+    const rectH = Math.max(Math.abs(valueY - baseY), 1)
     const rectW = Math.max(right[0] - top[0], 1)
     const clipped = clampRectToGrid(top[0], rectY, rectW, rectH, grid)
     if (clipped.width < 0.5 || clipped.height < 0.5) return null
@@ -813,66 +589,35 @@ export interface PdfBandItem {
 
 export function buildPdfBandItems(
   bins: PdfBin[],
-  options: { logOnValue?: boolean, logOnDensity?: boolean } = {},
+  options: { valueScale: AxisScale, densityScale: AxisScale },
 ): PdfBandItem[] {
-  const { logOnValue = false, logOnDensity = false } = options
+  const { valueScale, densityScale } = options
   return bins.flatMap((bin) => {
-    const density = cleanDensity(bin.density, logOnDensity)
+    const density = densityScale.toPlotCoord(bin.density)
     if (density === null) return []
-    if (logOnValue && (bin.valueLo <= 0 || bin.valueHi <= 0)) return []
-    return [{ value: [bin.valueLo, bin.valueHi, density] as [number, number, number], bin }]
+    if (!valueScale.acceptsRaw(bin.valueLo) || !valueScale.acceptsRaw(bin.valueHi)) return []
+    const valueLo = valueScale.toPlotCoord(bin.valueLo)!
+    const valueHi = valueScale.toPlotCoord(bin.valueHi)!
+    return [{ value: [valueLo, valueHi, density] as [number, number, number], bin }]
   })
 }
 
 /** Auto-scale axes for PDF band charts; yBase anchors bands at the density floor. */
 export function computePdfBandAxisBounds(
   items: PdfBandItem[],
-  options: { logOnValue?: boolean, logOnDensity?: boolean } = {},
+  options: { valueScale: AxisScale, densityScale: AxisScale },
 ): BandAxisBounds {
-  const { logOnValue = false, logOnDensity = false } = options
+  const { valueScale, densityScale } = options
   if (items.length === 0) return { xBase: 0, yBase: 0 }
-
-  const padLinear = (lo: number, hi: number, frac = 0.06) => {
-    const span = hi - lo || Math.abs(hi) * 0.1 || 1
-    return { lo: lo - span * frac, hi: hi + span * frac }
-  }
 
   const xLo = Math.min(...items.map((item) => item.value[0]))
   const xHi = Math.max(...items.map((item) => item.value[1]))
   const dMin = Math.min(...items.map((item) => item.value[2]))
   const dMax = Math.max(...items.map((item) => item.value[2]))
 
-  let xMin: number | undefined
-  let xMax: number | undefined
-  let yMin: number | undefined
-  let yMax: number | undefined
-  let xBase = 0
-  let yBase = 0
-
-  if (logOnValue) {
-    xMin = Math.max(1e-6, xLo / 1.5)
-    xMax = xHi * 1.5
-    xBase = xMin
-  } else {
-    const floor = xLo < 0 ? xLo : 0
-    const x = padLinear(floor, xHi)
-    xMin = x.lo
-    xMax = x.hi
-    xBase = 0
-  }
-
-  if (logOnDensity) {
-    yMin = Math.max(1e-12, dMin / 2)
-    yMax = dMax * 2
-    yBase = yMin
-  } else {
-    const y = padLinear(0, dMax)
-    yMin = 0
-    yMax = y.hi
-    yBase = 0
-  }
-
-  return { xMin, xMax, yMin, yMax, xBase, yBase }
+  const x = pdfValueAxisBounds(valueScale, xLo, xHi)
+  const y = densityScale.axisBounds(dMin, dMax)
+  return { xMin: x.min, xMax: x.max, yMin: y.min, yMax: y.max, xBase: x.base, yBase: y.base }
 }
 
 /** Layout shared by grid margins and dataZoom sliders (keeps axis titles clear of the jauge). */
@@ -1017,15 +762,25 @@ export function buildProfileOption(
     : ordered
 
   const valueAxisName = profile.unit ? `Valeur · ${profile.unit}` : 'Valeur'
-  const logOnRank = populationDensity
-    ? (showPdf ? false : logScaleY)
-    : logScaleX
-  const logOnValue = populationDensity ? logScaleX : logScaleY
-  const logOnDensity = showPdf ? logScaleY : false
+  const scales = resolveProfileAxisScales({ logScaleX, logScaleY, populationDensity, showPdf })
+  const { rank: rankScale, value: valueScale, density: densityScale } = scales
   const valueOnX = !lorenzCurve && (populationDensity || showPdf)
+  const densityAxisName = profile.unit
+    ? `Densité de probabilité · 1/${profile.unit}`
+    : 'Densité de probabilité'
+
+  const rankAxisConfig = buildEchartsAxis('Part de population (%)', rankScale, { nameGap: 32 })
+  const valueAxisConfig = buildEchartsAxis(valueAxisName, valueScale)
+  const densityAxisConfig = buildEchartsAxis(densityAxisName, densityScale)
 
   const base = {
-    title: { text: title ?? profile.label, left: 'center', textStyle: { fontSize: 14 } },
+    title: {
+      text: title ?? profile.label,
+      subtext: valueScale.chartSubtext,
+      left: 'center' as const,
+      textStyle: { fontSize: 14 },
+      subtextStyle: { fontSize: 11, color: '#616161' },
+    },
     grid: {
       left: valueOnX ? 72 : 88,
       right: 24,
@@ -1100,12 +855,12 @@ export function buildProfileOption(
   }
 
   if (showPdf) {
-    let bins = computePdfBins(ordered, { logOnValue })
+    let bins = computePdfBins(ordered, { valueScale })
     if (zoomActive && valueRange) {
       bins = filterPdfBinsByValueRange(bins, valueRange)
     }
-    const xAxis = buildValueAxis(valueAxisName, logOnValue)
-    const yAxis = buildDensityAxis(profile.unit, logOnDensity)
+    const xAxis = { ...valueAxisConfig }
+    const yAxis = { ...densityAxisConfig }
 
     const pdfTooltip = (params: unknown) => {
       const p = params as { data?: { bin?: PdfBin } }
@@ -1120,9 +875,9 @@ export function buildProfileOption(
     }
 
     if (primaryProfileSeriesType(chartType) === 'bar') {
-      const bands = buildPdfBandItems(bins, { logOnValue, logOnDensity })
-      const bounds = computePdfBandAxisBounds(bands, { logOnValue, logOnDensity })
-      applyValueRangeZoom(xAxis, valueRange, logOnValue)
+      const bands = buildPdfBandItems(bins, { valueScale, densityScale })
+      const bounds = computePdfBandAxisBounds(bands, { valueScale, densityScale })
+      valueScale.applyZoom(xAxis, valueRange ?? {})
 
       return {
         ...base,
@@ -1146,16 +901,16 @@ export function buildProfileOption(
     const seriesType = primaryProfileSeriesType(chartType) === 'scatter' ? 'scatter' : 'line'
     const data = bins
       .map((bin) => {
-        const density = cleanDensity(bin.density, logOnDensity)
+        const density = densityScale.toPlotCoord(bin.density)
         if (density === null) return null
-        return { bin, pair: [bin.valueLo, density] as [number, number] }
+        const xCoord = valueScale.toPlotCoord(bin.valueLo)
+        if (xCoord === null) return null
+        return { bin, pair: [xCoord, density] as [number, number] }
       })
       .filter((entry): entry is { bin: PdfBin, pair: [number, number] } => entry !== null)
 
-    applyValueRangeZoom(xAxis, valueRange, logOnValue)
-    if (logOnDensity) {
-      applyPdfDensityAxisExtent(yAxis, data.map((d) => d.pair[1]), logOnDensity)
-    }
+    valueScale.applyZoom(xAxis, valueRange ?? {})
+    applyPdfDensityAxisExtent(yAxis, densityScale, data.map((d) => d.pair[1]))
 
     return {
       ...base,
@@ -1180,19 +935,19 @@ export function buildProfileOption(
     ? [...(overlayPoints ?? chartPoints)].sort((a, b) => a.rank - b.rank)
     : chartPoints
 
+  const bandOptions = { rankScale, valueScale, populationDensity }
+
   if (chartType === 'bar') {
-    const bands = buildRankBandItems(chartPoints, { logOnRank, logOnValue, populationDensity })
-    const bounds = computeBandAxisBounds(bands, { logOnRank, logOnValue, populationDensity })
-    const rankAxis = buildRankAxis(logOnRank)
-    const valueAxis = buildValueAxis(valueAxisName, logOnValue)
-    const xAxis = populationDensity ? valueAxis : rankAxis
-    const yAxis = populationDensity ? rankAxis : valueAxis
+    const bands = buildRankBandItems(chartPoints, bandOptions)
+    const bounds = computeBandAxisBounds(bands, bandOptions)
+    const xAxis = populationDensity ? { ...valueAxisConfig } : { ...rankAxisConfig }
+    const yAxis = populationDensity ? { ...rankAxisConfig } : { ...valueAxisConfig }
 
     applyDualAxisZoom(xAxis, yAxis, {
       valueRange,
       rankPoints: chartPoints,
-      logOnRank,
-      logOnValue,
+      rankScale,
+      valueScale,
       populationDensity,
     })
 
@@ -1203,8 +958,8 @@ export function buildProfileOption(
         formatter: (params) => {
           const p = params as { name?: string, data?: { value?: [number, number, number] } }
           const band = p?.data
-          const yVal = populationDensity ? band?.value?.[0] : band?.value?.[2]
-          const shown = yVal === null || yVal === undefined ? '—' : yVal.toLocaleString('fr-FR')
+          const plotVal = populationDensity ? band?.value?.[0] : band?.value?.[2]
+          const shown = formatStoredAxisValue(valueScale, plotVal)
           const code = p?.name ? `${p.name}<br/>` : ''
           return `${code}${valueAxisName}: ${shown}`
         },
@@ -1241,8 +996,8 @@ export function buildProfileOption(
 
   const data = seriesChartPoints
     .map((point) => {
-      const rankCoord = rankCoordinate(plotRankForPoint(point, profile.kind), logOnRank)
-      const valueCoord = cleanValue(point.value, logOnValue)
+      const rankCoord = rankScale.toPlotCoord(plotRankForPoint(point, profile.kind))
+      const valueCoord = point.value === null ? null : valueScale.toPlotCoord(point.value)
       if (rankCoord === null) return null
 
       if (populationDensity) {
@@ -1254,21 +1009,19 @@ export function buildProfileOption(
     })
     .filter((entry): entry is { point: PercentilePoint, pair: [number, number | null] } => entry !== null)
 
-  const rankAxis = buildRankAxis(logOnRank)
-  const valueAxis = buildValueAxis(valueAxisName, logOnValue)
-  const xAxis = populationDensity ? valueAxis : rankAxis
-  const yAxis = populationDensity ? rankAxis : valueAxis
+  const xAxis = populationDensity ? { ...valueAxisConfig } : { ...rankAxisConfig }
+  const yAxis = populationDensity ? { ...rankAxisConfig } : { ...valueAxisConfig }
   applyDualAxisZoom(xAxis, yAxis, {
     valueRange,
     rankPoints: seriesPoints,
-    logOnRank,
-    logOnValue,
+    rankScale,
+    valueScale,
     populationDensity,
   })
 
   if (overlayType) {
-    const bands = buildRankBandItems(chartPoints, { logOnRank, logOnValue, populationDensity })
-    const bounds = computeBandAxisBounds(bands, { logOnRank, logOnValue, populationDensity })
+    const bands = buildRankBandItems(chartPoints, bandOptions)
+    const bounds = computeBandAxisBounds(bands, bandOptions)
     const overlayDataZoom = buildProfileDataZoom(
       valueOnX,
       bandDataZoomWindow(bounds, populationDensity),
@@ -1284,8 +1037,8 @@ export function buildProfileOption(
           if (seriesType === 'custom') {
             const p = params as { name?: string, data?: { value?: [number, number, number] } }
             const band = p?.data
-            const yVal = populationDensity ? band?.value?.[0] : band?.value?.[2]
-            const shown = yVal === null || yVal === undefined ? '—' : yVal.toLocaleString('fr-FR')
+            const plotVal = populationDensity ? band?.value?.[0] : band?.value?.[2]
+            const shown = formatStoredAxisValue(valueScale, plotVal)
             const code = p?.name ? `${p.name}<br/>` : ''
             return `${code}${valueAxisName}: ${shown}`
           }

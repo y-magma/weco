@@ -57,17 +57,27 @@ describe('thresholdVariableFor', () => {
 })
 
 describe('WID_PROFILE_VARIABLES', () => {
-  it('pairs each concept with an average and a threshold variable', () => {
-    const concepts = new Set(WID_PROFILE_VARIABLES.map((v) => v.concept))
+  it('pairs each income/wealth concept with an average and a threshold variable', () => {
+    const moneyVars = WID_PROFILE_VARIABLES.filter((v) => v.group === 'income' || v.group === 'wealth')
+    const concepts = new Set(moneyVars.map((v) => v.concept))
     for (const concept of concepts) {
-      const kinds = WID_PROFILE_VARIABLES.filter((v) => v.concept === concept).map((v) => v.kind)
+      const kinds = moneyVars.filter((v) => v.concept === concept).map((v) => v.kind)
       expect(kinds).toContain('average')
       expect(kinds).toContain('threshold')
     }
   })
 
-  it('exposes exactly four profile variables', () => {
-    expect(WID_PROFILE_VARIABLES).toHaveLength(4)
+  it('exposes six profile variables (patrimoine, revenu, carbone)', () => {
+    expect(WID_PROFILE_VARIABLES).toHaveLength(6)
+  })
+
+  it('includes both carbon footprint variables', () => {
+    const carbonVars = WID_PROFILE_VARIABLES.filter((v) => v.group === 'carbon')
+    expect(carbonVars.map((v) => v.sixlet)).toContain('lpfghg')
+    expect(carbonVars.map((v) => v.sixlet)).toContain('lpfcar')
+    for (const v of carbonVars) {
+      expect(v.unit).toMatch(/tCO/)
+    }
   })
 
   it('keeps sixlet/kind consistent', () => {

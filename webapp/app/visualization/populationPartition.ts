@@ -21,6 +21,16 @@ export const POPULATION_VIEW_OPTIONS: { value: PopulationViewMode, label: string
   { value: 'custom', label: 'Tranches personnalisées' },
 ]
 
+/** Sous-ensemble pour le panneau trapèzes (courbe d'origine). */
+export const TRAPEZOID_POPULATION_VIEW_OPTIONS = POPULATION_VIEW_OPTIONS.filter(
+  (option) => option.value === 'all' || option.value === 'step1',
+)
+
+/** Profil : uniquement 127 g-percentiles bruts ou tranches de 1 % (100 percentiles). */
+export const PROFILE_POPULATION_VIEW_OPTIONS = POPULATION_VIEW_OPTIONS.filter(
+  (option) => option.value === 'all' || option.value === 'step1',
+)
+
 const EPS = 1e-9
 
 function fmt(n: number): string {
@@ -165,6 +175,33 @@ export function validateCustomBreakpoints(
 
   if (prev !== 100) {
     return { valid: false, error: 'Terminez le découpage par la borne 100 %.' }
+  }
+
+  return { valid: true, error: null }
+}
+
+/** Valide les bornes sans exiger que la dernière soit 100 %. */
+export function validatePartialCustomBreakpoints(
+  breakpoints: number[],
+  available: number[],
+): CustomBreakpointValidation {
+  if (breakpoints.length === 0) {
+    return { valid: false, error: 'Entrez au moins une borne de fin d’intervalle.' }
+  }
+
+  let prev = 0
+  for (const bp of breakpoints) {
+    const rounded = roundBoundary(bp)
+    if (!isBoundaryAvailable(rounded, available)) {
+      return {
+        valid: false,
+        error: `${formatBoundaryLabel(rounded)} n’est pas une borne disponible dans les données chargées.`,
+      }
+    }
+    if (rounded <= prev) {
+      return { valid: false, error: 'Les bornes doivent être strictement croissantes.' }
+    }
+    prev = rounded
   }
 
   return { valid: true, error: null }

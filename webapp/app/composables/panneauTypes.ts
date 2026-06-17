@@ -1,4 +1,4 @@
-export type PanneauType = 'population' | 'temps' | 'variables'
+export type PanneauType = 'population' | 'temps' | 'variables' | 'trapeze'
 
 export interface PanneauTypeMeta {
   id: PanneauType
@@ -33,6 +33,14 @@ export const PANNEAU_TYPES: PanneauTypeMeta[] = [
     subtitle: 'Du plus modeste au plus aisé',
     text: 'Voir comment une mesure se répartit dans la population.',
     route: '/panneau/population',
+  },
+  {
+    id: 'trapeze',
+    icon: 'mdi-chart-areaspline',
+    title: 'Approximation par trapèzes et rectangles',
+    subtitle: 'Moyenne conservée par intervalle',
+    text: 'Approximer une courbe par des trapèzes et des rectangles sur des intervalles choisis.',
+    route: '/panneau/trapeze',
   },
 ]
 

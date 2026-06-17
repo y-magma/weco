@@ -1,15 +1,10 @@
 import type {
   CountryOption,
   DataSeries,
-  DistributionSeries,
-  FetchDistributionParams,
   FetchProfileParams,
-  FetchSeriesParams,
   FetchVariableTimeSeriesParams,
-  IndicatorMeta,
   ListProfileYearsParams,
   PercentileProfile,
-  SearchIndicatorsParams,
 } from '@domain/entities'
 
 export interface DataSourceStatus {
@@ -36,10 +31,7 @@ export interface DataSourcePort {
   readonly website?: string
   readonly capabilities?: DataSourceCapabilities
 
-  searchIndicators(params?: SearchIndicatorsParams): Promise<IndicatorMeta[]>
   listCountries(): Promise<CountryOption[]>
-  fetchSeries(params: FetchSeriesParams): Promise<DataSeries>
-  fetchDistribution(params: FetchDistributionParams): Promise<DistributionSeries>
   fetchPercentileProfile(params: FetchProfileParams): Promise<PercentileProfile>
   fetchVariableTimeSeries(params: FetchVariableTimeSeriesParams): Promise<DataSeries>
   listProfileYears(params: ListProfileYearsParams): Promise<number[]>

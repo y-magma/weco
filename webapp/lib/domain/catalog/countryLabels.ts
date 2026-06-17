@@ -20,16 +20,19 @@ export function countryDisplayName(code: string): string {
     return FRENCH_SPECIAL_COUNTRY_NAMES[key]!
   }
 
+  const widName = WID_COUNTRY_NAMES[key]
+  if (widName) return widName
+
   if (!key.includes('-')) {
     try {
       const french = FRENCH_REGION_NAMES.of(key)
       if (french && french !== key) return french
     } catch {
-      // Intl may reject non-ISO codes — fall through to WID dictionary.
+      // Intl may reject non-ISO codes — fall through to code.
     }
   }
 
-  return WID_COUNTRY_NAMES[key] ?? key
+  return key
 }
 
 /** Format for selectors: « France (FR) ». */

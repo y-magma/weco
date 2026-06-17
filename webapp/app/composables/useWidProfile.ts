@@ -22,7 +22,7 @@ import {
   extractAvailableBoundaries,
   isCustomPartitionComplete,
   stepFromMode,
-  validateCustomBreakpoints,
+  validatePartialCustomBreakpoints,
   type PopulationViewMode,
 } from '~/visualization/populationPartition'
 import type { CountryOption, PercentileProfile } from '@domain/entities'
@@ -101,15 +101,17 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
   )
 
   const customPartitionValidation = computed(() =>
-    validateCustomBreakpoints(customBreakpoints.value, availableBoundaries.value),
+    validatePartialCustomBreakpoints(customBreakpoints.value, availableBoundaries.value),
   )
+
+  const customPartitionReady = computed(() => customPartitionValidation.value.valid)
 
   const customPartitionComplete = computed(() =>
     isCustomPartitionComplete(customBreakpoints.value) && customPartitionValidation.value.valid,
   )
 
   const supportsDrillDown = computed(() =>
-    populationViewMode.value === 'step1' && !customPartitionComplete.value,
+    populationViewMode.value === 'step1' && customBreakpoints.value.length === 0,
   )
 
   const displayPoints = computed(() => {
@@ -122,7 +124,7 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
     }
 
     if (mode === 'custom') {
-      if (!customPartitionComplete.value) return []
+      if (!customPartitionReady.value) return []
       return buildPartitionPoints(points, customBreakpoints.value)
     }
 
@@ -330,6 +332,7 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
     customBreakpoints,
     availableBoundaries,
     customPartitionValidation,
+    customPartitionReady,
     customPartitionComplete,
     drillLevel,
     drillBreadcrumb,

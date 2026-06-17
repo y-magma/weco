@@ -1,21 +1,7 @@
 <script setup lang="ts">
-import type { CountryOption } from '@domain/entities'
-
 definePageMeta({ layout: 'default' })
 
-const app = useApplication()
-const countries = ref<CountryOption[]>([])
-const countriesError = ref<string | null>(null)
-
-provide('widCountries', countries)
-
-onMounted(async () => {
-  try {
-    countries.value = await app.listCountries.execute()
-  } catch (err) {
-    countriesError.value = err instanceof Error ? err.message : 'Échec du chargement des pays'
-  }
-})
+const { countriesError } = useWidCountriesProvider()
 </script>
 
 <template>

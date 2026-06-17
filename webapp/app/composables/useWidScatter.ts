@@ -11,6 +11,7 @@ import {
   WID_POP_OPTIONS,
   WID_PROFILE_VARIABLES,
 } from '@domain/catalog/widCodes'
+import { WidPanelScope, yearRangeLabel } from '~/composables/widPanelBase'
 
 export interface WidScatterStateOptions {
   countries?: Ref<CountryOption[]>
@@ -19,8 +20,7 @@ export interface WidScatterStateOptions {
 }
 
 export function createWidScatterState(options: WidScatterStateOptions = {}) {
-  const app = useApplication()
-  const sharedCountries = options.countries
+  const scope = new WidPanelScope(useApplication(), options.countries)
 
   const countryCode = ref('FR')
   const variableX = ref(options.initialVariableX ?? 'thweal')
@@ -31,12 +31,8 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
   const logScaleX = ref(false)
   const logScaleY = ref(false)
 
-  const loading = ref(false)
   const yearsLoading = ref(false)
-  const error = ref<string | null>(null)
 
-  const localCountries = ref<CountryOption[]>([])
-  const countries = sharedCountries ?? localCountries
   const availableYears = ref<number[]>([])
   const points = ref<ProfileScatterPoint[]>([])
   const scatterOption = ref<EChartsOption | null>(null)
@@ -45,15 +41,9 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
   const ageOptions = WID_AGE_OPTIONS
   const popOptions = WID_POP_OPTIONS
   const years = computed(() => availableYears.value)
-  const yearRangeLabel = computed(() => {
-    const list = availableYears.value
-    if (list.length === 0) return ''
-    const min = list[list.length - 1]!
-    const max = list[0]!
-    return min === max ? `${max}` : `${min}–${max}`
-  })
 
   const labelFor = (sixlet: string) => findWidVariable(sixlet)?.label ?? sixlet
+  const unitFor = (sixlet: string) => findWidVariable(sixlet)?.unit
 
   const rebuild = () => {
     if (!points.value.length) {
@@ -62,7 +52,9 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
     }
     scatterOption.value = buildProfileScatterOption(points.value, {
       xLabel: labelFor(variableX.value),
+      xUnit: unitFor(variableX.value),
       yLabel: labelFor(variableY.value),
+      yUnit: unitFor(variableY.value),
       logScaleX: logScaleX.value,
       logScaleY: logScaleY.value,
     })
@@ -71,7 +63,7 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
   const refreshYears = async () => {
     yearsLoading.value = true
     try {
-      availableYears.value = await app.listProfileYears.execute({
+      availableYears.value = await scope.app.listProfileYears.execute({
         countryCode: countryCode.value,
         variable: variableX.value,
         age: age.value,
@@ -88,10 +80,10 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
   }
 
   const load = async () => {
-    loading.value = true
-    error.value = null
+    scope.loading.value = true
+    scope.error.value = null
     try {
-      points.value = await app.loadScatter.execute({
+      points.value = await scope.app.loadScatter.execute({
         variableX: variableX.value,
         variableY: variableY.value,
         params: {
@@ -104,22 +96,16 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
       })
       rebuild()
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Échec du chargement du nuage'
+      scope.error.value = err instanceof Error ? err.message : 'Échec du chargement du nuage'
       points.value = []
       scatterOption.value = null
     } finally {
-      loading.value = false
+      scope.loading.value = false
     }
   }
 
   const init = async () => {
-    if (!sharedCountries) {
-      try {
-        localCountries.value = await app.listCountries.execute()
-      } catch {
-        localCountries.value = [{ code: 'FR', label: 'France' }]
-      }
-    }
+    await scope.initCountries()
     await refreshYears()
     await load()
   }
@@ -137,15 +123,15 @@ export function createWidScatterState(options: WidScatterStateOptions = {}) {
     pop,
     logScaleX,
     logScaleY,
-    countries,
+    countries: scope.countries,
     variables,
     ageOptions,
     popOptions,
     years,
     yearsLoading,
-    yearRangeLabel,
-    loading,
-    error,
+    yearRangeLabel: computed(() => yearRangeLabel(availableYears.value)),
+    loading: scope.loading,
+    error: scope.error,
     points,
     scatterOption,
     load,

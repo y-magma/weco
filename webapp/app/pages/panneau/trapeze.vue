@@ -10,9 +10,9 @@ const { countriesError } = useWidCountriesProvider()
 
     <v-row class="mb-2">
       <v-col cols="12">
-        <h1 class="text-h4 font-weight-bold mb-1">Relation entre 2 indicateurs</h1>
+        <h1 class="text-h4 font-weight-bold mb-1">Approximation par trapèzes et rectangles</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
-          Repérer si deux indicateurs varient de concert.
+          Approximer une courbe WID par des trapèzes et des rectangles conservant la moyenne sur chaque intervalle choisi.
         </p>
       </v-col>
     </v-row>
@@ -26,6 +26,6 @@ const { countriesError } = useWidCountriesProvider()
       {{ countriesError }}
     </v-alert>
 
-    <PanneauNuageVariables chart-height="460px" />
+    <PanneauTrapeze chart-height="460px" />
   </div>
 </template>

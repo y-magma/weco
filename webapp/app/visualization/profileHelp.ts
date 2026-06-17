@@ -68,7 +68,7 @@ export const PROFILE_HELP = {
     title: 'Échelle log (ordonnée)',
     paragraphs: [
       'L’échelle log s’applique à l’axe vertical tel qu’il est affiché.',
-      'Profil standard : échelle logarithmique sur la richesse. Les valeurs ≤ 0 sont masquées.',
+      'Profil standard : échelle symlog sur la richesse — f(x) = signe(x)·log₁₀(1+|x|), graduations en valeurs réelles x (y compris ≤ 0).',
       'Densité de population : espacement logarithmique sur la part de population (même transform −log₁₀(100 − rang) que pour l’axe X en profil standard), graduations en rang % réel.',
       'Densité de probabilité : échelle logarithmique sur la densité f. Les valeurs ≤ 0 sont masquées.',
     ],
@@ -87,7 +87,7 @@ export const PROFILE_HELP = {
       'Tranches fines sur les plus riches : affichage brut des 127 g-percentiles WID.',
       'Tranches de 1 %, 10 % ou 25 % de pop : agrégation en intervalles réguliers ]0 %, step %], ]step %, 2×step %], … jusqu’à 100 %.',
       'En tranches de 1 %, la tranche ]99 %, 100 %] reste agrégée ; un zoom progressif permet d’affiner le sommet de la distribution.',
-      'Tranches personnalisées : saisissez les bornes de fin de chaque intervalle (la borne suivante en est le début) jusqu’à 100 %. Seules les bornes présentes dans les données chargées sont acceptées.',
+      'Tranches personnalisées : saisissez les bornes de fin de chaque intervalle (la borne suivante en est le début). Il n’est pas nécessaire d’aller jusqu’à 100 %. Seules les bornes présentes dans les données chargées sont acceptées.',
     ],
   },
   drillMaxLevel: {
@@ -200,7 +200,9 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
         'Échelle log (Y) : espacement −log₁₀(100 − rang) sur la part de population ; graduations en rang % réel.',
       )
     } else {
-      paragraphs.push('Échelle log (Y) : richesse en échelle logarithmique ; valeurs ≤ 0 exclues.')
+      paragraphs.push(
+        'Échelle log (Y) : richesse en symlog f(x)=signe(x)·log₁₀(1+|x|) ; graduations en valeurs réelles (≤ 0 incluses).',
+      )
     }
   }
 

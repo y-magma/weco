@@ -1,47 +1,25 @@
 import type {
   CountryOption,
-  DataSeries,
-  DistributionSeries,
-  FetchDistributionParams,
   FetchProfileParams,
-  ListProfileYearsParams,
-  FetchSeriesParams,
   FetchVariableTimeSeriesParams,
-  IndicatorMeta,
+  ListProfileYearsParams,
   PercentilePoint,
   PercentileProfile,
-  SearchIndicatorsParams,
+  DataSeries,
 } from '@domain/entities'
 import { findWidVariable, measureKind } from '@domain/catalog/widCodes'
 import type { DataSourcePort, DataSourceStatus } from '@domain/ports/DataSourcePort'
 import { dataSourceCache } from '@infrastructure/cache/cache'
 import {
-  WID_INDICATORS,
-} from '@domain/catalog/indicators'
-import {
   WID_EMPTY_COUNTRIES_ERROR,
   WID_NO_API_KEY_ERROR,
   widApiRequestError,
   widEmptyProfileError,
-  widEmptySeriesError,
 } from '@infrastructure/data-sources/wid/widErrors'
 import { WidClient } from '@infrastructure/data-sources/wid/widClient'
 
 const DEFAULT_WID_API_BASE_URL =
   'https://rfap9nitz6.execute-api.eu-west-1.amazonaws.com/prod'
-
-/** Default g-percentile used when reading a single-series WID indicator. */
-const SERIES_PERCENTILE: Record<string, string> = {
-  sptinc: 'p90p100',
-  sptop1: 'p99p100',
-  ghini: 'p0p100',
-  ahwbus: 'p0p100',
-}
-
-function seriesPercentile(sixlet: string): string {
-  if (SERIES_PERCENTILE[sixlet]) return SERIES_PERCENTILE[sixlet]!
-  return sixlet.charAt(0).toLowerCase() === 's' ? 'p90p100' : 'p0p100'
-}
 
 export class WidDataSource implements DataSourcePort {
   readonly id = 'wid'
@@ -76,18 +54,6 @@ export class WidDataSource implements DataSourcePort {
     return this.liveClient
   }
 
-  async searchIndicators(params?: SearchIndicatorsParams): Promise<IndicatorMeta[]> {
-    const query = params?.query?.toLowerCase().trim()
-
-    if (!query) return WID_INDICATORS
-
-    return WID_INDICATORS.filter(
-      (indicator) =>
-        indicator.label.toLowerCase().includes(query)
-        || indicator.id.toLowerCase().includes(query),
-    )
-  }
-
   async listCountries(): Promise<CountryOption[]> {
     const cacheKey = dataSourceCache.buildKey(this.id, 'countries', {})
     const cached = dataSourceCache.get<CountryOption[]>(cacheKey)
@@ -108,51 +74,6 @@ export class WidDataSource implements DataSourcePort {
       throw new Error(WID_EMPTY_COUNTRIES_ERROR)
     } catch (error) {
       if (error instanceof Error && error.message === WID_EMPTY_COUNTRIES_ERROR) {
-        throw error
-      }
-      this.lastError = widApiRequestError(error)
-      throw new Error(this.lastError)
-    }
-  }
-
-  async fetchSeries(params: FetchSeriesParams): Promise<DataSeries> {
-    const cacheKey = dataSourceCache.buildKey(this.id, 'series', params)
-    const cached = dataSourceCache.get<DataSeries>(cacheKey)
-    if (cached) return cached
-
-    const client = this.requireLiveClient()
-
-    try {
-      const points = await client.fetchIndicatorSeries({
-        area: params.countryCode,
-        sixlet: params.indicatorId,
-        age: '992',
-        pop: 'j',
-        percentile: seriesPercentile(params.indicatorId),
-        yearFrom: params.yearFrom,
-        yearTo: params.yearTo,
-      })
-
-      if (!points.length) {
-        const message = widEmptySeriesError(params)
-        this.lastError = message
-        throw new Error(message)
-      }
-
-      const indicator = WID_INDICATORS.find((item) => item.id === params.indicatorId)
-      const series: DataSeries = {
-        id: `${params.countryCode}-${params.indicatorId}`,
-        label: `${params.countryCode} · ${indicator?.label ?? params.indicatorId}`,
-        points,
-        metadata: { sample: false },
-      }
-
-      this.lastFetchAt = new Date().toISOString()
-      this.lastError = undefined
-      dataSourceCache.set(cacheKey, series)
-      return series
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith("L'API WID n'a renvoyé aucune série")) {
         throw error
       }
       this.lastError = widApiRequestError(error)
@@ -207,13 +128,6 @@ export class WidDataSource implements DataSourcePort {
       this.lastError = widApiRequestError(error)
       throw new Error(this.lastError)
     }
-  }
-
-  async fetchDistribution(_params: FetchDistributionParams): Promise<DistributionSeries> {
-    const message =
-      "La distribution par percentile n'est pas disponible via l'API WID (données synthétiques retirées)."
-    this.lastError = message
-    throw new Error(message)
   }
 
   usesLiveApi(): boolean {

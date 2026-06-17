@@ -6,6 +6,7 @@ import {
   computeBandAxisBounds,
   computeProfileValueExtent,
   computeRankIntervalExtent,
+  createRenderRankBand,
   filterPointsByValueRange,
   computePdfBins,
   computeLorenzPoints,
@@ -19,6 +20,8 @@ import {
   resolveProfileChartType,
   rankTopLogCoordinate,
 } from '~/visualization/profile'
+import { symlogToCoord } from '~/visualization/symlogScale'
+import { linearRankScale, linearValueScale, rankTopLogScale, resolveProfileAxisScales } from '~/visualization/axisScale'
 import type { PercentileProfile } from '@domain/entities'
 
 function makeProfile(overrides: Partial<PercentileProfile> = {}): PercentileProfile {
@@ -159,14 +162,51 @@ describe('buildProfileOption — value range zoom', () => {
 })
 
 describe('computeBandAxisBounds', () => {
-  it('anchors bars at yBase = 0 on a linear value axis even with negative data', () => {
+  it('anchors bars at yBase = 0 on symlog value axis with negative data', () => {
+    const scales = resolveProfileAxisScales({
+      logScaleX: false,
+      logScaleY: true,
+      populationDensity: false,
+      showPdf: false,
+    })
     const items = buildRankBandItems([
       { percentile: 'p0p1', rank: 0, value: -1000 },
       { percentile: 'p90p91', rank: 90, value: 200000 },
-    ])
-    const bounds = computeBandAxisBounds(items)
+    ], { rankScale: scales.rank, valueScale: scales.value })
+    const bounds = computeBandAxisBounds(items, {
+      rankScale: scales.rank,
+      valueScale: scales.value,
+    })
     expect(bounds.yBase).toBe(0)
     expect(bounds.yMin).toBeLessThan(0)
+  })
+})
+
+describe('createRenderRankBand', () => {
+  it('extends bars below zero for negative values', () => {
+    const render = createRenderRankBand(0)
+    const grid = { x: 0, y: 0, width: 400, height: 300 }
+    const yToPixel = (value: number) => 150 - value * 0.1
+
+    const negative = render(
+      { coordSys: grid } as Parameters<ReturnType<typeof createRenderRankBand>>[0],
+      {
+        value: (i: number) => [0, 1, -750][i] as number,
+        coord: (pair: [number, number]) => [50, yToPixel(pair[1])],
+        style: () => ({}),
+      } as Parameters<ReturnType<typeof createRenderRankBand>>[1],
+    )
+    const positive = render(
+      { coordSys: grid } as Parameters<ReturnType<typeof createRenderRankBand>>[0],
+      {
+        value: (i: number) => [0, 1, 1500][i] as number,
+        coord: (pair: [number, number]) => [50, yToPixel(pair[1])],
+        style: () => ({}),
+      } as Parameters<ReturnType<typeof createRenderRankBand>>[1],
+    )
+
+    expect(negative?.shape).toMatchObject({ y: 150, height: 75 })
+    expect(positive?.shape).toMatchObject({ y: 0, height: 150 })
   })
 })
 
@@ -174,7 +214,7 @@ describe('buildRankBandItems', () => {
   it('keeps the ]99.999 %, 100 %] band when log X is enabled', () => {
     const bands = buildRankBandItems(
       [{ percentile: 'p99.999p100', rank: 99.999, value: 1_000_000 }],
-      { logOnRank: true },
+      { rankScale: rankTopLogScale, valueScale: linearValueScale },
     )
     expect(bands).toHaveLength(1)
     expect(bands[0]!.i).toBe(99.999)
@@ -185,7 +225,10 @@ describe('buildRankBandItems', () => {
   })
 
   it('maps each pᵢpₖ bracket to a band on ]i %, k %]', () => {
-    const bands = buildRankBandItems(makeProfile().points)
+    const bands = buildRankBandItems(makeProfile().points, {
+      rankScale: linearRankScale,
+      valueScale: linearValueScale,
+    })
     expect(bands.map((b) => [b.i, b.k])).toEqual([
       [0, 1],
       [50, 51],
@@ -220,22 +263,23 @@ describe('buildProfileOption', () => {
     expect((option.yAxis as { type: string }).type).toBe('value')
   })
 
-  it('uses a log axis when logScaleY is set', () => {
+  it('uses symlog coords on a linear Y axis when logScaleY is set (standard profile)', () => {
     const option = buildProfileOption(makeProfile(), { logScaleY: true })
-    expect((option.yAxis as { type: string }).type).toBe('log')
+    expect((option.yAxis as { type: string }).type).toBe('value')
+    expect((option.title as { subtext?: string }).subtext).toContain('symlog')
   })
 
-  it('formats the value axis with compact labels', () => {
+  it('formats the value axis with real values from symlog coords', () => {
     const option = buildProfileOption(makeProfile(), { logScaleY: true })
     const formatter = (option.yAxis as { axisLabel: { formatter: (v: number) => string } }).axisLabel.formatter
-    expect(formatter(1_000_000)).toBe('1M')
-    expect(formatter(10_000)).toBe('10k')
+    expect(formatter(1)).toBe('9')
+    expect(formatter(-1)).toBe('-9')
   })
 
-  it('drops non-positive values on a log axis (guard)', () => {
+  it('keeps non-positive values visible with logScaleY (symlog)', () => {
     const option = buildProfileOption(makeProfile(), { chartType: 'scatter', logScaleY: true })
     const bottom = seriesPairs(option).find((pair) => pair[0] === 0.5)!
-    expect(bottom[1]).toBeNull()
+    expect(bottom[1]).toBeCloseTo(symlogToCoord(-1000)!)
   })
 
   it('honours the chart type', () => {
@@ -491,11 +535,11 @@ describe('buildProfileOption — log X scale', () => {
     }
   })
 
-  it('still applies the ≤0 guard on a log Y in log X mode', () => {
+  it('keeps negative Y values visible with log Y in log X mode (symlog)', () => {
     const option = buildProfileOption(makeProfile(), { chartType: 'scatter', logScaleX: true, logScaleY: true })
     const pairs = seriesPairs(option)
     const bottom = pairs.find((pair) => pair[0] === rankDisplayCoordinate(0.5))!
-    expect(bottom[1]).toBeNull()
+    expect(bottom[1]).toBeCloseTo(symlogToCoord(-1000)!)
   })
 
   it('drops points at rank 100 when log X is enabled', () => {

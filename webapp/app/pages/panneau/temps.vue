@@ -1,21 +1,7 @@
 <script setup lang="ts">
-import type { CountryOption } from '@domain/entities'
-
 definePageMeta({ layout: 'default' })
 
-const app = useApplication()
-const countries = ref<CountryOption[]>([])
-const countriesError = ref<string | null>(null)
-
-provide('widCountries', countries)
-
-onMounted(async () => {
-  try {
-    countries.value = await app.listCountries.execute()
-  } catch (err) {
-    countriesError.value = err instanceof Error ? err.message : 'Échec du chargement des pays'
-  }
-})
+const { countriesError } = useWidCountriesProvider()
 </script>
 
 <template>
@@ -40,6 +26,19 @@ onMounted(async () => {
       {{ countriesError }}
     </v-alert>
 
-    <PanneauSerieTemporelle chart-height="460px" />
+    <PanneauSerieTemporelle chart-height="420px" />
+
+    <v-divider class="my-6" />
+
+    <v-row class="mb-2">
+      <v-col cols="12">
+        <h2 class="text-h5 font-weight-bold mb-1">Comparaison multi-pays</h2>
+        <p class="text-body-2 text-medium-emphasis mb-0">
+          Comparer la même tranche de population sur plusieurs pays.
+        </p>
+      </v-col>
+    </v-row>
+
+    <PanneauSerieTemporelleCompare chart-height="420px" />
   </div>
 </template>

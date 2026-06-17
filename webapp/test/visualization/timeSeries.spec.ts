@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { buildTimeSeriesOption } from '~/visualization/timeSeries'
+import { buildStackedTimeSeriesOption, buildTimeSeriesOption } from '~/visualization/timeSeries'
 import type { DataSeries } from '@domain/entities'
+import { buildTimeSeriesTranches, TIME_SERIES_DEFAULT_BREAKPOINTS } from '~/visualization/timeSeriesPartition'
 
 const sampleSeries: DataSeries = {
   id: 'FR-ahweal',
@@ -54,5 +55,61 @@ describe('buildTimeSeriesOption', () => {
     expect(echartsSeries).toHaveLength(2)
     expect(echartsSeries.map((item) => item.name)).toEqual(['France', 'États-Unis'])
     expect((option.legend as { show: boolean }).show).toBe(true)
+  })
+
+  it('keeps each country history when year ranges differ', () => {
+    const france: DataSeries = {
+      id: 'FR',
+      label: 'France',
+      points: [
+        { year: 1800, value: 100 },
+        { year: 1900, value: 200 },
+      ],
+    }
+    const usa: DataSeries = {
+      id: 'US',
+      label: 'États-Unis',
+      points: [{ year: 1913, value: 300 }],
+    }
+    const option = buildTimeSeriesOption([france, usa], 'Patrimoine net moyen')
+    const echartsSeries = option.series as { data: (number | null)[] }[]
+    const years = (option.xAxis as { data: string[] }).data
+
+    expect(years).toEqual(['1800', '1900', '1913'])
+    expect(echartsSeries[0]!.data).toEqual([100, 200, null])
+    expect(echartsSeries[1]!.data).toEqual([null, null, 300])
+  })
+
+  it('does not filter series data when zooming', () => {
+    const option = buildTimeSeriesOption([sampleSeries], 'Test')
+    const dataZoom = option.dataZoom as { filterMode?: string }[]
+    expect(dataZoom.every((item) => item.filterMode === 'none')).toBe(true)
+  })
+})
+
+describe('buildStackedTimeSeriesOption', () => {
+  it('renders stacked area series for each tranche', () => {
+    const tranches = buildTimeSeriesTranches([...TIME_SERIES_DEFAULT_BREAKPOINTS], 'wealth')
+    const option = buildStackedTimeSeriesOption(
+      [{
+        countryCode: 'US',
+        countryLabel: 'États-Unis',
+        tranches: tranches.map((tranche) => ({
+          tranche,
+          byYear: new Map([
+            [2020, 100_000 * tranche.hi],
+            [2021, 120_000 * tranche.hi],
+          ]),
+        })),
+      }],
+      'Patrimoine net moyen',
+      'États-Unis · par tranche de population',
+    )
+
+    const echartsSeries = option.series as { type: string, stack: string, areaStyle: { opacity: number } }[]
+    expect(echartsSeries).toHaveLength(5)
+    expect(echartsSeries.every((item) => item.type === 'line' && item.stack === 'US')).toBe(true)
+    expect(echartsSeries.every((item) => item.areaStyle.opacity > 0)).toBe(true)
+    expect((option.legend as { orient: string }).orient).toBe('vertical')
   })
 })

@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { countryDisplayName, formatCountryLabel } from '@domain/catalog/countryLabels'
 
 describe('formatCountryLabel', () => {
-  it('shows French country name with ISO code', () => {
+  it('shows WID country name with code', () => {
     expect(formatCountryLabel('FR')).toBe('France (FR)')
-    expect(formatCountryLabel('DE')).toBe('Allemagne (DE)')
+    expect(formatCountryLabel('DE')).toBe('Germany (DE)')
+    expect(formatCountryLabel('US')).toBe('USA (US)')
   })
 
   it('shows WID subregion name with code', () => {

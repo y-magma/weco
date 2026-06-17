@@ -8,6 +8,7 @@ import {
   selectableCustomBoundaries,
   validateCustomBreakpoints,
   validateNextCustomBreakpoint,
+  validatePartialCustomBreakpoints,
 } from '~/visualization/populationPartition'
 import { buildGPercentiles } from '@domain/services/percentiles'
 import type { PercentilePoint } from '@domain/entities'
@@ -76,6 +77,13 @@ describe('custom breakpoint validation', () => {
     expect(validateCustomBreakpoints([50, 40, 100], available).valid).toBe(false)
     expect(validateCustomBreakpoints([50, 90], available).valid).toBe(false)
     expect(validateCustomBreakpoints([50, 90, 100], available).valid).toBe(true)
+  })
+
+  it('accepts partial breakpoints without requiring 100', () => {
+    expect(validatePartialCustomBreakpoints([], available).valid).toBe(false)
+    expect(validatePartialCustomBreakpoints([50], available).valid).toBe(true)
+    expect(validatePartialCustomBreakpoints([50, 90], available).valid).toBe(true)
+    expect(validatePartialCustomBreakpoints([50, 40], available).valid).toBe(false)
   })
 
   it('lists selectable boundaries after the last entry', () => {

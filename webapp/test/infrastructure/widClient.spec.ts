@@ -85,6 +85,12 @@ describe('parseSeriesResponse', () => {
     expect(rows.some((r) => r.year === 2020 && r.percentile === 'p50p51')).toBe(true)
     expect(rows.some((r) => r.year === 2021 && r.percentile === 'p50p51')).toBe(true)
   })
+
+  it('can be filtered to a single percentile', () => {
+    const rows = parseSeriesResponse(fixture()).filter((row) => row.percentile === 'p50p51')
+    expect(rows).toHaveLength(2)
+    expect(rows.every((row) => row.percentile === 'p50p51')).toBe(true)
+  })
 })
 
 describe('extractAvailableYears', () => {

@@ -11,7 +11,7 @@ import { buildGPercentiles } from '@domain/services/percentiles'
 
 export type MeasureKind = 'average' | 'threshold' | 'other'
 
-export type WidVariableGroup = 'income' | 'wealth'
+export type WidVariableGroup = 'income' | 'wealth' | 'carbon'
 
 export interface WidVariable {
   /** Six-letter code, e.g. `ahweal`. */
@@ -41,6 +41,7 @@ export function measureKind(sixlet: string): MeasureKind {
 const GROUP_LABELS: Record<WidVariableGroup, string> = {
   wealth: 'Patrimoine',
   income: 'Revenus',
+  carbon: 'Carbone',
 }
 
 function v(
@@ -62,14 +63,18 @@ function v(
 }
 
 /**
- * Variables exposées dans le panneau de visualisation (V1).
- * Paires moyenne / seuil pour le patrimoine net et le revenu avant impôt.
+ * Variables exposées dans le panneau de visualisation.
+ * Paires moyenne / seuil pour le patrimoine net et le revenu avant impôt,
+ * plus les variables distribuées CO₂ WID (préfixe l = moyenne par groupe).
+ * Pour les variables carbone, utiliser age=999 (tous âges) et pop=i (individus).
  */
 export const WID_PROFILE_VARIABLES: WidVariable[] = [
   v('ahweal', 'Patrimoine net moyen', 'hweal', 'monnaie locale constante', 'wealth'),
   v('thweal', 'Patrimoine net — seuil', 'hweal', 'monnaie locale constante', 'wealth'),
   v('aptinc', 'Revenu avant impôt moyen', 'ptinc', 'monnaie locale constante', 'income'),
   v('tptinc', 'Revenu avant impôt — seuil', 'ptinc', 'monnaie locale constante', 'income'),
+  v('lpfghg', 'Empreinte carbone personnelle (GES)', 'pfghg', 'tCO₂eq / pers. / an', 'carbon'),
+  v('lpfcar', 'Empreinte CO₂ personnelle', 'pfcar', 'tCO₂ / pers. / an', 'carbon'),
 ]
 
 export function findWidVariable(sixlet: string): WidVariable | undefined {
@@ -96,16 +101,16 @@ export interface CodeOption {
 
 /** Age group codes (3 digits). Mandatory filter — see version1.md. */
 export const WID_AGE_OPTIONS: CodeOption[] = [
-  { value: '992', label: '992 — adultes (20 ans et +)' },
-  { value: '999', label: '999 — tous âges' },
-  { value: '991', label: '991 — moins de 20 ans' },
+  { value: '992', label: 'Adultes (20 ans et +)' },
+  { value: '999', label: 'Tous âges' },
+  { value: '991', label: 'Moins de 20 ans' },
 ]
 
 /** Population unit codes (1 letter). Mandatory filter — see version1.md. */
 export const WID_POP_OPTIONS: CodeOption[] = [
-  { value: 'j', label: 'j — adultes equal-split' },
-  { value: 'i', label: 'i — individus' },
-  { value: 't', label: 't — foyers fiscaux' },
+  { value: 'j', label: 'Adultes equal-split' },
+  { value: 'i', label: 'Individus' },
+  { value: 't', label: 'Foyers fiscaux' },
 ]
 
 export const WID_DEFAULT_AGE = '992'

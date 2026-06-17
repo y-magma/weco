@@ -9,11 +9,12 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
-    "test": "vitest run --exclude test/widConformance.spec.ts",
+    "test": "vitest run --exclude test/infrastructure/widConformance.spec.ts",
     "test:watch": "vitest",
-    "test:conformance": "vitest run test/widConformance.spec.ts",
+    "test:conformance": "vitest run test/infrastructure/widConformance.spec.ts",
     "wid:conformance": "node scripts/wid-conformance.mjs",
-    "wid:compare": "node scripts/wid-compare.mjs"
+    "wid:compare": "node scripts/wid-compare.mjs",
+    "wid:country-names": "node scripts/generate-wid-country-names.mjs"
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",

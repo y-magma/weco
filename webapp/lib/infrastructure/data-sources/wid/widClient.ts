@@ -306,13 +306,16 @@ export class WidClient {
       { headers: this.headers() },
     )
 
-    return parseSeriesResponse(response)
-      .filter((row) => {
-        if (params.yearFrom != null && row.year < params.yearFrom) return false
-        if (params.yearTo != null && row.year > params.yearTo) return false
-        return true
-      })
-      .map((row) => ({ year: row.year, value: row.value }))
+    const byYear = new Map<number, number>()
+    for (const row of parseSeriesResponse(response)) {
+      if (row.percentile !== params.percentile) continue
+      if (params.yearFrom != null && row.year < params.yearFrom) continue
+      if (params.yearTo != null && row.year > params.yearTo) continue
+      byYear.set(row.year, row.value)
+    }
+
+    return [...byYear.entries()]
+      .map(([year, value]) => ({ year, value }))
       .sort((a, b) => a.year - b.year)
   }
 

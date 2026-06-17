@@ -14,6 +14,10 @@ const SCATTER_GRID_BOTTOM = 88
 export interface ProfileScatterOptions {
   xLabel: string
   yLabel: string
+  /** Unité affichée entre parenthèses sur l'axe X. */
+  xUnit?: string
+  /** Unité affichée entre parenthèses sur l'axe Y. */
+  yUnit?: string
   /** Log scale on the X axis. Non-positive X values are dropped. */
   logScaleX?: boolean
   /** Log scale on the Y axis. Non-positive Y values are dropped. */
@@ -31,7 +35,9 @@ export function buildProfileScatterOption(
   points: ProfileScatterPoint[],
   options: ProfileScatterOptions,
 ): EChartsOption {
-  const { xLabel, yLabel, logScaleX = false, logScaleY = false, title } = options
+  const { xLabel, yLabel, xUnit, yUnit, logScaleX = false, logScaleY = false, title } = options
+  const xAxisName = xUnit ? `${xLabel} (${xUnit})` : xLabel
+  const yAxisName = yUnit ? `${yLabel} (${yUnit})` : yLabel
 
   const data = points
     .filter((point) => !(logScaleX && point.x <= 0) && !(logScaleY && point.y <= 0))
@@ -79,9 +85,10 @@ export function buildProfileScatterOption(
     },
     xAxis: {
       type: logScaleX ? 'log' : 'value',
-      name: xLabel,
+      name: xAxisName,
       nameLocation: 'middle',
-      nameGap: 28,
+      nameGap: 32,
+      nameTextStyle: { fontSize: 11 },
       scale: !logScaleX,
       axisLabel: {
         formatter: (value: number) => formatCompactAxisValue(value),
@@ -89,7 +96,10 @@ export function buildProfileScatterOption(
     },
     yAxis: {
       type: logScaleY ? 'log' : 'value',
-      name: yLabel,
+      name: yAxisName,
+      nameLocation: 'middle',
+      nameGap: 56,
+      nameTextStyle: { fontSize: 11 },
       scale: !logScaleY,
       axisLabel: {
         formatter: (value: number) => formatCompactAxisValue(value),

@@ -1,57 +1,38 @@
 <script setup lang="ts">
 import type { CountryOption } from '@domain/entities'
-import { WID_PROFILE_VARIABLES } from '@domain/catalog/widCodes'
-import type { PanneauType } from '~/composables/panneauTypes'
 
-const props = withDefaults(defineProps<{
-  panelIndex?: number
-  removable?: boolean
-  collapsible?: boolean
-  panelType?: PanneauType
-  defaultFiltersExpanded?: boolean
+withDefaults(defineProps<{
   chartHeight?: string
 }>(), {
-  panelIndex: 0,
-  removable: false,
-  collapsible: false,
-  panelType: undefined,
-  defaultFiltersExpanded: true,
   chartHeight: '380px',
 })
 
-const emit = defineEmits<{ remove: [] }>()
-
 const countries = inject<Ref<CountryOption[]>>('widCountries')
 if (!countries) {
-  throw new Error('PanneauNuageVariables requires a widCountries provider')
+  throw new Error('PanneauSerieTemporelleCompare requires a widCountries provider')
 }
 
-const vars = WID_PROFILE_VARIABLES
-const initialX = vars[props.panelIndex % vars.length]?.sixlet ?? 'thweal'
-const initialY = vars[(props.panelIndex + 1) % vars.length]?.sixlet ?? 'ahweal'
 const paramsInSidebar = inject<Ref<boolean>>('paramsInSidebar', ref(false))
 
-const state = createWidScatterState({ countries, initialVariableX: initialX, initialVariableY: initialY })
+const state = createWidSeriesCompareState({ countries })
 
 const {
-  countryCode,
-  variableX,
-  variableY,
-  year,
+  countryCodes,
+  variable,
+  percentile,
   age,
   pop,
-  logScaleX,
-  logScaleY,
   variables,
   ageOptions,
   popOptions,
-  years,
-  yearsLoading,
-  yearRangeLabel,
+  populationOptions,
   loading,
   error: panelError,
-  points,
-  scatterOption,
+  loadWarning,
+  seriesList,
+  chartOption,
+  variableMeta,
+  yearCountLabel,
   load,
 } = state
 
@@ -62,71 +43,54 @@ onMounted(() => {
 
 <template>
   <div
-    class="panneau-nuage-variables"
+    class="panneau-serie-temporelle-compare"
     :class="{ 'panneau--sidebar-mode': paramsInSidebar }"
   >
     <div class="panneau__filters">
     <PanneauFiltersShell
-      :collapsible="collapsible"
-      :panel-type="panelType ?? 'variables'"
-      :removable="removable"
-      :default-expanded="defaultFiltersExpanded"
-      @remove="emit('remove')"
+      panel-type="temps"
+      :default-expanded="true"
     >
+      <div class="text-subtitle-2 font-weight-medium mb-2">
+        Comparaison multi-pays — une tranche de population
+      </div>
 
       <v-row dense class="panel-filters-row align-start">
         <v-col class="panel-filters-row__item">
           <v-autocomplete
-            v-model="countryCode"
+            v-model="countryCodes"
             :items="countries"
             item-title="label"
             item-value="code"
             label="Pays"
             prepend-inner-icon="mdi-earth"
-            placeholder="Rechercher un pays…"
-            clearable
-            auto-select-first
+            placeholder="Comparer plusieurs pays…"
+            multiple
+            chips
+            closable-chips
             density="compact"
             hide-details
           />
         </v-col>
         <v-col class="panel-filters-row__item">
           <v-select
-            v-model="year"
-            :items="years"
-            :loading="yearsLoading"
-            :disabled="yearsLoading || years.length === 0"
-            :hint="yearRangeLabel ? `Disponible : ${yearRangeLabel}` : undefined"
-            label="Année"
-            density="compact"
-            persistent-hint
-          />
-        </v-col>
-      </v-row>
-
-      <v-row dense class="mt-2 panel-filters-row align-start">
-        <v-col class="panel-filters-row__item">
-          <v-select
-            v-model="variableX"
+            v-model="variable"
             :items="variables"
             item-title="label"
             item-value="sixlet"
             group-by="groupLabel"
-            label="Variable X (abscisse)"
-            prepend-inner-icon="mdi-axis-x-arrow"
+            label="Variable"
             density="compact"
             hide-details
           />
         </v-col>
         <v-col class="panel-filters-row__item">
           <v-select
-            v-model="variableY"
-            :items="variables"
+            v-model="percentile"
+            :items="populationOptions"
             item-title="label"
-            item-value="sixlet"
-            group-by="groupLabel"
-            label="Variable Y (ordonnée)"
-            prepend-inner-icon="mdi-axis-y-arrow"
+            item-value="value"
+            label="Tranche de population"
             density="compact"
             hide-details
           />
@@ -164,33 +128,6 @@ onMounted(() => {
             </v-expansion-panel>
           </v-expansion-panels>
         </v-col>
-
-        <v-col cols="12" md="6">
-          <v-expansion-panels variant="accordion">
-            <v-expansion-panel>
-              <v-expansion-panel-title class="text-body-2">
-                Réglages
-              </v-expansion-panel-title>
-              <v-expansion-panel-text>
-                <v-switch
-                  v-model="logScaleX"
-                  label="Échelle log abscisse"
-                  color="primary"
-                  density="compact"
-                  hide-details
-                  class="mb-1"
-                />
-                <v-switch
-                  v-model="logScaleY"
-                  label="Échelle log ordonnée"
-                  color="primary"
-                  density="compact"
-                  hide-details
-                />
-              </v-expansion-panel-text>
-            </v-expansion-panel>
-          </v-expansion-panels>
-        </v-col>
       </v-row>
 
       <v-row dense class="mt-2">
@@ -212,18 +149,34 @@ onMounted(() => {
 
     <div class="panneau__chart">
     <v-card variant="outlined" class="pa-3">
+      <v-alert
+        v-if="loadWarning"
+        type="warning"
+        variant="tonal"
+        density="compact"
+        class="mb-3"
+      >
+        {{ loadWarning }}
+      </v-alert>
+
       <div class="d-flex flex-wrap ga-2 mb-2">
-        <v-chip size="x-small" color="primary" variant="tonal">
+        <v-chip v-if="seriesList.length" size="x-small" color="primary" variant="tonal">
           Source : WID.world
         </v-chip>
-        <v-chip v-if="points.length" size="x-small" variant="tonal">
-          {{ points.length }} percentiles joints
+        <v-chip v-if="variableMeta?.unit" size="x-small" variant="tonal">
+          Unité : {{ variableMeta.unit }}
+        </v-chip>
+        <v-chip v-if="seriesList.length" size="x-small" variant="tonal">
+          {{ seriesList.length }} pays
+        </v-chip>
+        <v-chip v-if="yearCountLabel" size="x-small" variant="tonal">
+          {{ yearCountLabel }}
         </v-chip>
       </div>
 
       <EChart
-        :key="`${logScaleX}-${logScaleY}-${variableX}-${variableY}`"
-        :option="scatterOption"
+        :key="`${variable}-${percentile}-${countryCodes.join(',')}`"
+        :option="chartOption"
         :loading="loading"
         :error="panelError"
         :height="chartHeight"
