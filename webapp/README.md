@@ -51,12 +51,14 @@ Output is written to `.output/public` for GitHub Pages, Netlify, or any static h
 Each push to `main` that touches `webapp/` triggers
 [`.github/workflows/deploy-webapp.yml`](../.github/workflows/deploy-webapp.yml).
 
-**One-time setup** (repo [Settings → Pages](https://github.com/warielon/samuel-gscop-26/settings/pages)):
+**One-time setup** — repo **Settings → Pages** (`https://github.com/<owner>/<repo>/settings/pages`) :
 
-1. **Build and deployment → Source** : `GitHub Actions`
-2. **Settings → Secrets → Actions** : add `NUXT_PUBLIC_WID_API_KEY` (same hex key as in `.env.example`)
+1. **Build and deployment → Source** : **GitHub Actions** (not “Deploy from a branch”).
+2. **Settings → Secrets → Actions** : add `NUXT_PUBLIC_WID_API_KEY`.
 
-Live URL: **https://warielon.github.io/samuel-gscop-26/**
+Live URL: **https://\<owner\>.github.io/\<repo\>/** (e.g. `https://warielon.github.io/weco/`).
+
+If deploy fails with `Failed to create deployment (status: 404)`, Pages is not enabled or the source is still “branch” instead of “GitHub Actions”. On a **private** repo, GitHub Pages requires a paid plan — use S3/Cloudflare Pages instead.
 
 Manual redeploy: **Actions → Deploy webapp to GitHub Pages → Run workflow**.
 
