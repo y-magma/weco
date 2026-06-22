@@ -26,11 +26,6 @@ export const TRAPEZOID_POPULATION_VIEW_OPTIONS = POPULATION_VIEW_OPTIONS.filter(
   (option) => option.value === 'all' || option.value === 'step1',
 )
 
-/** Profil : uniquement 127 g-percentiles bruts ou tranches de 1 % (100 percentiles). */
-export const PROFILE_POPULATION_VIEW_OPTIONS = POPULATION_VIEW_OPTIONS.filter(
-  (option) => option.value === 'all' || option.value === 'step1',
-)
-
 const EPS = 1e-9
 
 function fmt(n: number): string {

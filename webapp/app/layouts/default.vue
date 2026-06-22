@@ -18,7 +18,7 @@ provide('paramsInSidebar', paramsInSidebar)
 
 const navItems = [
   { title: 'Home', to: '/', icon: 'mdi-home' },
-  { title: 'Cas d\'étude', to: '/panneau', icon: 'mdi-chart-bar' },
+  { title: 'Exploration des données', to: '/panneau', icon: 'mdi-chart-bar' },
   { title: 'Grille de visualisations', to: '/grille', icon: 'mdi-view-grid-plus' },
 ]
 

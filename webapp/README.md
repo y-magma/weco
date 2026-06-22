@@ -1,17 +1,15 @@
 # Boîte à outils de visualisations
 
 Nuxt + Vuetify + TypeScript SPA pour explorer les données WID.world :
-trois types de visualisation (profil sur les g-percentiles, série temporelle,
-nuage de 2 variables), grilles composables et import CSV.
+profils sur les g-percentiles, séries temporelles, grilles composables et import CSV.
 
 ## Features
 
 - Page d'accueil et navigation responsive (Vuetify)
 - Couche de sources de données extensible avec adaptateur **WID.world**
-- **Hub `/panneau`** : trois boîtes à outils (population, temps, variables)
-- **Profil population** : bandes / ligne / nuage, échelles log, drill-down, densités, Lorenz
-- **Série temporelle** : comparaison multi-pays sur une même variable, légende, axes compacts
-- **Nuage 2 variables** : jointure par percentile, jauge de rang, axes compacts
+- **Hub `/panneau`** : deux boîtes à outils (série temporelle, profil d'inégalité et approximations)
+- **Profil d'inégalité et approximations** : profil WID, trapèzes/rectangles, échelles log, drill-down, densités, Lorenz
+- **Série temporelle** : évolution par tranches de population pour un pays, axes compacts
 - **Grille** : panneaux de types mixtes, filtres repliables, tuile « + » avec dialogue de choix
 - Import CSV avec aperçu et série temporelle
 - Rendu de la spécification Markdown (`/spec`)

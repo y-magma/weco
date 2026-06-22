@@ -6,8 +6,8 @@ definePageMeta({
 const features = [
   {
     icon: 'mdi-chart-bar',
-    title: 'Cas d\'étude',
-    text: 'Trois types d\'études : série temporelle, relation entre deux indicateurs, inégalités et profil.',
+    title: 'Exploration des données',
+    text: 'Méthodes d\'exploration : séries temporelles et profil d\'inégalité avec approximations.',
     to: '/panneau',
   },
   {
@@ -44,14 +44,13 @@ const features = [
       <v-col cols="12" md="5">
         <v-card variant="tonal" color="primary" class="pa-6 h-100">
           <v-icon icon="mdi-database-search-outline" size="36" class="mb-4" />
-          <h2 class="text-h6 mb-2">Version 1</h2>
+          <h2 class="text-h6 mb-2">Version</h2>
           <p class="text-body-2">
-            Données WID.world en direct (clé API). Cas d'étude :
+            Données WID.world en direct (clé API). Exploration des données :
             profils moyen ou seuil sur les 127 g-percentiles, vues densité de
             population et de probabilité, échelles lin/log, zoom sur la queue
             de distribution. Grille de visualisations pour composer plusieurs
-            panneaux en parallèle. Filtres âge et population en paramètres
-            avancés (992 / j par défaut).
+            panneaux en parallèle.
           </p>
         </v-card>
       </v-col>

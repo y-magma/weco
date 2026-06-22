@@ -28,8 +28,8 @@ function removePanel(id: number) {
       <v-col cols="12">
         <h1 class="text-h4 font-weight-bold mb-1">Grille de visualisations</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
-          Composez plusieurs études en parallèle — série temporelle,
-          relation entre deux indicateurs ou inégalités et profil.
+          Composez plusieurs explorations en parallèle — séries temporelles
+          et profil d'inégalité avec approximations.
         </p>
       </v-col>
     </v-row>
@@ -69,23 +69,13 @@ function removePanel(id: number) {
           removable
           @remove="removePanel(panel.id)"
         />
-        <PanneauNuageVariables
-          v-else-if="panel.type === 'variables'"
+        <PanneauTrapeze
+          v-else-if="panel.type === 'trapeze'"
           :panel-index="index"
           collapsible
           :panel-type="panel.type"
           :default-filters-expanded="false"
           removable
-          @remove="removePanel(panel.id)"
-        />
-        <PanneauVisualisation
-          v-else
-          :panel-index="index"
-          collapsible
-          :panel-type="panel.type"
-          :default-filters-expanded="false"
-          removable
-          :show-panel-title="false"
           @remove="removePanel(panel.id)"
         />
       </v-col>

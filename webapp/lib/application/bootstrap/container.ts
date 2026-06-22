@@ -8,7 +8,6 @@ import { ListCountriesUseCase } from '@application/use-cases/ListCountriesUseCas
 import { ListAvailableParamsUseCase } from '@application/use-cases/ListAvailableParamsUseCase'
 import { ListProfileYearsUseCase } from '@application/use-cases/ListProfileYearsUseCase'
 import { LoadProfileUseCase } from '@application/use-cases/LoadProfileUseCase'
-import { LoadScatterUseCase } from '@application/use-cases/LoadScatterUseCase'
 import { LoadTimeSeriesUseCase } from '@application/use-cases/LoadTimeSeriesUseCase'
 
 export interface ApplicationConfig {
@@ -22,7 +21,6 @@ export interface ApplicationContainer {
   listProfileYears: ListProfileYearsUseCase
   loadProfile: LoadProfileUseCase
   loadTimeSeries: LoadTimeSeriesUseCase
-  loadScatter: LoadScatterUseCase
   getDefaultSource: () => DataSourcePort
   listDataSources: () => DataSourcePort[]
 }
@@ -43,7 +41,6 @@ export function createApplicationContainer(config?: ApplicationConfig): Applicat
     listProfileYears: new ListProfileYearsUseCase(getSource),
     loadProfile: new LoadProfileUseCase(getSource),
     loadTimeSeries: new LoadTimeSeriesUseCase(getSource),
-    loadScatter: new LoadScatterUseCase(getSource),
     getDefaultSource: getSource,
     listDataSources,
   }

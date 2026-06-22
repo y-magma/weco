@@ -6,6 +6,6 @@
     to="/panneau"
     class="mb-3 px-0"
   >
-    Tous les cas d'étude
+    Exploration des données
   </v-btn>
 </template>

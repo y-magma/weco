@@ -74,6 +74,8 @@ export const TRAPEZOID_ORIGINAL_VIEW_OPTIONS: {
   { value: 'bar', label: 'Bâtons' },
 ]
 
+const WID_NON_GINI_VARIABLES = WID_PROFILE_VARIABLES.filter((item) => item.kind !== 'gini')
+
 export interface WidTrapezoidStateOptions {
   countries?: Ref<CountryOption[]>
   initialVariable?: string
@@ -126,7 +128,7 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
   const chartOption = ref<EChartsOption | null>(null)
 
   const variables = computed(() =>
-    empiricalPdf.value ? WID_THRESHOLD_VARIABLES : WID_PROFILE_VARIABLES,
+    empiricalPdf.value ? WID_THRESHOLD_VARIABLES : WID_NON_GINI_VARIABLES,
   )
   const countries = constraints.countries
   const ageOptions = constraints.ageOptions

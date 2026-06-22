@@ -238,6 +238,8 @@ function buildTrapezoidContext(profile: PercentileProfile, options: TrapezoidCha
   }
 
   const valueAxisConfig = buildEchartsAxis(valueAxisName, valueScale)
+  // Always include 0 (the trapezoid baseline) in the Y axis range.
+  if (!logScaleY) valueAxisConfig.scale = false
 
   const bandOptions = { rankScale, valueScale, empiricalCdf: false as const }
   const hidden = options.hiddenIntervalIndices

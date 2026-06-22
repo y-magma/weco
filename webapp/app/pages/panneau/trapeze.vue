@@ -11,9 +11,9 @@ usePanneauDataSourceProvider()
 
     <v-row class="mb-2">
       <v-col cols="12">
-        <h1 class="text-h4 font-weight-bold mb-1">Approximation par trapèzes et rectangles</h1>
+        <h1 class="text-h4 font-weight-bold mb-1">Profil d'inégalité et approximations</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
-          Approximer une courbe WID par des trapèzes et des rectangles conservant la moyenne sur chaque intervalle choisi.
+          Visualiser la répartition dans la population et approximer la courbe WID par des trapèzes et des rectangles conservant la moyenne sur chaque intervalle choisi.
         </p>
       </v-col>
     </v-row>

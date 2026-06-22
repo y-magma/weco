@@ -65,10 +65,9 @@ webapp/
 | Fichier | Route | Description |
 |---------|-------|-------------|
 | `index.vue` | `/` | Accueil |
-| `panneau/index.vue` | `/panneau` | Hub des 3 types de panneau |
-| `panneau/population.vue` | `/panneau/population` | Profil 127 g-percentiles |
+| `panneau/index.vue` | `/panneau` | Hub des types de panneau |
 | `panneau/temps.vue` | `/panneau/temps` | Série temporelle |
-| `panneau/variables.vue` | `/panneau/variables` | Nuage 2 variables |
+| `panneau/trapeze.vue` | `/panneau/trapeze` | Profil d'inégalité et approximations |
 | `grille.vue` | `/grille` | Grille multi-panneaux |
 | `spec.vue` | `/spec` | Rendu Markdown de `spec/` |
 | `sources.vue` | `/sources` | Statut des sources de données |
@@ -79,9 +78,8 @@ webapp/
 | Fichier | Rôle |
 |---------|------|
 | `useApplication.ts` | Accès au container applicatif (`$application`) |
-| `useWidProfile.ts` | État réactif profil → `LoadProfileUseCase` |
+| `useWidTrapezoid.ts` | État réactif profil + approximations → `LoadProfileUseCase` |
 | `useWidSeries.ts` | État réactif série → `LoadTimeSeriesUseCase` |
-| `useWidScatter.ts` | État réactif nuage → `LoadScatterUseCase` |
 | `useSpec.ts` | Page `/spec` via `specAdapter` |
 | `panneauTypes.ts` | Catalogue des types de panneau |
 
@@ -93,7 +91,7 @@ Les composables **n'appellent jamais l'infrastructure directement** — uniqueme
 |---------|------|
 | `profile.ts` | `buildProfileOption()` — profil 127 g-percentiles |
 | `timeSeries.ts` | `buildTimeSeriesOption()` |
-| `scatterProfiles.ts` | `buildProfileScatterOption()` |
+| `scatterProfiles.ts` | `buildProfileScatterOption()` (legacy percentile join) |
 | `drilldown.ts` | Drill-down hiérarchique |
 | `axisFormat.ts` | Formatage axes compacts |
 | `profileHelp.ts` | Textes d'aide contextuelle |
@@ -107,8 +105,7 @@ Les composables **n'appellent jamais l'infrastructure directement** — uniqueme
 | `ListCountriesUseCase` | Liste des pays WID |
 | `ListProfileYearsUseCase` | Années disponibles pour un profil |
 | `LoadProfileUseCase` | Profil 127 g-percentiles |
-| `LoadTimeSeriesUseCase` | Séries temporelles multi-pays |
-| `LoadScatterUseCase` | Nuage 2 variables joint par percentile |
+| `LoadTimeSeriesUseCase` | Séries temporelles par tranche de population |
 
 Le **bootstrap** (`bootstrap/container.ts`) initialise le registre WID et instancie les use cases. Plugin Nuxt : `app/plugins/application.client.ts`.
 
@@ -145,13 +142,13 @@ Code **100 % pur** (pas de Vue, pas de fetch, pas d'ECharts).
 ## 5. Parcours de données (exemple profil)
 
 ```
-panneau/population.vue
+panneau/trapeze.vue
   provide('widCountries')
-  └─ PanneauVisualisation.vue
-       └─ createWidProfileState()
+  └─ PanneauTrapeze.vue
+       └─ createWidTrapezoidState()
             ├─ app.loadProfile.execute()      ← use case
             │    └─ WidDataSource.fetchPercentileProfile()  ← infra
-            └─ buildProfileOption()           ← visualization
+            └─ buildTrapezoidOption()         ← visualization
        └─ EChart.vue
 ```
 

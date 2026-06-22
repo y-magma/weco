@@ -6,9 +6,9 @@ import { PANNEAU_TYPES } from '~/composables/panneauTypes'
   <div>
     <v-row class="mb-4">
       <v-col cols="12">
-        <h1 class="text-h4 font-weight-bold mb-1">Cas d'étude</h1>
+        <h1 class="text-h4 font-weight-bold mb-1">Exploration des données</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
-          Choisissez un type d'étude pour explorer les données WID.world.
+          Choisissez une méthode d'exploration pour explorer les données WID.world.
         </p>
       </v-col>
     </v-row>
