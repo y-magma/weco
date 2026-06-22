@@ -14,7 +14,7 @@ describe('resolveProfileAxisScales', () => {
     const scales = resolveProfileAxisScales({
       logScaleX: false,
       logScaleY: true,
-      populationDensity: false,
+      empiricalCdf: false,
       showPdf: false,
     })
     expect(scales.value).toBe(symlogValueScale)
@@ -25,18 +25,18 @@ describe('resolveProfileAxisScales', () => {
     const scales = resolveProfileAxisScales({
       logScaleX: true,
       logScaleY: false,
-      populationDensity: false,
+      empiricalCdf: false,
       showPdf: false,
     })
     expect(scales.rank).toBe(rankTopLogScale)
     expect(scales.value).toBe(linearValueScale)
   })
 
-  it('uses strict log on wealth X in population density when logScaleX is on', () => {
+  it('uses strict log on wealth X in empirical CDF view when logScaleX is on', () => {
     const scales = resolveProfileAxisScales({
       logScaleX: true,
       logScaleY: false,
-      populationDensity: true,
+      empiricalCdf: true,
       showPdf: false,
     })
     expect(scales.value).toBe(strictLogValueScale)

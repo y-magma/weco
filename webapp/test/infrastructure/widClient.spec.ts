@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   extractAvailableYears,
   parseAvailableCountriesResponse,
+  parseAvailableParamsResponse,
   parseProfileResponse,
   parseSeriesResponse,
 } from '@infrastructure/data-sources/wid/widClient'
@@ -75,6 +76,30 @@ describe('parseAvailableCountriesResponse', () => {
       { ahweal: { FR: [], US: [], DE: [] } },
     ])
     expect(codes).toEqual(['DE', 'FR', 'US'])
+  })
+})
+
+describe('parseAvailableParamsResponse', () => {
+  it('extracts unique age/pop combos for a country', () => {
+    const combos = parseAvailableParamsResponse([
+      {
+        ahweal: {
+          FR: [
+            ['p50p51', '992', 'j'],
+            ['p50p51', '992', 'i'],
+            ['p0p1', '992', 'j'],
+          ],
+        },
+      },
+    ], 'FR')
+    expect(combos).toEqual([
+      { age: '992', pop: 'i' },
+      { age: '992', pop: 'j' },
+    ])
+  })
+
+  it('returns an empty array when country is missing', () => {
+    expect(parseAvailableParamsResponse([{ ahweal: { FR: [] } }], 'US')).toEqual([])
   })
 })
 

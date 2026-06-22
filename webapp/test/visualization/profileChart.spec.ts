@@ -121,7 +121,7 @@ describe('buildProfileDataZoom', () => {
     expect(zooms.find((z) => z.type === 'slider' && z.xAxisIndex === 0)).toBeDefined()
   })
 
-  it('uses a horizontal slider for the value axis in population-density view', () => {
+  it('uses a horizontal slider for the value axis in empirical CDF view', () => {
     const zooms = buildProfileDataZoom(true)
     const valueSlider = zooms.find((z) => z.type === 'slider' && z.xAxisIndex === 0)
     expect(valueSlider).toBeDefined()
@@ -140,9 +140,9 @@ describe('buildProfileOption — value range zoom', () => {
     expect((option.xAxis as { max: number }).max).toBeLessThanOrEqual(55)
   })
 
-  it('zooms X (richesse) and Y (population %) in population-density view', () => {
+  it('zooms X (richesse) and Y (population %) in empirical CDF view', () => {
     const option = buildProfileOption(makeProfile(), {
-      populationDensity: true,
+      empiricalCdf: true,
       valueRange: { min: 10000, max: 100000 },
     })
     expect((option.xAxis as { min: number, max: number }).min).toBe(10000)
@@ -166,7 +166,7 @@ describe('computeBandAxisBounds', () => {
     const scales = resolveProfileAxisScales({
       logScaleX: false,
       logScaleY: true,
-      populationDensity: false,
+      empiricalCdf: false,
       showPdf: false,
     })
     const items = buildRankBandItems([
@@ -207,6 +207,25 @@ describe('createRenderRankBand', () => {
 
     expect(negative?.shape).toMatchObject({ y: 150, height: 75 })
     expect(positive?.shape).toMatchObject({ y: 0, height: 150 })
+  })
+
+  it('skips inverted segments when a positive value plots below the density floor', () => {
+    const render = createRenderRankBand(1e-12)
+    const grid = { x: 0, y: 0, width: 400, height: 300 }
+
+    const inverted = render(
+      { coordSys: grid } as Parameters<ReturnType<typeof createRenderRankBand>>[0],
+      {
+        value: (i: number) => [0, 1, 1e-14][i] as number,
+        coord: (pair: [number, number]) => {
+          if (pair[1] === 1e-12) return [50, 200]
+          return [50, 250]
+        },
+        style: () => ({}),
+      } as Parameters<ReturnType<typeof createRenderRankBand>>[1],
+    )
+
+    expect(inverted).toBeNull()
   })
 })
 
@@ -568,9 +587,9 @@ describe('buildProfileOption — threshold variable positioning', () => {
   })
 })
 
-describe('buildProfileOption — population density view', () => {
+describe('buildProfileOption — empirical CDF view', () => {
   it('swaps axes: X = value, Y = population share (average → interval midpoint)', () => {
-    const option = buildProfileOption(makeProfile(), { chartType: 'scatter', populationDensity: true })
+    const option = buildProfileOption(makeProfile(), { chartType: 'scatter', empiricalCdf: true })
     expect((option.xAxis as { name: string }).name).toContain('EUR')
     expect((option.yAxis as { name: string }).name).toBe('Part de population (%)')
     const pairs = seriesPairs(option)
@@ -582,7 +601,7 @@ describe('buildProfileOption — population density view', () => {
   it('routes logScaleX to the value axis and logScaleY to the rank axis', () => {
     const option = buildProfileOption(makeProfile(), {
       chartType: 'scatter',
-      populationDensity: true,
+      empiricalCdf: true,
       logScaleX: true,
       logScaleY: true,
     })
@@ -636,23 +655,42 @@ describe('computePdfBins', () => {
     expect(bins[1]!.density).toBeCloseTo((40 / 100) / (200000 - 50000))
   })
 
-  it('skips non-increasing wealth intervals', () => {
+  it('skips decreasing wealth intervals (Δv < 0)', () => {
     const bins = computePdfBins([
       { percentile: 'p0p1', rank: 0, value: 100 },
       { percentile: 'p50p51', rank: 50, value: 50 },
     ])
     expect(bins).toHaveLength(0)
   })
+
+  it('merges consecutive plateaus (Δv = 0) into one bin at the next wealth jump', () => {
+    const bins = computePdfBins([
+      { percentile: 'p40p41', rank: 40, value: 100_000 },
+      { percentile: 'p50p51', rank: 50, value: 100_000 },
+      { percentile: 'p60p61', rank: 60, value: 100_000 },
+      { percentile: 'p70p71', rank: 70, value: 200_000 },
+    ])
+    expect(bins).toHaveLength(1)
+    expect(bins[0]).toMatchObject({
+      valueLo: 100_000,
+      valueHi: 200_000,
+      rankLo: 40,
+      rankHi: 70,
+      density: (30 / 100) / (200_000 - 100_000),
+      percentileLo: 'p40p41',
+      percentileHi: 'p70p71',
+    })
+  })
 })
 
-describe('buildProfileOption — probability density view', () => {
+describe('buildProfileOption — empirical PDF view', () => {
   it('plots the empirical PDF on wealth vs density axes', () => {
     const option = buildProfileOption(makeProfile(), {
-      populationDensity: true,
-      probabilityDensity: true,
+      empiricalCdf: true,
+      empiricalPdf: true,
     })
     expect((option.xAxis as { name: string }).name).toContain('EUR')
-    expect((option.yAxis as { name: string }).name).toContain('Densité de probabilité')
+    expect((option.yAxis as { name: string }).name).toContain('PDF empirique')
     const pairs = seriesPairs(option)
     expect(pairs.length).toBeGreaterThan(0)
     expect(pairs[0]![1]).toBeGreaterThan(0)
@@ -660,8 +698,8 @@ describe('buildProfileOption — probability density view', () => {
 
   it('routes logScaleY to the density axis', () => {
     const option = buildProfileOption(makeProfile(), {
-      populationDensity: true,
-      probabilityDensity: true,
+      empiricalCdf: true,
+      empiricalPdf: true,
       logScaleY: true,
     })
     expect((option.yAxis as { type: string }).type).toBe('log')
@@ -677,8 +715,8 @@ describe('buildProfileOption — probability density view', () => {
       ],
     })
     const option = buildProfileOption(profile, {
-      populationDensity: true,
-      probabilityDensity: true,
+      empiricalCdf: true,
+      empiricalPdf: true,
       chartType: 'bar',
       logScaleY: true,
     })
@@ -690,8 +728,79 @@ describe('buildProfileOption — probability density view', () => {
     expect(series.data[0]!.value[0]).toBe(1000)
     expect(series.data[0]!.value[1]).toBe(50_000)
     expect(yAxis.scale).toBe(false)
-    expect(yAxis.min).toBeUndefined()
-    expect(yAxis.max).toBeUndefined()
+    expect(yAxis.min).toBeDefined()
+    expect(yAxis.max).toBeDefined()
+    const minDensity = Math.min(...densities)
+    expect(yAxis.min!).toBeLessThanOrEqual(minDensity)
+    expect(yAxis.max!).toBeGreaterThan(Math.max(...densities))
     expect(Math.min(...densities)).toBeGreaterThan(0)
+  })
+})
+
+function makeThresholdProfile(): PercentileProfile {
+  return makeProfile({
+    variable: 'thweal',
+    kind: 'threshold',
+    points: [
+      { percentile: 'p0p1', rank: 0, value: 1000 },
+      { percentile: 'p50p51', rank: 50, value: 50_000 },
+      { percentile: 'p90p91', rank: 90, value: 500_000 },
+    ],
+  })
+}
+
+function seriesNames(option: ReturnType<typeof buildProfileOption>): string[] {
+  return (option.series as { name?: string }[]).map((series) => series.name ?? '')
+}
+
+describe('buildProfileOption — smooth CDF/PDF', () => {
+  it('shows empirical and smooth CDF series when mode is both', () => {
+    const option = buildProfileOption(makeThresholdProfile(), {
+      empiricalCdf: true,
+      chartType: 'line',
+      smoothDistributionMode: 'both',
+    })
+    const names = seriesNames(option)
+    expect(names).toContain('thweal')
+    expect(names).toContain('CDF lissée')
+  })
+
+  it('shows only smooth CDF when mode is smooth', () => {
+    const option = buildProfileOption(makeThresholdProfile(), {
+      empiricalCdf: true,
+      chartType: 'line',
+      smoothDistributionMode: 'smooth',
+    })
+    const names = seriesNames(option)
+    expect(names).not.toContain('thweal')
+    expect(names).toContain('CDF lissée')
+  })
+
+  it('shows smooth PDF overlay when empirical PDF and mode both', () => {
+    const option = buildProfileOption(makeThresholdProfile(), {
+      empiricalCdf: true,
+      empiricalPdf: true,
+      chartType: 'line',
+      smoothDistributionMode: 'both',
+    })
+    const names = seriesNames(option)
+    expect(names).toContain('PDF empirique')
+    expect(names).toContain('PDF lissée')
+  })
+
+  it('shows smooth CDF with logX when only smooth mode is active', () => {
+    const option = buildProfileOption(makeThresholdProfile(), {
+      empiricalCdf: true,
+      chartType: 'line',
+      logScaleX: true,
+      smoothDistributionMode: 'smooth',
+    })
+    const names = seriesNames(option)
+    expect(names).toContain('CDF lissée')
+    expect(names).not.toContain('thweal')
+    const xAxis = option.xAxis as { type: string, min?: number, max?: number }
+    expect(xAxis.type).toBe('log')
+    expect(xAxis.min).toBeGreaterThan(0)
+    expect(xAxis.max).toBeGreaterThan(xAxis.min!)
   })
 })

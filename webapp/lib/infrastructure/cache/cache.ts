@@ -5,6 +5,12 @@ interface CacheEntry<T> {
 
 const DEFAULT_TTL_MS = 5 * 60 * 1000
 
+/** Metadata (age/pop combos, countries per variable) — rarely changes. */
+export const CACHE_TTL_METADATA_MS = 24 * 60 * 60 * 1000
+
+/** Available years for a param combo. */
+export const CACHE_TTL_YEARS_MS = 60 * 60 * 1000
+
 export class DataSourceCache {
   private store = new Map<string, CacheEntry<unknown>>()
 

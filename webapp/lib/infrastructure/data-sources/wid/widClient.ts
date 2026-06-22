@@ -1,8 +1,8 @@
 import { fetchJson } from '@infrastructure/http/fetchJson'
 import type { DataSeries, SeriesPoint } from '@domain/entities'
 import { buildWidApiKeyHeader } from '@infrastructure/data-sources/wid/widApiKey'
-import { buildGPercentiles, parsePercentileRank } from '@domain/services/percentiles'
-import { buildVariableCode } from '@domain/catalog/widCodes'
+import { parsePercentileRank } from '@domain/services/percentiles'
+import { buildVariableCode, profilePercentilesFor, profileYearProbePercentiles } from '@domain/catalog/widCodes'
 import { formatCountryLabel } from '@domain/catalog/countryLabels'
 
 export interface WidClientConfig {
@@ -103,9 +103,6 @@ export function parseProfileResponse(
   return rows
 }
 
-/** Representative g-percentiles used to probe the year span of a profile variable. */
-const PROFILE_YEAR_PROBE_PERCENTILES = ['p50p51', 'p0p1', 'p90p100'] as const
-
 /** Unique years from API rows, most recent first. */
 export function extractAvailableYears(rows: Array<{ year: number }>): number[] {
   const years = new Set<number>()
@@ -169,6 +166,42 @@ export function parseAvailableCountriesResponse(response: unknown): string[] {
   return [...codes].sort()
 }
 
+export interface WidParamComboRow {
+  age: string
+  pop: string
+}
+
+/**
+ * Parse age/pop combos for one country from `countries-available-variables`.
+ * Each country entry is an array of triplets `[percentile, age, pop]`.
+ */
+export function parseAvailableParamsResponse(
+  response: unknown,
+  countryCode: string,
+): WidParamComboRow[] {
+  const combos = new Map<string, WidParamComboRow>()
+  const entries = Array.isArray(response) ? response : [response]
+
+  for (const item of entries) {
+    if (!item || typeof item !== 'object') continue
+    for (const byCountry of Object.values(item as Record<string, unknown>)) {
+      if (!byCountry || typeof byCountry !== 'object') continue
+      const triplets = (byCountry as Record<string, unknown>)[countryCode]
+      if (!Array.isArray(triplets)) continue
+      for (const triplet of triplets) {
+        if (!Array.isArray(triplet) || triplet.length < 3) continue
+        const age = String(triplet[1])
+        const pop = String(triplet[2])
+        combos.set(`${age}:${pop}`, { age, pop })
+      }
+    }
+  }
+
+  return [...combos.values()].sort((a, b) =>
+    a.age.localeCompare(b.age) || a.pop.localeCompare(b.pop),
+  )
+}
+
 export class WidClient {
   private readonly baseUrl: string
   private readonly apiKeyHeader?: string
@@ -188,15 +221,26 @@ export class WidClient {
     return headers
   }
 
-  async listCountries(): Promise<{ code: string; label: string }[]> {
+  async listCountries(params: { sixlet: string }): Promise<{ code: string; label: string }[]> {
     const response = await fetchJson<unknown>(
-      `${this.baseUrl}/countries-available-variables?countries=all&variables=ahweal`,
+      `${this.baseUrl}/countries-available-variables?countries=all&variables=${encodeURIComponent(params.sixlet)}`,
       { headers: this.headers() },
     )
     return parseAvailableCountriesResponse(response).map((code) => ({
       code,
       label: formatCountryLabel(code),
     }))
+  }
+
+  async listAvailableParams(params: {
+    area: string
+    sixlet: string
+  }): Promise<WidParamComboRow[]> {
+    const response = await fetchJson<unknown>(
+      `${this.baseUrl}/countries-available-variables?countries=${encodeURIComponent(params.area)}&variables=${encodeURIComponent(params.sixlet)}`,
+      { headers: this.headers() },
+    )
+    return parseAvailableParamsResponse(response, params.area)
   }
 
   async fetchData(params: {
@@ -232,7 +276,7 @@ export class WidClient {
     pop: string
     year: number
   }): Promise<WidProfileRow[]> {
-    const codes = buildGPercentiles().map((percentile) =>
+    const codes = profilePercentilesFor(params.sixlet).map((percentile) =>
       buildVariableCode(params.sixlet, percentile, params.age, params.pop),
     )
 
@@ -264,7 +308,7 @@ export class WidClient {
     age: string
     pop: string
   }): Promise<number[]> {
-    const codes = PROFILE_YEAR_PROBE_PERCENTILES.map((percentile) =>
+    const codes = profileYearProbePercentiles(params.sixlet).map((percentile) =>
       buildVariableCode(params.sixlet, percentile, params.age, params.pop),
     )
     const searchParams = new URLSearchParams()

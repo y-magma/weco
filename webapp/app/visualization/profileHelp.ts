@@ -1,5 +1,5 @@
 import type { PercentileProfile } from '@domain/entities'
-import { WID_G_PERCENTILE_COUNT } from '@domain/catalog/widCodes'
+import { expectedProfilePointCount, WID_G_PERCENTILE_COUNT } from '@domain/catalog/widCodes'
 
 import type { ProfileChartType } from '~/visualization/profile'
 
@@ -7,8 +7,8 @@ export interface ProfileHelpContext {
   chartType: ProfileChartType
   logScaleX: boolean
   logScaleY: boolean
-  populationDensity: boolean
-  probabilityDensity: boolean
+  empiricalCdf: boolean
+  empiricalPdf: boolean
   lorenzCurve: boolean
   profile: PercentileProfile | null
 }
@@ -18,7 +18,7 @@ export const PROFILE_HELP = {
     title: 'Type de graphique',
     paragraphs: [
       'Les 127 g-percentiles WID sont triés par rang croissant. Chaque point correspond à une tranche de population (ex. p50p51 = entre le 50e et le 51e percentile).',
-      'Bandes : une bande par tranche, largeur = intervalle de population (ou de richesse en densité de probabilité), hauteur = valeur ou densité.',
+      'Bandes : une bande par tranche, largeur = intervalle de population (ou de richesse en PDF empirique), hauteur = valeur ou densité.',
       'Nuage : un marqueur par tranche, sans liaison entre les points. Variable moyenne (a…) : marqueur au centre de la tranche ]i, k] ; variable seuil (t…) : à la borne basse i.',
       'Ligne : segments reliant les points consécutifs (courbe polyligne). Même règle de positionnement sur l’axe population que le nuage.',
       'Vous pouvez sélectionner deux types en même temps : Bandes + Nuage ou Bandes + Ligne superposent les bandes en filigrane sous le nuage ou la ligne.',
@@ -26,8 +26,8 @@ export const PROFILE_HELP = {
       'À l’ouverture, les axes sont cadrés sur les bandes ; les curseurs de zoom permettent d’élargir la vue jusqu’à l’étendue complète de la ligne ou du nuage.',
     ],
   },
-  populationDensity: {
-    title: 'Densité de population',
+  empiricalCdf: {
+    title: 'CDF empirique',
     paragraphs: [
       'Les axes sont inversés par rapport au profil standard : abscisse = richesse (valeur de la variable), ordonnée = part de population (rang percentile en %).',
       'Chaque point (x, y) associe le seuil ou la moyenne de richesse x à la part y de la population située en dessous de ce niveau.',
@@ -46,14 +46,26 @@ export const PROFILE_HELP = {
       'Approximation discrète à partir des g-percentiles WID : plus rigoureuse avec une variable seuil (t…), indicative avec une variable moyenne (a…).',
     ],
   },
-  probabilityDensity: {
-    title: 'Densité de probabilité',
+  empiricalPdf: {
+    title: 'PDF empirique',
     paragraphs: [
-      'Cette vue dérive la courbe de répartition (CDF) affichée en mode « Densité de population ».',
-      'Entre deux tranches de percentiles consécutives i et i+1, on calcule la dérivée empirique : f = ΔF / Δx = (rangᵢ₊₁ − rangᵢ) / (100 × (valeurᵢ₊₁ − valeurᵢ)).',
-      'Abscisse = richesse (largeur ]valeurᵢ, valeurᵢ₊₁] en mode Bandes, borne basse en mode Ligne). Ordonnée = densité de probabilité (unité : 1 / unité de richesse, ex. 1/EUR).',
-      'Les intervalles où la richesse ne croît pas (Δx ≤ 0) ou les valeurs manquantes sont ignorés.',
+      'Cette vue dérive la courbe de répartition (CDF) affichée en mode « CDF empirique ».',
+      'Entre deux segments de percentiles, on calcule la dérivée empirique : f = ΔF / Δx = (rangⱼ − rangᵢ) / (100 × (valeurⱼ − valeurᵢ)).',
+      'Plateau (Δx = 0) : les tranches consécutives à la même richesse sont fusionnées ; le bin est émis au prochain saut strictement positif.',
+      'Abscisse = richesse (largeur ]valeurᵢ, valeurⱼ] en mode Bandes, borne basse en mode Ligne). Ordonnée = PDF empirique (unité : 1 / unité de richesse, ex. 1/EUR).',
+      'Les intervalles où la richesse décroît (Δx < 0) ou les valeurs manquantes sont ignorés.',
       'Interprétation la plus rigoureuse avec une variable seuil (t…). Seules les variables seuil sont sélectionnables dans ce mode. En mode Bandes, l’histogramme est le plus lisible.',
+    ],
+  },
+  smoothDistribution: {
+    title: 'CDF / PDF lissée (spline monotone)',
+    paragraphs: [
+      'Approximation non paramétrique : une spline cubique monotone (PCHIP) est construite sur les nœuds de la CDF empirique F(x) = rang % / 100 aux seuils de richesse.',
+      'La CDF lissée interpole ces nœuds sans assumer une loi (Pareto, log-normale, etc.). La PDF lissée est la dérivée f(x) = F′(x) de cette spline.',
+      'Modes d’affichage : activez Empirique et/ou Lissée — les deux boutons enfoncés superposent les courbes.',
+      'Transformation affichée explicitement — les données brutes WID ne sont pas modifiées ni interpolées silencieusement.',
+      'Interprétation rigoureuse avec une variable seuil (t…). Avec une variable moyenne (a…), la CDF/PDF lissée reste indicative.',
+      'Avec logX sur la richesse, la spline est construite sur log(x) ; la PDF tient compte de la règle de chaîne.',
     ],
   },
   logScaleX: {
@@ -61,16 +73,16 @@ export const PROFILE_HELP = {
     paragraphs: [
       'L’échelle log s’applique à l’axe horizontal tel qu’il est affiché.',
       'Profil standard : espacement logarithmique depuis le 100 % — les points sont placés en −log₁₀(100 − rang), mais les graduations affichent le rang réel (0 % à gauche, 100 % à droite).',
-      'Densité de population ou de probabilité : échelle logarithmique sur la richesse. Les valeurs ≤ 0 sont masquées (trou dans la courbe).',
+      'CDF empirique ou PDF empirique : échelle logarithmique sur la richesse. Les valeurs ≤ 0 sont masquées (trou dans la courbe).',
     ],
   },
   logScaleY: {
     title: 'Échelle log (ordonnée)',
     paragraphs: [
       'L’échelle log s’applique à l’axe vertical tel qu’il est affiché.',
-      'Profil standard : échelle symlog sur la richesse — f(x) = signe(x)·log₁₀(1+|x|), graduations en valeurs réelles x (y compris ≤ 0).',
-      'Densité de population : espacement logarithmique sur la part de population (même transform −log₁₀(100 − rang) que pour l’axe X en profil standard), graduations en rang % réel.',
-      'Densité de probabilité : échelle logarithmique sur la densité f. Les valeurs ≤ 0 sont masquées.',
+      'Profil standard : échelle logarithmique sur la richesse (log₁₀). Seules les valeurs strictement positives sont affichées ; les valeurs ≤ 0 sont masquées (trou dans la courbe).',
+      'CDF empirique : espacement logarithmique sur la part de population (même transform −log₁₀(100 − rang) que pour l’axe X en profil standard), graduations en rang % réel.',
+      'PDF empirique : échelle logarithmique sur la densité f. Les valeurs ≤ 0 sont masquées.',
     ],
   },
   showAllPercentiles: {
@@ -117,24 +129,36 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
   title: string
   paragraphs: string[]
 } {
-  const { chartType, logScaleX, logScaleY, populationDensity, probabilityDensity, lorenzCurve, profile } = ctx
+  const { chartType, logScaleX, logScaleY, empiricalCdf, empiricalPdf, lorenzCurve, profile } = ctx
   const unit = profile?.unit ?? 'unité'
   const kind = profile?.kind
   const kindLabel = kind === 'threshold'
     ? 'seuil (t…)'
     : kind === 'average'
       ? 'moyenne (a…)'
-      : profile?.variable.startsWith('l')
-        ? 'émissions de groupe (l…)'
-        : 'autre'
+      : kind === 'share'
+        ? 'part (s…)'
+        : kind === 'gini'
+          ? 'Gini (g…)'
+          : profile?.variable.startsWith('l')
+            ? 'émissions de groupe (l…)'
+            : 'autre'
 
   const pointCount = profile?.points.length ?? 0
+  const expectedPoints = profile ? expectedProfilePointCount(profile.variable) : WID_G_PERCENTILE_COUNT
   const paragraphs: string[] = [
-    `Données brutes : ${pointCount || '—'} g-percentiles WID pour ${profile?.label ?? 'la sélection courante'}. Variable de type ${kindLabel}, unité ${unit}.`,
+    kind === 'gini'
+      ? `Indicateur agrégé : coefficient de Gini pour ${profile?.label ?? 'la sélection courante'} (${pointCount || '—'} valeur). Unité : ${unit}. Utilisez la série temporelle pour suivre son évolution.`
+      : `Données brutes : ${pointCount || '—'} g-percentiles WID pour ${profile?.label ?? 'la sélection courante'}. Variable de type ${kindLabel}, unité ${unit}.`,
   ]
-  if (pointCount > 0 && pointCount < WID_G_PERCENTILE_COUNT) {
+  if (kind !== 'gini' && pointCount > 0 && pointCount < expectedPoints) {
     paragraphs.push(
-      `Centiles disponibles : ${pointCount} sur ${WID_G_PERCENTILE_COUNT} demandés à l'API (selon pays, année et variable).`,
+      `Centiles disponibles : ${pointCount} sur ${expectedPoints} demandés à l'API (selon pays, année et variable).`,
+    )
+  }
+  if (kind === 'share') {
+    paragraphs.push(
+      'Les parts (s…) indiquent la fraction du total captée par chaque tranche de population (valeurs entre 0 et 1).',
     )
   }
 
@@ -147,16 +171,16 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
         ? 'Variable seuil : les valeurs sont des seuils de richesse — approximation standard pour une Lorenz empirique.'
         : 'Variable moyenne : les valeurs sont des moyennes par tranche — approximation indicative de la concentration.',
     )
-  } else if (probabilityDensity) {
+  } else if (empiricalPdf) {
     paragraphs.push(
-      'Vue active : densité de probabilité (dérivée de la CDF).',
+      'Vue active : PDF empirique (dérivée de la CDF).',
       'Seules les variables seuil (préfixe t…) sont disponibles dans ce mode.',
       'Abscisse X = richesse. Ordonnée Y = f(x) = Δ(rang % / 100) / Δ(valeur) entre tranches consécutives.',
       `Formule par intervalle [valeurᵢ, valeurᵢ₊₁] : f = (rangᵢ₊₁ − rangᵢ) / (100 × (valeurᵢ₊₁ − valeurᵢ)).`,
     )
-  } else if (populationDensity) {
+  } else if (empiricalCdf) {
     paragraphs.push(
-      'Vue active : densité de population (axes inversés, CDF empirique).',
+      'Vue active : CDF empirique (axes inversés).',
       'Abscisse X = richesse (valeur). Ordonnée Y = part de population cumulée (rang percentile en %).',
       kind === 'threshold'
         ? 'Variable seuil : la courbe relie les points d’une fonction de répartition F(x) empirique.'
@@ -183,7 +207,7 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
   }
 
   if (logScaleX) {
-    if (populationDensity || probabilityDensity) {
+    if (empiricalCdf || empiricalPdf) {
       paragraphs.push('Échelle log (X) : richesse en échelle logarithmique ; valeurs ≤ 0 exclues.')
     } else {
       paragraphs.push(
@@ -193,9 +217,9 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
   }
 
   if (logScaleY) {
-    if (probabilityDensity) {
+    if (empiricalPdf) {
       paragraphs.push('Échelle log (Y) : densité f en échelle logarithmique.')
-    } else if (populationDensity) {
+    } else if (empiricalCdf) {
       paragraphs.push(
         'Échelle log (Y) : espacement −log₁₀(100 − rang) sur la part de population ; graduations en rang % réel.',
       )
@@ -210,7 +234,7 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
     paragraphs.push('Axes linéaires 0–100 % (échelles log désactivées en mode Lorenz).')
   }
 
-  if (!lorenzCurve && !probabilityDensity
+  if (!lorenzCurve && !empiricalPdf
     && (chartType === 'line' || chartType === 'scatter' || chartType === 'line-bar' || chartType === 'scatter-bar')) {
     if (kind === 'average') {
       paragraphs.push(
@@ -223,7 +247,7 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
     }
   }
 
-  if (!logScaleX && !logScaleY && !populationDensity && !probabilityDensity && !lorenzCurve
+  if (!logScaleX && !logScaleY && !empiricalCdf && !empiricalPdf && !lorenzCurve
     && (chartType === 'line' || chartType === 'line-bar')) {
     paragraphs.push('Sans option log : axes linéaires. Segments reliant les points consécutifs de chaque tranche de percentile.')
   }

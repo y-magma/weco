@@ -3,8 +3,10 @@ import type { CountryOption } from '@domain/entities'
 
 withDefaults(defineProps<{
   chartHeight?: string
+  showDataSourceSection?: boolean
 }>(), {
   chartHeight: '380px',
+  showDataSourceSection: true,
 })
 
 const countries = inject<Ref<CountryOption[]>>('widCountries')
@@ -13,6 +15,7 @@ if (!countries) {
 }
 
 const paramsInSidebar = inject<Ref<boolean>>('paramsInSidebar', ref(false))
+const { sourceId, sourceLabel } = usePanneauDataSource()
 
 const state = createWidSeriesCompareState({ countries })
 
@@ -33,6 +36,8 @@ const {
   chartOption,
   variableMeta,
   yearCountLabel,
+  yearRangeLabel,
+  paramsLoading,
   load,
 } = state
 
@@ -51,6 +56,8 @@ onMounted(() => {
       panel-type="temps"
       :default-expanded="true"
     >
+      <PanneauDataSourceSection v-if="showDataSourceSection" v-model="sourceId" />
+
       <div class="text-subtitle-2 font-weight-medium mb-2">
         Comparaison multi-pays — une tranche de population
       </div>
@@ -108,6 +115,8 @@ onMounted(() => {
                 <v-select
                   v-model="age"
                   :items="ageOptions"
+                  :loading="paramsLoading"
+                  :disabled="paramsLoading || ageOptions.length === 0"
                   item-title="label"
                   item-value="value"
                   label="Âge"
@@ -118,11 +127,14 @@ onMounted(() => {
                 <v-select
                   v-model="pop"
                   :items="popOptions"
+                  :loading="paramsLoading"
+                  :disabled="paramsLoading || popOptions.length === 0"
                   item-title="label"
                   item-value="value"
                   label="Population"
                   density="compact"
-                  hide-details
+                  :hint="yearRangeLabel ? `Années disponibles : ${yearRangeLabel}` : undefined"
+                  persistent-hint
                 />
               </v-expansion-panel-text>
             </v-expansion-panel>
@@ -161,13 +173,16 @@ onMounted(() => {
 
       <div class="d-flex flex-wrap ga-2 mb-2">
         <v-chip v-if="seriesList.length" size="x-small" color="primary" variant="tonal">
-          Source : WID.world
+          Source : {{ sourceLabel }}
         </v-chip>
         <v-chip v-if="variableMeta?.unit" size="x-small" variant="tonal">
           Unité : {{ variableMeta.unit }}
         </v-chip>
         <v-chip v-if="seriesList.length" size="x-small" variant="tonal">
           {{ seriesList.length }} pays
+        </v-chip>
+        <v-chip v-if="yearRangeLabel" size="x-small" variant="tonal">
+          Plage : {{ yearRangeLabel }}
         </v-chip>
         <v-chip v-if="yearCountLabel" size="x-small" variant="tonal">
           {{ yearCountLabel }}

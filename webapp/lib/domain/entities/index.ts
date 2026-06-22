@@ -59,6 +59,27 @@ export interface CountryOption {
   label: string
 }
 
+export interface ListCountriesParams {
+  /** Six-letter variable used to probe country availability. */
+  variable: string
+}
+
+export interface ListAvailableParamsParams {
+  countryCode: string
+  variable: string
+}
+
+export interface WidParamComboEntity {
+  age: string
+  pop: string
+}
+
+export interface WidParamAvailabilityEntity {
+  combos: WidParamComboEntity[]
+  ages: string[]
+  pops: string[]
+}
+
 export interface FetchVariableTimeSeriesParams {
   countryCode: string
   /** Six-letter variable, e.g. `ahweal`. */

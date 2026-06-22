@@ -2,6 +2,7 @@
 definePageMeta({ layout: 'default' })
 
 const { countriesError } = useWidCountriesProvider()
+usePanneauDataSourceProvider()
 </script>
 
 <template>

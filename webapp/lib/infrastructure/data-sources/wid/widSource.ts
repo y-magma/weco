@@ -1,15 +1,23 @@
 import type {
   CountryOption,
+  DataSeries,
   FetchProfileParams,
   FetchVariableTimeSeriesParams,
+  ListAvailableParamsParams,
+  ListCountriesParams,
   ListProfileYearsParams,
   PercentilePoint,
   PercentileProfile,
-  DataSeries,
+  WidParamAvailabilityEntity,
 } from '@domain/entities'
 import { findWidVariable, measureKind } from '@domain/catalog/widCodes'
+import { buildParamAvailability } from '@domain/services/widParamAvailability'
 import type { DataSourcePort, DataSourceStatus } from '@domain/ports/DataSourcePort'
-import { dataSourceCache } from '@infrastructure/cache/cache'
+import {
+  CACHE_TTL_METADATA_MS,
+  CACHE_TTL_YEARS_MS,
+  dataSourceCache,
+} from '@infrastructure/cache/cache'
 import {
   WID_EMPTY_COUNTRIES_ERROR,
   WID_NO_API_KEY_ERROR,
@@ -54,19 +62,20 @@ export class WidDataSource implements DataSourcePort {
     return this.liveClient
   }
 
-  async listCountries(): Promise<CountryOption[]> {
-    const cacheKey = dataSourceCache.buildKey(this.id, 'countries', {})
+  async listCountries(params?: ListCountriesParams): Promise<CountryOption[]> {
+    const variable = params?.variable ?? 'ahweal'
+    const cacheKey = dataSourceCache.buildKey(this.id, 'countries', { variable })
     const cached = dataSourceCache.get<CountryOption[]>(cacheKey)
     if (cached?.length) return cached
 
     const client = this.requireLiveClient()
 
     try {
-      const countries = await client.listCountries()
+      const countries = await client.listCountries({ sixlet: variable })
       if (countries.length > 0) {
         this.lastFetchAt = new Date().toISOString()
         this.lastError = undefined
-        dataSourceCache.set(cacheKey, countries)
+        dataSourceCache.set(cacheKey, countries, CACHE_TTL_METADATA_MS)
         return countries
       }
 
@@ -76,6 +85,31 @@ export class WidDataSource implements DataSourcePort {
       if (error instanceof Error && error.message === WID_EMPTY_COUNTRIES_ERROR) {
         throw error
       }
+      this.lastError = widApiRequestError(error)
+      throw new Error(this.lastError)
+    }
+  }
+
+  async listAvailableParams(params: ListAvailableParamsParams): Promise<WidParamAvailabilityEntity> {
+    const cacheKey = dataSourceCache.buildKey(this.id, 'available-params', params)
+    const cached = dataSourceCache.get<WidParamAvailabilityEntity>(cacheKey)
+    if (cached) return cached
+
+    const client = this.requireLiveClient()
+
+    try {
+      const combos = await client.listAvailableParams({
+        area: params.countryCode,
+        sixlet: params.variable,
+      })
+      const availability = buildParamAvailability(combos)
+      if (availability.combos.length > 0) {
+        this.lastFetchAt = new Date().toISOString()
+        this.lastError = undefined
+        dataSourceCache.set(cacheKey, availability, CACHE_TTL_METADATA_MS)
+      }
+      return availability
+    } catch (error) {
       this.lastError = widApiRequestError(error)
       throw new Error(this.lastError)
     }
@@ -152,7 +186,7 @@ export class WidDataSource implements DataSourcePort {
       if (years.length > 0) {
         this.lastFetchAt = new Date().toISOString()
         this.lastError = undefined
-        dataSourceCache.set(cacheKey, years)
+        dataSourceCache.set(cacheKey, years, CACHE_TTL_YEARS_MS)
       }
 
       return years

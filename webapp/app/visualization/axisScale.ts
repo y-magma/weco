@@ -203,6 +203,29 @@ export const linearRankScale: RankAxisScale = {
   },
 }
 
+export const strictLogRankScale: RankAxisScale = {
+  id: 'strict-log-rank',
+  toPlotCoord: (raw) => (raw > 0 && Number.isFinite(raw) ? raw : null),
+  toDisplayValue: (stored) => stored,
+  formatTick: (stored) => `${formatRankPercent(stored)} %`,
+  echartsType: 'log',
+  echartsScale: false,
+  acceptsRaw: (raw) => raw > 0,
+  axisBounds(lo, hi) {
+    const min = Math.max(1e-6, lo / 2)
+    return { min, max: Math.min(100, hi * 2), base: min }
+  },
+  applyZoom() {},
+  rankBound: (bound) => (bound > 0 && Number.isFinite(bound) ? bound : null),
+  applyRankExtent(axis, extent) {
+    if (!extent) return
+    const lo = strictLogRankScale.rankBound(extent.rankLo)
+    const hi = strictLogRankScale.rankBound(extent.rankHi)
+    if (lo != null) axis.min = Math.max(1e-6, lo / 2)
+    if (hi != null) axis.max = Math.min(100, hi * 2)
+  },
+}
+
 export const rankTopLogScale: RankAxisScale = {
   id: 'rank-top-log',
   toPlotCoord: (raw) => rankDisplayCoordinate(raw),
@@ -265,8 +288,13 @@ export const strictLogDensityScale: AxisScale = {
   echartsScale: false,
   acceptsRaw: (raw) => raw > 0,
   axisBounds(lo, hi) {
-    const min = Math.max(1e-12, lo / 2)
-    return { min, max: hi * 2, base: min }
+    if (lo <= 0 || hi <= 0) {
+      const floor = 1e-12
+      return { min: floor, max: floor * 10, base: floor }
+    }
+    const min = lo / 2
+    const max = hi * 2
+    return { min, max, base: min }
   },
   applyZoom() {},
 }
@@ -275,24 +303,18 @@ export const strictLogDensityScale: AxisScale = {
 export function resolveProfileAxisScales(options: {
   logScaleX: boolean
   logScaleY: boolean
-  populationDensity: boolean
+  empiricalCdf: boolean
   showPdf: boolean
 }): ProfileAxisScales {
-  const { logScaleX, logScaleY, populationDensity, showPdf } = options
+  const { logScaleX, logScaleY, empiricalCdf, showPdf } = options
 
-  const rankLog = populationDensity ? (showPdf ? false : logScaleY) : logScaleX
-  const valueLog = populationDensity ? logScaleX : logScaleY
+  const rankLog = empiricalCdf ? (showPdf ? false : logScaleY) : logScaleX
+  const valueLog = empiricalCdf ? logScaleX : logScaleY
   const densityLog = showPdf ? logScaleY : false
-
-  const valueUsesSymlog = valueLog && !populationDensity && !showPdf
 
   return {
     rank: rankLog ? rankTopLogScale : linearRankScale,
-    value: valueUsesSymlog
-      ? symlogValueScale
-      : valueLog
-        ? strictLogValueScale
-        : linearValueScale,
+    value: valueLog ? strictLogValueScale : linearValueScale,
     density: densityLog ? strictLogDensityScale : linearDensityScale,
   }
 }
@@ -327,15 +349,49 @@ export function applyDualAxisZoom(
     rankPoints: { rank: number, percentile: string }[]
     rankScale: RankAxisScale
     valueScale: AxisScale
-    populationDensity: boolean
+    empiricalCdf: boolean
     rankIntervalExtent: { rankLo: number, rankHi: number } | null
   },
 ): void {
   if (!isValueRangeZoomActive(options.valueRange)) return
-  const rankAxis = options.populationDensity ? yAxis : xAxis
-  const valueAxis = options.populationDensity ? xAxis : yAxis
+  const rankAxis = options.empiricalCdf ? yAxis : xAxis
+  const valueAxis = options.empiricalCdf ? xAxis : yAxis
   options.valueScale.applyZoom(valueAxis, options.valueRange!)
   options.rankScale.applyRankExtent(rankAxis, options.rankIntervalExtent)
+}
+
+/** Merge histogram band bounds with raw data extrema (log Y must fit the curve tail). */
+export function mergeLogValueAxisExtent(
+  valueScale: AxisScale,
+  positiveValues: number[],
+  bandBounds?: { yMin?: number, yMax?: number, yBase?: number } | null,
+): AxisScaleBounds {
+  const dataBounds = positiveValues.length > 0
+    ? valueScale.axisBounds(Math.min(...positiveValues), Math.max(...positiveValues))
+    : null
+
+  const hasBand = bandBounds != null
+    && (bandBounds.yMin != null || bandBounds.yMax != null)
+
+  if (!dataBounds && !hasBand) {
+    return { base: 1e-6 }
+  }
+  if (!dataBounds && hasBand) {
+    return { min: bandBounds!.yMin, max: bandBounds!.yMax, base: bandBounds!.yBase ?? 1e-6 }
+  }
+  if (dataBounds && !hasBand) {
+    return dataBounds
+  }
+
+  return {
+    min: bandBounds!.yMin != null && dataBounds!.min != null
+      ? Math.min(bandBounds!.yMin, dataBounds!.min)
+      : bandBounds!.yMin ?? dataBounds!.min,
+    max: bandBounds!.yMax != null && dataBounds!.max != null
+      ? Math.max(bandBounds!.yMax, dataBounds!.max)
+      : bandBounds!.yMax ?? dataBounds!.max,
+    base: Math.min(bandBounds!.yBase ?? dataBounds!.base, dataBounds!.base),
+  }
 }
 
 export function isValueRangeZoomActive(range?: ValueRangeZoom): boolean {
@@ -368,6 +424,19 @@ export function applyPdfDensityAxisExtent(
   const lo = Math.min(...densities)
   const hi = Math.max(...densities)
   const bounds = scale.axisBounds(lo, hi)
+  axis.min = bounds.min
+  axis.max = bounds.max
+}
+
+/** Fit a wealth (value) axis to plotted coordinates (e.g. smooth CDF alone on log X). */
+export function applyValueAxisExtentFromPlots(
+  axis: { min?: number, max?: number },
+  scale: AxisScale,
+  plotValues: number[],
+) {
+  const finite = plotValues.filter((v) => Number.isFinite(v))
+  if (finite.length === 0) return
+  const bounds = pdfValueAxisBounds(scale, Math.min(...finite), Math.max(...finite))
   axis.min = bounds.min
   axis.max = bounds.max
 }

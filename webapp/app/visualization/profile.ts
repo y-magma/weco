@@ -9,6 +9,7 @@ import { buildChartToolbox } from '~/visualization/chartZoom'
 import {
   applyDualAxisZoom as applyScaleDualAxisZoom,
   applyPdfDensityAxisExtent,
+  applyValueAxisExtentFromPlots,
   buildEchartsAxis,
   formatStoredAxisValue,
   isValueRangeZoomActive,
@@ -18,8 +19,60 @@ import {
   type RankAxisScale,
   type ValueRangeZoom,
 } from '~/visualization/axisScale'
+import {
+  buildSmoothDistributionSpline,
+  sampleSmoothCdfSeries,
+  sampleSmoothPdfSeries,
+  type SmoothDistributionMode,
+} from '~/visualization/empiricalDistributionSmooth'
+
+export type { SmoothDistributionMode } from '~/visualization/empiricalDistributionSmooth'
 
 export type ProfileChartType = 'bar' | 'scatter' | 'line' | 'scatter-bar' | 'line-bar'
+
+const EMPIRICAL_SERIES_COLOR = '#1565C0'
+const SMOOTH_DISTRIBUTION_COLOR = '#C62828'
+const EMPIRICAL_PDF_SERIES_NAME = 'PDF empirique'
+
+function showEmpiricalDistribution(mode: SmoothDistributionMode): boolean {
+  return mode === 'empirical' || mode === 'both'
+}
+
+function showSmoothDistribution(mode: SmoothDistributionMode): boolean {
+  return mode === 'smooth' || mode === 'both'
+}
+
+function smoothDistributionLineSeries(name: string, pairs: Array<[number, number]>, z = 3) {
+  return {
+    name,
+    type: 'line' as const,
+    data: pairs.map((pair) => ({ value: pair })),
+    symbol: 'none' as const,
+    connectNulls: false,
+    lineStyle: { width: 2.5, color: SMOOTH_DISTRIBUTION_COLOR },
+    itemStyle: { color: SMOOTH_DISTRIBUTION_COLOR },
+    z,
+  }
+}
+
+function smoothDistributionLegend(mode: SmoothDistributionMode, names: string[]) {
+  if (mode !== 'both' || names.length < 2) return undefined
+  return { show: true, top: 28, data: names }
+}
+
+function applySmoothCdfValueAxisExtent(
+  xAxis: { min?: number, max?: number },
+  valueScale: AxisScale,
+  smoothPairs: Array<[number, number]>,
+  empiricalX: number[] = [],
+) {
+  if (smoothPairs.length === 0) return
+  applyValueAxisExtentFromPlots(
+    xAxis,
+    valueScale,
+    [...smoothPairs.map((pair) => pair[0]), ...empiricalX],
+  )
+}
 
 export type ProfileChartLayer = 'bar' | 'scatter' | 'line'
 
@@ -96,17 +149,19 @@ export interface ProfileChartOptions {
   /** Log scale on the displayed Y axis (value, rank spacing, or density). */
   logScaleY?: boolean
   /**
-   * Population-density view: swap axes — X = valeur (richesse), Y = part de
+   * Empirical CDF view: swap axes — X = valeur (richesse), Y = part de
    * population (rang %). See spec/version1.md (graphe #3, axes inversés).
    */
-  populationDensity?: boolean
+  empiricalCdf?: boolean
   /**
-   * Probability-density view (requires `populationDensity`): Y = dF/dx where
+   * Empirical PDF view (requires `empiricalCdf`): Y = dF/dx where
    * F is the empirical CDF from consecutive percentile brackets.
    */
-  probabilityDensity?: boolean
+  empiricalPdf?: boolean
   /** Lorenz curve: cumulative population % vs cumulative wealth %. */
   lorenzCurve?: boolean
+  /** Smooth CDF/PDF overlay mode (PCHIP on empirical knots). */
+  smoothDistributionMode?: SmoothDistributionMode
   /**
    * Fine-grained points for line/scatter overlays on top of aggregated bands.
    * When omitted, the main profile points are used for every series.
@@ -188,8 +243,8 @@ export function applyRankExtentZoom(
   logOnRank: boolean,
 ): void {
   const rankScale = logOnRank
-    ? resolveProfileAxisScales({ logScaleX: true, logScaleY: false, populationDensity: false, showPdf: false }).rank
-    : resolveProfileAxisScales({ logScaleX: false, logScaleY: false, populationDensity: false, showPdf: false }).rank
+    ? resolveProfileAxisScales({ logScaleX: true, logScaleY: false, empiricalCdf: false, showPdf: false }).rank
+    : resolveProfileAxisScales({ logScaleX: false, logScaleY: false, empiricalCdf: false, showPdf: false }).rank
   rankScale.applyRankExtent(axis, extent)
 }
 
@@ -202,10 +257,10 @@ export function applyValueRangeZoom(
 ): void {
   if (!isValueRangeZoomActive(range)) return
   const scale = symLogOnValue
-    ? resolveProfileAxisScales({ logScaleX: false, logScaleY: true, populationDensity: false, showPdf: false }).value
+    ? resolveProfileAxisScales({ logScaleX: false, logScaleY: true, empiricalCdf: false, showPdf: false }).value
     : logOnValue
-      ? resolveProfileAxisScales({ logScaleX: false, logScaleY: true, populationDensity: true, showPdf: false }).value
-      : resolveProfileAxisScales({ logScaleX: false, logScaleY: false, populationDensity: false, showPdf: false }).value
+      ? resolveProfileAxisScales({ logScaleX: false, logScaleY: true, empiricalCdf: true, showPdf: false }).value
+      : resolveProfileAxisScales({ logScaleX: false, logScaleY: false, empiricalCdf: false, showPdf: false }).value
   scale.applyZoom(axis, range!)
 }
 
@@ -218,7 +273,7 @@ export function applyDualAxisZoom(
     rankPoints: PercentilePoint[]
     rankScale: RankAxisScale
     valueScale: AxisScale
-    populationDensity: boolean
+    empiricalCdf: boolean
   },
 ): void {
   applyScaleDualAxisZoom(xAxis, yAxis, {
@@ -240,7 +295,7 @@ export interface RankBandItem {
   name: string
   i: number
   k: number
-  /** [xLo, xHi, y] in default view; [xValue, yLo, yHi] in population-density view. */
+  /** [xLo, xHi, y] in default view; [xValue, yLo, yHi] in empirical CDF view. */
   value: [number, number, number]
 }
 
@@ -266,8 +321,12 @@ export interface PdfBin {
 }
 
 /**
- * Empirical PDF bins: ΔF/Δx between consecutive valid percentile points.
+ * Empirical PDF bins: ΔF/Δx between valid percentile segments.
  * F = rank / 100, so density = (rankHi − rankLo) / (100 × (valueHi − valueLo)).
+ *
+ * Plateaus (Δv = 0): consecutive points at the same wealth level are merged
+ * into one segment; density is computed when wealth rises at the next point.
+ * Decreasing steps (Δv < 0) are still skipped edge-by-edge.
  */
 export function computePdfBins(
   points: PercentilePoint[],
@@ -276,7 +335,7 @@ export function computePdfBins(
   const valueScale = options.valueScale ?? resolveProfileAxisScales({
     logScaleX: false,
     logScaleY: false,
-    populationDensity: false,
+    empiricalCdf: false,
     showPdf: false,
   }).value
   const ordered = [...points]
@@ -289,23 +348,40 @@ export function computePdfBins(
     })
 
   const bins: PdfBin[] = []
-  for (let i = 0; i < ordered.length - 1; i++) {
+  let i = 0
+  while (i < ordered.length - 1) {
     const lo = ordered[i]!
-    const hi = ordered[i + 1]!
-    const deltaValue = hi.value! - lo.value!
-    if (deltaValue <= 0) continue
+    const vRef = lo.value!
+
+    // Plateau (Δv = 0): advance j while the next point shares the same wealth.
+    let j = i + 1
+    while (j < ordered.length && ordered[j]!.value === vRef) {
+      j++
+    }
+
+    if (j >= ordered.length) {
+      break
+    }
+
+    const hi = ordered[j]!
+    const deltaValue = hi.value! - vRef
+    if (deltaValue < 0) {
+      i++
+      continue
+    }
 
     const deltaRank = hi.rank - lo.rank
     bins.push({
-      valueLo: lo.value!,
+      valueLo: vRef,
       valueHi: hi.value!,
       rankLo: lo.rank,
       rankHi: hi.rank,
       density: (deltaRank / 100) / deltaValue,
-      midpoint: (lo.value! + hi.value!) / 2,
+      midpoint: (vRef + hi.value!) / 2,
       percentileLo: lo.percentile,
       percentileHi: hi.percentile,
     })
+    i = j
   }
   return bins
 }
@@ -403,17 +479,17 @@ function profilePointRankTooltipLine(
 
 /**
  * Build band items for each `pᵢpₖ` bracket on ]i %, k %].
- * Default view: X = rank span, Y = value. Population-density view: X = value, Y = rank span.
+ * Default view: X = rank span, Y = value. Empirical CDF view: X = value, Y = rank span.
  */
 export function buildRankBandItems(
   points: PercentilePoint[],
   options: {
     rankScale: RankAxisScale
     valueScale: AxisScale
-    populationDensity?: boolean
+    empiricalCdf?: boolean
   },
 ): RankBandItem[] {
-  const { rankScale, valueScale, populationDensity = false } = options
+  const { rankScale, valueScale, empiricalCdf = false } = options
   const ordered = [...points].sort((a, b) => a.rank - b.rank)
   const items: RankBandItem[] = []
 
@@ -429,7 +505,7 @@ export function buildRankBandItems(
     const rankHi = rankScale.rankBound(k, 'upper')
     if (rankLo === null || rankHi === null) continue
 
-    if (populationDensity) {
+    if (empiricalCdf) {
       items.push({ name: point.percentile, i, k, value: [plotValue, rankLo, rankHi] })
     } else {
       items.push({ name: point.percentile, i, k, value: [rankLo, rankHi, plotValue] })
@@ -444,13 +520,13 @@ export function computeBandAxisBounds(
   options: {
     rankScale: RankAxisScale
     valueScale: AxisScale
-    populationDensity?: boolean
+    empiricalCdf?: boolean
   },
 ): BandAxisBounds {
-  const { rankScale, valueScale, populationDensity = false } = options
+  const { rankScale, valueScale, empiricalCdf = false } = options
   if (items.length === 0) return { xBase: 0, yBase: 0 }
 
-  if (populationDensity) {
+  if (empiricalCdf) {
     const xLo = Math.min(...items.map((item) => item.value[0]))
     const xHi = Math.max(...items.map((item) => item.value[0]))
     const yLo = Math.min(...items.map((item) => item.value[1]))
@@ -536,6 +612,9 @@ export function createRenderRankBand(yBase: number) {
     // When Y is zoomed, yBase may lie below the visible axis min → clamp baseline to grid bottom.
     const valueY = top[1]
     const baseY = grid ? Math.min(base[1], grid.bottom) : base[1]
+    // Positive densities below the axis floor (log auto-scale) must not draw downward.
+    if (y > 0 && valueY > baseY + 0.5) return null
+
     const rectY = Math.min(valueY, baseY)
     const rectH = Math.max(Math.abs(valueY - baseY), 1)
     const rectW = Math.max(right[0] - top[0], 1)
@@ -550,7 +629,37 @@ export function createRenderRankBand(yBase: number) {
   }
 }
 
-/** Vertical bands: value on X, rank span on Y (population-density view). */
+/** Narrow vertical sticks centered on rank, from baseline to value. */
+export function createRenderRankStick(yBase: number, barWidthPx = 5) {
+  return function renderRankStick(
+    params: CustomSeriesRenderItemParams,
+    api: CustomSeriesRenderItemAPI,
+  ) {
+    const rankCoord = api.value(0) as number
+    const y = api.value(1) as number
+    if (!Number.isFinite(rankCoord) || !Number.isFinite(y)) return null
+
+    const top = api.coord([rankCoord, y])
+    const base = api.coord([rankCoord, yBase])
+    const grid = gridPixelRect(params)
+
+    const valueY = top[1]
+    const baseY = grid ? Math.min(base[1], grid.bottom) : base[1]
+    const rectY = Math.min(valueY, baseY)
+    const rectH = Math.max(Math.abs(valueY - baseY), 1)
+    const halfW = barWidthPx / 2
+    const clipped = clampRectToGrid(top[0] - halfW, rectY, barWidthPx, rectH, grid)
+    if (clipped.width < 0.5 || clipped.height < 0.5) return null
+
+    return {
+      type: 'rect' as const,
+      shape: clipped,
+      style: api.style(),
+    }
+  }
+}
+
+/** Vertical bands: value on X, rank span on Y (empirical CDF view). */
 export function createRenderPopulationBand(xBase: number) {
   return function renderPopulationBand(
     params: CustomSeriesRenderItemParams,
@@ -639,13 +748,13 @@ export interface ProfileDataZoomWindow {
 /** Map band axis bounds to rank/value dataZoom windows (handles density axis swap). */
 export function bandDataZoomWindow(
   bounds: BandAxisBounds,
-  populationDensity: boolean,
+  empiricalCdf: boolean,
 ): ProfileDataZoomWindow | undefined {
   const hasRank = bounds.xMin != null || bounds.xMax != null
     || bounds.yMin != null || bounds.yMax != null
   if (!hasRank) return undefined
 
-  return populationDensity
+  return empiricalCdf
     ? {
         valueStart: bounds.xMin,
         valueEnd: bounds.xMax,
@@ -671,23 +780,33 @@ function dataZoomRange(
   }
 }
 
+export interface ProfileDataZoomOptions {
+  /** `none` pans/scales the value axis without filtering series (needed on log Y). */
+  valueFilterMode?: 'filter' | 'none'
+  /** `none` pans/scales the rank axis without filtering series (needed on strict log X). */
+  rankFilterMode?: 'filter' | 'none'
+}
+
 /** Native ECharts sliders: rank/population axis + value axis (horizontal or vertical). */
 export function buildProfileDataZoom(
   valueOnX: boolean,
   initialWindow?: ProfileDataZoomWindow,
+  options?: ProfileDataZoomOptions,
 ) {
   const rankOnX = !valueOnX
+  const valueFilterMode = options?.valueFilterMode ?? 'filter'
+  const rankFilterMode = options?.rankFilterMode ?? 'filter'
   const { bottomSlider, bottomSliderHeight, gridBottom } = PROFILE_CHART_LAYOUT
   const rankRange = dataZoomRange(initialWindow?.rankStart, initialWindow?.rankEnd)
   const valueRange = dataZoomRange(initialWindow?.valueStart, initialWindow?.valueEnd)
 
   const rankInside = rankOnX
-    ? { type: 'inside' as const, xAxisIndex: 0, filterMode: 'filter' as const, ...rankRange }
-    : { type: 'inside' as const, yAxisIndex: 0, filterMode: 'filter' as const, ...rankRange }
+    ? { type: 'inside' as const, xAxisIndex: 0, filterMode: rankFilterMode, ...rankRange }
+    : { type: 'inside' as const, yAxisIndex: 0, filterMode: rankFilterMode, ...rankRange }
 
   const valueInside = valueOnX
-    ? { type: 'inside' as const, xAxisIndex: 0, filterMode: 'filter' as const, ...valueRange }
-    : { type: 'inside' as const, yAxisIndex: 0, filterMode: 'filter' as const, ...valueRange }
+    ? { type: 'inside' as const, xAxisIndex: 0, filterMode: valueFilterMode, ...valueRange }
+    : { type: 'inside' as const, yAxisIndex: 0, filterMode: valueFilterMode, ...valueRange }
 
   const rankSlider = rankOnX
     ? {
@@ -695,7 +814,7 @@ export function buildProfileDataZoom(
         xAxisIndex: 0,
         height: bottomSliderHeight,
         bottom: bottomSlider,
-        filterMode: 'filter' as const,
+        filterMode: rankFilterMode,
         ...rankRange,
       }
     : {
@@ -706,7 +825,7 @@ export function buildProfileDataZoom(
         left: 10,
         top: 56,
         bottom: gridBottom,
-        filterMode: 'filter' as const,
+        filterMode: rankFilterMode,
         ...rankRange,
       }
 
@@ -716,7 +835,7 @@ export function buildProfileDataZoom(
         xAxisIndex: 0,
         height: bottomSliderHeight,
         bottom: bottomSlider,
-        filterMode: 'filter' as const,
+        filterMode: valueFilterMode,
         ...valueRange,
       }
     : {
@@ -727,7 +846,7 @@ export function buildProfileDataZoom(
         left: 10,
         top: 56,
         bottom: gridBottom + bottomSliderHeight + bottomSlider,
-        filterMode: 'filter' as const,
+        filterMode: valueFilterMode,
         ...valueRange,
       }
 
@@ -746,15 +865,19 @@ export function buildProfileOption(
     chartType = 'bar',
     logScaleY = false,
     logScaleX = false,
-    populationDensity = false,
-    probabilityDensity = false,
+    empiricalCdf = false,
+    empiricalPdf = false,
     lorenzCurve = false,
+    smoothDistributionMode = 'empirical',
     valueRange,
     overlayPoints,
     title,
   } = options
 
-  const showPdf = !lorenzCurve && populationDensity && probabilityDensity
+  const showPdf = !lorenzCurve && empiricalCdf && empiricalPdf
+  const showEmpiricalDist = showEmpiricalDistribution(smoothDistributionMode)
+  const showSmoothDist = showSmoothDistribution(smoothDistributionMode)
+  const wealthLogForSpline = empiricalCdf && logScaleX
   const ordered = [...profile.points].sort((a, b) => a.rank - b.rank)
   const zoomActive = isValueRangeZoomActive(valueRange)
   const chartPoints = zoomActive && valueRange
@@ -762,12 +885,15 @@ export function buildProfileOption(
     : ordered
 
   const valueAxisName = profile.unit ? `Valeur · ${profile.unit}` : 'Valeur'
-  const scales = resolveProfileAxisScales({ logScaleX, logScaleY, populationDensity, showPdf })
+  const scales = resolveProfileAxisScales({ logScaleX, logScaleY, empiricalCdf, showPdf })
   const { rank: rankScale, value: valueScale, density: densityScale } = scales
-  const valueOnX = !lorenzCurve && (populationDensity || showPdf)
+  const smoothSpline = showSmoothDist && (empiricalCdf || showPdf)
+    ? buildSmoothDistributionSpline(chartPoints, { logX: wealthLogForSpline })
+    : null
+  const valueOnX = !lorenzCurve && (empiricalCdf || showPdf)
   const densityAxisName = profile.unit
-    ? `Densité de probabilité · 1/${profile.unit}`
-    : 'Densité de probabilité'
+    ? `PDF empirique · 1/${profile.unit}`
+    : 'PDF empirique'
 
   const rankAxisConfig = buildEchartsAxis('Part de population (%)', rankScale, { nameGap: 32 })
   const valueAxisConfig = buildEchartsAxis(valueAxisName, valueScale)
@@ -861,9 +987,25 @@ export function buildProfileOption(
     }
     const xAxis = { ...valueAxisConfig }
     const yAxis = { ...densityAxisConfig }
+    const empiricalOpacity = smoothDistributionMode === 'both' ? 0.45 : 0.85
+    const smoothPdfPairs = smoothSpline
+      ? sampleSmoothPdfSeries(smoothSpline, valueScale, densityScale, { logX: wealthLogForSpline })
+      : []
 
     const pdfTooltip = (params: unknown) => {
-      const p = params as { data?: { bin?: PdfBin } }
+      const p = params as {
+        seriesName?: string
+        data?: { bin?: PdfBin, value?: [number, number] }
+      }
+      if (p.seriesName === 'PDF lissée' && p.data?.value) {
+        const xStored = valueScale.toDisplayValue(p.data.value[0])
+        const densityStored = densityScale.toDisplayValue(p.data.value[1])
+        return [
+          `Richesse : ${xStored.toLocaleString('fr-FR')}`,
+          `PDF lissée : ${densityStored.toExponential(3)}`,
+          'Spline monotone PCHIP sur la CDF empirique',
+        ].join('<br/>')
+      }
       const bin = p?.data?.bin
       if (!bin) return ''
       return [
@@ -874,59 +1016,81 @@ export function buildProfileOption(
       ].join('<br/>')
     }
 
-    if (primaryProfileSeriesType(chartType) === 'bar') {
+    const series: EChartsOption['series'] = []
+    const legendNames: string[] = []
+
+    if (primaryProfileSeriesType(chartType) === 'bar' && showEmpiricalDist) {
       const bands = buildPdfBandItems(bins, { valueScale, densityScale })
       const bounds = computePdfBandAxisBounds(bands, { valueScale, densityScale })
       valueScale.applyZoom(xAxis, valueRange ?? {})
+      if (bounds.xMin != null) xAxis.min = bounds.xMin
+      if (bounds.xMax != null) xAxis.max = bounds.xMax
+      if (bounds.yMin != null) yAxis.min = bounds.yMin
+      if (bounds.yMax != null) yAxis.max = bounds.yMax
+      series.push({
+        name: EMPIRICAL_PDF_SERIES_NAME,
+        type: 'custom',
+        clip: true,
+        renderItem: createRenderRankBand(bounds.yBase),
+        data: bands.map((band) => ({ value: band.value, bin: band.bin })),
+        encode: { x: [0, 1], y: 2 },
+        itemStyle: { color: EMPIRICAL_SERIES_COLOR, opacity: empiricalOpacity },
+      })
+      legendNames.push(EMPIRICAL_PDF_SERIES_NAME)
+    } else if (showEmpiricalDist) {
+      const seriesType = primaryProfileSeriesType(chartType) === 'scatter' ? 'scatter' : 'line'
+      const data = bins
+        .map((bin) => {
+          const density = densityScale.toPlotCoord(bin.density)
+          if (density === null) return null
+          const xCoord = valueScale.toPlotCoord(bin.valueLo)
+          if (xCoord === null) return null
+          return { bin, pair: [xCoord, density] as [number, number] }
+        })
+        .filter((entry): entry is { bin: PdfBin, pair: [number, number] } => entry !== null)
 
-      return {
-        ...base,
-        tooltip: { trigger: 'item', formatter: pdfTooltip },
-        xAxis,
-        yAxis,
-        series: [
-          {
-            name: profile.variable,
-            type: 'custom',
-            clip: true,
-            renderItem: createRenderRankBand(bounds.yBase),
-            data: bands.map((band) => ({ value: band.value, bin: band.bin })),
-            encode: { x: [0, 1], y: 2 },
-            itemStyle: { color: '#1565C0', opacity: 0.85 },
-          },
-        ],
-      }
+      valueScale.applyZoom(xAxis, valueRange ?? {})
+      applyPdfDensityAxisExtent(yAxis, densityScale, data.map((d) => d.pair[1]))
+
+      series.push({
+        name: EMPIRICAL_PDF_SERIES_NAME,
+        type: seriesType,
+        data: data.map(({ bin, pair }) => ({ value: pair, bin })),
+        showSymbol: seriesType !== 'line',
+        symbolSize: seriesType === 'scatter' ? 6 : undefined,
+        connectNulls: false,
+        itemStyle: { color: EMPIRICAL_SERIES_COLOR, opacity: empiricalOpacity },
+        lineStyle: seriesType === 'line' ? { color: EMPIRICAL_SERIES_COLOR } : undefined,
+      })
+      legendNames.push(EMPIRICAL_PDF_SERIES_NAME)
     }
 
-    const seriesType = primaryProfileSeriesType(chartType) === 'scatter' ? 'scatter' : 'line'
-    const data = bins
-      .map((bin) => {
-        const density = densityScale.toPlotCoord(bin.density)
-        if (density === null) return null
-        const xCoord = valueScale.toPlotCoord(bin.valueLo)
-        if (xCoord === null) return null
-        return { bin, pair: [xCoord, density] as [number, number] }
-      })
-      .filter((entry): entry is { bin: PdfBin, pair: [number, number] } => entry !== null)
-
-    valueScale.applyZoom(xAxis, valueRange ?? {})
-    applyPdfDensityAxisExtent(yAxis, densityScale, data.map((d) => d.pair[1]))
+    if (showSmoothDist && smoothPdfPairs.length > 0) {
+      if (series.length === 0) {
+        valueScale.applyZoom(xAxis, valueRange ?? {})
+        applyPdfDensityAxisExtent(yAxis, densityScale, smoothPdfPairs.map((p) => p[1]))
+      } else {
+        const empiricalDensityPlots = showEmpiricalDist
+          ? bins
+              .map((bin) => densityScale.toPlotCoord(bin.density))
+              .filter((density): density is number => density !== null)
+          : []
+        applyPdfDensityAxisExtent(yAxis, densityScale, [
+          ...empiricalDensityPlots,
+          ...smoothPdfPairs.map((p) => p[1]),
+        ])
+      }
+      series.push(smoothDistributionLineSeries('PDF lissée', smoothPdfPairs))
+      legendNames.push('PDF lissée')
+    }
 
     return {
       ...base,
+      legend: smoothDistributionLegend(smoothDistributionMode, legendNames),
       tooltip: { trigger: 'item', formatter: pdfTooltip },
       xAxis,
       yAxis,
-      series: [
-        {
-          name: profile.variable,
-          type: seriesType,
-          data: data.map(({ bin, pair }) => ({ value: pair, bin })),
-          showSymbol: seriesType !== 'line',
-          symbolSize: seriesType === 'scatter' ? 6 : undefined,
-          connectNulls: false,
-        },
-      ],
+      series,
     }
   }
 
@@ -935,30 +1099,113 @@ export function buildProfileOption(
     ? [...(overlayPoints ?? chartPoints)].sort((a, b) => a.rank - b.rank)
     : chartPoints
 
-  const bandOptions = { rankScale, valueScale, populationDensity }
+  const bandOptions = { rankScale, valueScale, empiricalCdf }
+  const smoothCdfPairs = empiricalCdf && smoothSpline
+    ? sampleSmoothCdfSeries(smoothSpline, valueScale, rankScale, { logX: wealthLogForSpline })
+    : []
+  const empiricalDistOpacity = smoothDistributionMode === 'both' ? 0.45 : 0.85
 
   if (chartType === 'bar') {
     const bands = buildRankBandItems(chartPoints, bandOptions)
     const bounds = computeBandAxisBounds(bands, bandOptions)
-    const xAxis = populationDensity ? { ...valueAxisConfig } : { ...rankAxisConfig }
-    const yAxis = populationDensity ? { ...rankAxisConfig } : { ...valueAxisConfig }
+    const xAxis = empiricalCdf ? { ...valueAxisConfig } : { ...rankAxisConfig }
+    const yAxis = empiricalCdf ? { ...rankAxisConfig } : { ...valueAxisConfig }
 
     applyDualAxisZoom(xAxis, yAxis, {
       valueRange,
       rankPoints: chartPoints,
       rankScale,
       valueScale,
-      populationDensity,
+      empiricalCdf,
     })
+
+    if (!empiricalCdf) {
+      return {
+        ...base,
+        tooltip: {
+          trigger: 'item',
+          formatter: (params) => {
+            const p = params as { name?: string, data?: { value?: [number, number, number] } }
+            const band = p?.data
+            const plotVal = band?.value?.[2]
+            const shown = formatStoredAxisValue(valueScale, plotVal)
+            const code = p?.name ? `${p.name}<br/>` : ''
+            return `${code}${valueAxisName}: ${shown}`
+          },
+        },
+        xAxis,
+        yAxis,
+        series: [
+          {
+            name: profile.variable,
+            type: 'custom',
+            clip: true,
+            renderItem: createRenderRankBand(bounds.yBase),
+            data: bands.map((band) => ({
+              name: band.name,
+              value: band.value,
+              i: band.i,
+              k: band.k,
+            })),
+            encode: { x: [0, 1], y: 2 },
+            itemStyle: { color: EMPIRICAL_SERIES_COLOR, opacity: 0.85 },
+          },
+        ],
+      }
+    }
+
+    const barSeries: EChartsOption['series'] = []
+    const barLegendNames: string[] = []
+    if (showEmpiricalDist) {
+      barSeries.push({
+        name: profile.variable,
+        type: 'custom',
+        clip: true,
+        renderItem: createRenderPopulationBand(bounds.xBase),
+        data: bands.map((band) => ({
+          name: band.name,
+          value: band.value,
+          i: band.i,
+          k: band.k,
+        })),
+        encode: { x: 0, y: [1, 2] },
+        itemStyle: { color: EMPIRICAL_SERIES_COLOR, opacity: empiricalDistOpacity },
+      })
+      barLegendNames.push(profile.variable)
+    }
+    if (showSmoothDist && smoothCdfPairs.length > 0) {
+      barSeries.push(smoothDistributionLineSeries('CDF lissée', smoothCdfPairs))
+      barLegendNames.push('CDF lissée')
+    }
+
+    applySmoothCdfValueAxisExtent(
+      xAxis,
+      valueScale,
+      smoothCdfPairs,
+      showEmpiricalDist ? bands.map((band) => band.value[0]) : [],
+    )
 
     return {
       ...base,
+      legend: smoothDistributionLegend(smoothDistributionMode, barLegendNames),
       tooltip: {
         trigger: 'item',
         formatter: (params) => {
-          const p = params as { name?: string, data?: { value?: [number, number, number] } }
+          const p = params as {
+            seriesName?: string
+            name?: string
+            data?: { value?: [number, number] | [number, number, number] }
+          }
+          if (p.seriesName === 'CDF lissée' && p.data?.value?.length === 2) {
+            const pair = p.data.value as [number, number]
+            return [
+              `Richesse : ${valueScale.toDisplayValue(pair[0]).toLocaleString('fr-FR')}`,
+              `Population cumulée : ${formatRankPercent(rankScale.toDisplayValue(pair[1]))} %`,
+              'Spline monotone PCHIP sur la CDF empirique',
+            ].join('<br/>')
+          }
           const band = p?.data
-          const plotVal = populationDensity ? band?.value?.[0] : band?.value?.[2]
+          const plotVal = band?.value?.[0]
           const shown = formatStoredAxisValue(valueScale, plotVal)
           const code = p?.name ? `${p.name}<br/>` : ''
           return `${code}${valueAxisName}: ${shown}`
@@ -966,26 +1213,7 @@ export function buildProfileOption(
       },
       xAxis,
       yAxis,
-      series: [
-        {
-          name: profile.variable,
-          type: 'custom',
-          clip: true,
-          renderItem: populationDensity
-            ? createRenderPopulationBand(bounds.xBase)
-            : createRenderRankBand(bounds.yBase),
-          data: bands.map((band) => ({
-            name: band.name,
-            value: band.value,
-            i: band.i,
-            k: band.k,
-          })),
-          encode: populationDensity
-            ? { x: 0, y: [1, 2] }
-            : { x: [0, 1], y: 2 },
-          itemStyle: { color: '#1565C0', opacity: 0.85 },
-        },
-      ],
+      series: barSeries,
     }
   }
 
@@ -1000,7 +1228,7 @@ export function buildProfileOption(
       const valueCoord = point.value === null ? null : valueScale.toPlotCoord(point.value)
       if (rankCoord === null) return null
 
-      if (populationDensity) {
+      if (empiricalCdf) {
         if (valueCoord === null) return null
         return { point, pair: [valueCoord, rankCoord] as [number, number] }
       }
@@ -1009,14 +1237,14 @@ export function buildProfileOption(
     })
     .filter((entry): entry is { point: PercentilePoint, pair: [number, number | null] } => entry !== null)
 
-  const xAxis = populationDensity ? { ...valueAxisConfig } : { ...rankAxisConfig }
-  const yAxis = populationDensity ? { ...rankAxisConfig } : { ...valueAxisConfig }
+  const xAxis = empiricalCdf ? { ...valueAxisConfig } : { ...rankAxisConfig }
+  const yAxis = empiricalCdf ? { ...rankAxisConfig } : { ...valueAxisConfig }
   applyDualAxisZoom(xAxis, yAxis, {
     valueRange,
     rankPoints: seriesPoints,
     rankScale,
     valueScale,
-    populationDensity,
+    empiricalCdf,
   })
 
   if (overlayType) {
@@ -1024,25 +1252,105 @@ export function buildProfileOption(
     const bounds = computeBandAxisBounds(bands, bandOptions)
     const overlayDataZoom = buildProfileDataZoom(
       valueOnX,
-      bandDataZoomWindow(bounds, populationDensity),
+      bandDataZoomWindow(bounds, empiricalCdf),
+    )
+
+    const overlaySeries: EChartsOption['series'] = [
+      {
+        name: 'Bandes',
+        type: 'custom',
+        clip: true,
+        z: 0,
+        renderItem: empiricalCdf
+          ? createRenderPopulationBand(bounds.xBase)
+          : createRenderRankBand(bounds.yBase),
+        data: bands.map((band) => ({
+          name: band.name,
+          value: band.value,
+          i: band.i,
+          k: band.k,
+        })),
+        encode: empiricalCdf
+          ? { x: 0, y: [1, 2] }
+          : { x: [0, 1], y: 2 },
+        itemStyle: { color: EMPIRICAL_SERIES_COLOR, opacity: PROFILE_BAND_WATERMARK_OPACITY },
+        emphasis: { itemStyle: { opacity: PROFILE_BAND_WATERMARK_OPACITY * 1.6 } },
+      },
+    ]
+    const overlayLegendNames: string[] = []
+
+    if (empiricalCdf && showEmpiricalDist) {
+      overlaySeries.push({
+        name: profile.variable,
+        type: overlayType,
+        z: 2,
+        data: data.map(({ point, pair }) => ({ value: pair, point })),
+        showSymbol: overlayType !== 'line',
+        symbolSize: overlayType === 'scatter' ? 6 : undefined,
+        connectNulls: false,
+        lineStyle: overlayType === 'line'
+          ? { width: 2, color: EMPIRICAL_SERIES_COLOR, opacity: empiricalDistOpacity }
+          : undefined,
+        itemStyle: { color: EMPIRICAL_SERIES_COLOR, opacity: empiricalDistOpacity },
+      })
+      overlayLegendNames.push(profile.variable)
+    } else if (!empiricalCdf) {
+      overlaySeries.push({
+        name: profile.variable,
+        type: overlayType,
+        z: 2,
+        data: data.map(({ point, pair }) => ({ value: pair, point })),
+        showSymbol: overlayType !== 'line',
+        symbolSize: overlayType === 'scatter' ? 6 : undefined,
+        connectNulls: false,
+        lineStyle: overlayType === 'line' ? { width: 2, color: EMPIRICAL_SERIES_COLOR } : undefined,
+        itemStyle: { color: EMPIRICAL_SERIES_COLOR },
+      })
+    }
+
+    if (empiricalCdf && showSmoothDist && smoothCdfPairs.length > 0) {
+      overlaySeries.push(smoothDistributionLineSeries('CDF lissée', smoothCdfPairs))
+      overlayLegendNames.push('CDF lissée')
+    }
+
+    applySmoothCdfValueAxisExtent(
+      xAxis,
+      valueScale,
+      smoothCdfPairs,
+      empiricalCdf && showEmpiricalDist ? data.map((entry) => entry.pair[0]) : [],
     )
 
     return {
       ...base,
+      legend: empiricalCdf
+        ? smoothDistributionLegend(smoothDistributionMode, overlayLegendNames)
+        : undefined,
       dataZoom: overlayDataZoom,
       tooltip: {
         trigger: 'item',
         formatter: (params) => {
-          const seriesType = (params as { seriesType?: string }).seriesType
-          if (seriesType === 'custom') {
-            const p = params as { name?: string, data?: { value?: [number, number, number] } }
+          const p = params as {
+            seriesName?: string
+            seriesType?: string
+            name?: string
+            value?: [number, number | null]
+            data?: { value?: [number, number] | [number, number, number], point?: PercentilePoint }
+          }
+          if (p.seriesName === 'CDF lissée' && p.data?.value?.length === 2) {
+            const pair = p.data.value as [number, number]
+            return [
+              `Richesse : ${valueScale.toDisplayValue(pair[0]).toLocaleString('fr-FR')}`,
+              `Population cumulée : ${formatRankPercent(rankScale.toDisplayValue(pair[1]))} %`,
+              'Spline monotone PCHIP sur la CDF empirique',
+            ].join('<br/>')
+          }
+          if (p.seriesType === 'custom') {
             const band = p?.data
-            const plotVal = populationDensity ? band?.value?.[0] : band?.value?.[2]
+            const plotVal = empiricalCdf ? band?.value?.[0] : band?.value?.[2]
             const shown = formatStoredAxisValue(valueScale, plotVal)
             const code = p?.name ? `${p.name}<br/>` : ''
             return `${code}${valueAxisName}: ${shown}`
           }
-          const p = params as { value?: [number, number | null], data?: { point?: PercentilePoint } }
           const point = p?.data?.point
           const valueShown = point?.value === null || point?.value === undefined
             ? '—'
@@ -1054,50 +1362,71 @@ export function buildProfileOption(
       },
       xAxis,
       yAxis,
-      series: [
-        {
-          name: 'Bandes',
-          type: 'custom',
-          clip: true,
-          z: 0,
-          renderItem: populationDensity
-            ? createRenderPopulationBand(bounds.xBase)
-            : createRenderRankBand(bounds.yBase),
-          data: bands.map((band) => ({
-            name: band.name,
-            value: band.value,
-            i: band.i,
-            k: band.k,
-          })),
-          encode: populationDensity
-            ? { x: 0, y: [1, 2] }
-            : { x: [0, 1], y: 2 },
-          itemStyle: { color: '#1565C0', opacity: PROFILE_BAND_WATERMARK_OPACITY },
-          emphasis: { itemStyle: { opacity: PROFILE_BAND_WATERMARK_OPACITY * 1.6 } },
-        },
-        {
-          name: profile.variable,
-          type: overlayType,
-          z: 2,
-          data: data.map(({ point, pair }) => ({ value: pair, point })),
-          showSymbol: overlayType !== 'line',
-          symbolSize: overlayType === 'scatter' ? 6 : undefined,
-          connectNulls: false,
-          lineStyle: overlayType === 'line' ? { width: 2, color: '#1565C0' } : undefined,
-          itemStyle: { color: '#1565C0' },
-        },
-      ],
+      series: overlaySeries,
     }
   }
 
   const seriesType = chartType === 'line' ? 'line' : 'scatter'
+  const lineSeries: EChartsOption['series'] = []
+  const lineLegendNames: string[] = []
+
+  if (empiricalCdf && showEmpiricalDist) {
+    lineSeries.push({
+      name: profile.variable,
+      type: seriesType,
+      data: data.map(({ point, pair }) => ({ value: pair, point })),
+      showSymbol: seriesType !== 'line',
+      symbolSize: seriesType === 'scatter' ? 6 : undefined,
+      connectNulls: false,
+      itemStyle: { color: EMPIRICAL_SERIES_COLOR, opacity: empiricalDistOpacity },
+      lineStyle: seriesType === 'line' ? { color: EMPIRICAL_SERIES_COLOR } : undefined,
+    })
+    lineLegendNames.push(profile.variable)
+  } else if (!empiricalCdf) {
+    lineSeries.push({
+      name: profile.variable,
+      type: seriesType,
+      data: data.map(({ point, pair }) => ({ value: pair, point })),
+      showSymbol: seriesType !== 'line',
+      symbolSize: seriesType === 'scatter' ? 6 : undefined,
+      connectNulls: false,
+      itemStyle: undefined,
+    })
+  }
+
+  if (empiricalCdf && showSmoothDist && smoothCdfPairs.length > 0) {
+    lineSeries.push(smoothDistributionLineSeries('CDF lissée', smoothCdfPairs))
+    lineLegendNames.push('CDF lissée')
+  }
+
+  applySmoothCdfValueAxisExtent(
+    xAxis,
+    valueScale,
+    smoothCdfPairs,
+    empiricalCdf && showEmpiricalDist ? data.map((entry) => entry.pair[0]) : [],
+  )
 
   return {
     ...base,
+    legend: empiricalCdf
+      ? smoothDistributionLegend(smoothDistributionMode, lineLegendNames)
+      : undefined,
     tooltip: {
       trigger: 'item',
       formatter: (params) => {
-        const p = params as { value?: [number, number | null], data?: { point?: PercentilePoint } }
+        const p = params as {
+          seriesName?: string
+          value?: [number, number | null]
+          data?: { value?: [number, number], point?: PercentilePoint }
+        }
+        if (p.seriesName === 'CDF lissée' && p.data?.value) {
+          const pair = p.data.value
+          return [
+            `Richesse : ${valueScale.toDisplayValue(pair[0]).toLocaleString('fr-FR')}`,
+            `Population cumulée : ${formatRankPercent(rankScale.toDisplayValue(pair[1]))} %`,
+            'Spline monotone PCHIP sur la CDF empirique',
+          ].join('<br/>')
+        }
         const point = p?.data?.point
         const valueShown = point?.value === null || point?.value === undefined
           ? '—'
@@ -1109,16 +1438,6 @@ export function buildProfileOption(
     },
     xAxis,
     yAxis,
-    series: [
-      {
-        name: profile.variable,
-        type: seriesType,
-        data: data.map(({ point, pair }) => ({ value: pair, point })),
-        showSymbol: seriesType !== 'line',
-        symbolSize: seriesType === 'scatter' ? 6 : undefined,
-        connectNulls: false,
-        itemStyle: undefined,
-      },
-    ],
+    series: lineSeries,
   }
 }

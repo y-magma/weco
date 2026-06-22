@@ -10,7 +10,7 @@ import {
   validateNextCustomBreakpoint,
 } from '~/visualization/populationPartition'
 import type { CountryOption } from '@domain/entities'
-import { WID_PROFILE_VARIABLES } from '@domain/catalog/widCodes'
+import { supportsDistributionAnalytics, WID_PROFILE_VARIABLES } from '@domain/catalog/widCodes'
 import type { PanneauType } from '~/composables/panneauTypes'
 
 const props = withDefaults(defineProps<{
@@ -52,8 +52,8 @@ const {
   chartTypeLayers,
   logScaleY,
   logScaleX,
-  populationDensity,
-  probabilityDensity,
+  empiricalCdf,
+  empiricalPdf,
   lorenzCurve,
   variables,
   ageOptions,
@@ -61,6 +61,9 @@ const {
   years,
   yearsLoading,
   yearRangeLabel,
+  paramAdjustmentHints,
+  adjustmentToastVisible,
+  adjustmentToastMessage,
   loading,
   error: panelError,
   drillLevel,
@@ -156,12 +159,14 @@ const chartTypes = [
   { value: 'line', label: 'Ligne' },
 ]
 
+const distributionAnalyticsEnabled = computed(() => supportsDistributionAnalytics(variable.value))
+
 const activeCalculationHelp = computed(() => buildActiveCalculationHelp({
   chartType: resolveProfileChartType(chartTypeLayers.value),
   logScaleX: logScaleX.value,
   logScaleY: logScaleY.value,
-  populationDensity: populationDensity.value,
-  probabilityDensity: probabilityDensity.value,
+  empiricalCdf: empiricalCdf.value,
+  empiricalPdf: empiricalPdf.value,
   lorenzCurve: lorenzCurve.value,
   profile: profile.value,
 }))
@@ -232,6 +237,7 @@ onMounted(() => {
             density="compact"
             persistent-hint
           />
+          <ParamAdjustmentHint :message="paramAdjustmentHints.year" />
         </v-col>
       </v-row>
 
@@ -246,6 +252,8 @@ onMounted(() => {
                 <v-select
                   v-model="age"
                   :items="ageOptions"
+                  :loading="yearsLoading"
+                  :disabled="yearsLoading || ageOptions.length === 0"
                   item-title="label"
                   item-value="value"
                   label="Âge"
@@ -253,15 +261,19 @@ onMounted(() => {
                   hide-details
                   class="mb-3"
                 />
+                <ParamAdjustmentHint :message="paramAdjustmentHints.age" />
                 <v-select
                   v-model="pop"
                   :items="popOptions"
+                  :loading="yearsLoading"
+                  :disabled="yearsLoading || popOptions.length === 0"
                   item-title="label"
                   item-value="value"
                   label="Population"
                   density="compact"
                   hide-details
                 />
+                <ParamAdjustmentHint :message="paramAdjustmentHints.pop" />
               </v-expansion-panel-text>
             </v-expansion-panel>
           </v-expansion-panels>
@@ -310,6 +322,7 @@ onMounted(() => {
                     color="primary"
                     density="compact"
                     hide-details
+                    :disabled="!distributionAnalyticsEnabled"
                   />
                   <ProfileHelpButton
                     :title="PROFILE_HELP.lorenzCurve.title"
@@ -319,31 +332,31 @@ onMounted(() => {
 
                 <div class="d-flex align-center mb-1">
                   <v-switch
-                    v-model="populationDensity"
-                    label="Densité de population"
+                    v-model="empiricalCdf"
+                    label="CDF empirique"
                     color="primary"
                     density="compact"
                     hide-details
-                    :disabled="lorenzCurve"
+                    :disabled="!distributionAnalyticsEnabled || lorenzCurve"
                   />
                   <ProfileHelpButton
-                    :title="PROFILE_HELP.populationDensity.title"
-                    :paragraphs="PROFILE_HELP.populationDensity.paragraphs"
+                    :title="PROFILE_HELP.empiricalCdf.title"
+                    :paragraphs="PROFILE_HELP.empiricalCdf.paragraphs"
                   />
                 </div>
 
                 <div class="d-flex align-center mb-1">
                   <v-switch
-                    v-model="probabilityDensity"
-                    label="Densité de probabilité"
+                    v-model="empiricalPdf"
+                    label="PDF empirique"
                     color="primary"
                     density="compact"
                     hide-details
-                    :disabled="lorenzCurve"
+                    :disabled="!distributionAnalyticsEnabled || lorenzCurve"
                   />
                   <ProfileHelpButton
-                    :title="PROFILE_HELP.probabilityDensity.title"
-                    :paragraphs="PROFILE_HELP.probabilityDensity.paragraphs"
+                    :title="PROFILE_HELP.empiricalPdf.title"
+                    :paragraphs="PROFILE_HELP.empiricalPdf.paragraphs"
                   />
                 </div>
 
@@ -597,7 +610,7 @@ onMounted(() => {
       </v-expand-transition>
 
       <EChart
-        :key="`${lorenzCurve}-${populationDensity}-${probabilityDensity}-${chartTypeLayers.join('+')}-${populationViewMode}-${drillLevel}-${customBreakpoints.join(',')}`"
+        :key="`${lorenzCurve}-${empiricalCdf}-${empiricalPdf}-${chartTypeLayers.join('+')}-${populationViewMode}-${drillLevel}-${customBreakpoints.join(',')}`"
         :option="profileOption"
         :loading="loading"
         :error="panelError"
@@ -607,6 +620,11 @@ onMounted(() => {
     </v-card>
     </div>
   </div>
+
+  <WidParamAdjustmentToast
+    v-model="adjustmentToastVisible"
+    :message="adjustmentToastMessage"
+  />
 </template>
 
 <style scoped>

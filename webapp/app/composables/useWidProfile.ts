@@ -27,15 +27,13 @@ import {
 } from '~/visualization/populationPartition'
 import type { CountryOption, PercentileProfile } from '@domain/entities'
 import {
-  WID_AGE_OPTIONS,
-  WID_DEFAULT_AGE,
-  WID_DEFAULT_POP,
-  WID_POP_OPTIONS,
   WID_THRESHOLD_VARIABLES,
   WID_PROFILE_VARIABLES,
-  WID_G_PERCENTILE_COUNT,
+  expectedProfilePointCount,
+  supportsDistributionAnalytics,
   thresholdVariableFor,
 } from '@domain/catalog/widCodes'
+import { useWidParamConstraints } from '~/composables/useWidParamConstraints'
 
 export interface WidProfileStateOptions {
   countries?: Ref<CountryOption[]>
@@ -49,51 +47,61 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
   const countryCode = ref('FR')
   const variable = ref(options.initialVariable ?? 'ahweal')
   const year = ref(2021)
-  const age = ref(WID_DEFAULT_AGE)
-  const pop = ref(WID_DEFAULT_POP)
+  const age = ref('992')
+  const pop = ref('j')
   const chartTypeLayers = ref<ProfileChartLayer[]>(['bar'])
   const logScaleY = ref(false)
   const logScaleX = ref(false)
-  const populationDensity = ref(false)
-  const probabilityDensity = ref(false)
+  const empiricalCdf = ref(false)
+  const empiricalPdf = ref(false)
   const lorenzCurve = ref(false)
   const populationViewMode = ref<PopulationViewMode>('step1')
   const customBreakpoints = ref<number[]>([])
   const drillLevel = ref(0)
 
   const loading = ref(false)
-  const yearsLoading = ref(false)
   const error = ref<string | null>(null)
 
   const localCountries = ref<CountryOption[]>([])
-  const countries = sharedCountries ?? localCountries
-  const availableYears = ref<number[]>([])
+  const sharedCountriesRef = sharedCountries ?? localCountries
+
+  const constraints = useWidParamConstraints({
+    app,
+    variable,
+    params: { countryCode, age, pop, year },
+    countries: sharedCountriesRef,
+  })
+
   const profile = ref<PercentileProfile | null>(null)
   const profileOption = ref<EChartsOption | null>(null)
 
   const variables = computed(() =>
-    probabilityDensity.value ? WID_THRESHOLD_VARIABLES : WID_PROFILE_VARIABLES,
+    empiricalPdf.value ? WID_THRESHOLD_VARIABLES : WID_PROFILE_VARIABLES,
   )
-  const ageOptions = WID_AGE_OPTIONS
-  const popOptions = WID_POP_OPTIONS
-  const years = computed(() => availableYears.value)
-  const yearRangeLabel = computed(() => {
-    const list = availableYears.value
-    if (list.length === 0) return ''
-    const min = list[list.length - 1]!
-    const max = list[0]!
-    return min === max ? `${max}` : `${min}–${max}`
-  })
+  const countries = constraints.countries
+  const ageOptions = constraints.ageOptions
+  const popOptions = constraints.popOptions
+  const years = constraints.years
+  const yearsLoading = constraints.constraintsLoading
+  const yearRangeLabel = constraints.yearRangeLabel
+  const paramAdjustmentHints = constraints.paramAdjustmentHints
+  const adjustmentToastVisible = constraints.adjustmentToastVisible
+  const adjustmentToastMessage = constraints.adjustmentToastMessage
 
   const profilePointCount = computed(() => profile.value?.points.length ?? 0)
+  const expectedPointCount = computed(() => expectedProfilePointCount(variable.value))
   const profilePointCountLabel = computed(() => {
     const n = profilePointCount.value
+    const expected = expectedPointCount.value
     if (n === 0) return ''
-    if (n >= WID_G_PERCENTILE_COUNT) return `${n} g-percentiles`
-    return `${n} / ${WID_G_PERCENTILE_COUNT} g-percentiles`
+    if (expected === 1) return 'indicateur agrégé (1 valeur)'
+    if (n >= expected) return `${n} g-percentiles`
+    return `${n} / ${expected} g-percentiles`
   })
   const profilePartialData = computed(
-    () => profilePointCount.value > 0 && profilePointCount.value < WID_G_PERCENTILE_COUNT,
+    () => profilePointCount.value > 0
+      && expectedPointCount.value > 1
+      && profilePointCount.value < expectedPointCount.value,
   )
 
   const availableBoundaries = computed(() =>
@@ -175,37 +183,22 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
   }
 
   const loadCountries = async () => {
-    if (countries.value.length > 0) return
-    countries.value = await app.listCountries.execute()
+    if (sharedCountriesRef.value.length > 0 && constraints.countries.value.length > 0) return
+    await constraints.loadCountriesForVariable(variable.value)
   }
 
-  const syncYearToAvailable = () => {
-    const list = availableYears.value
-    if (list.length === 0) return
-    if (!list.includes(year.value)) year.value = list[0]!
+  const refreshAndLoad = async (mode: 'variableChange' | 'clamp') => {
+    const ready = await constraints.refreshConstraints(mode)
+    if (constraints.constraintsError.value) {
+      error.value = constraints.constraintsError.value
+    } else {
+      error.value = null
+    }
+    if (ready) await load()
   }
 
-  const refreshYears = async () => {
-    if (!countryCode.value) {
-      availableYears.value = []
-      return
-    }
-
-    yearsLoading.value = true
-    try {
-      availableYears.value = await app.listProfileYears.execute({
-        countryCode: countryCode.value,
-        variable: variable.value,
-        age: age.value,
-        pop: pop.value,
-      })
-      syncYearToAvailable()
-    } catch (err) {
-      availableYears.value = []
-      error.value = err instanceof Error ? err.message : 'Échec du chargement des années disponibles'
-    } finally {
-      yearsLoading.value = false
-    }
+  const onFiltersChanged = async (mode: 'variableChange' | 'clamp') => {
+    await refreshAndLoad(mode)
   }
 
   const rebuild = () => {
@@ -219,8 +212,8 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
       chartType,
       logScaleY: logScaleY.value,
       logScaleX: logScaleX.value,
-      populationDensity: populationDensity.value,
-      probabilityDensity: probabilityDensity.value,
+      empiricalCdf: empiricalCdf.value,
+      empiricalPdf: empiricalPdf.value,
       lorenzCurve: lorenzCurve.value,
       overlayPoints: overlaySeriesType(chartType)
         ? overlayDisplayPoints.value
@@ -257,33 +250,41 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
       error.value = err instanceof Error ? err.message : 'Échec du chargement des pays'
       return
     }
-    await refreshYears()
-    if (availableYears.value.length > 0) await load()
+    await refreshAndLoad('variableChange')
   }
 
-  watch([countryCode, variable, age, pop], async () => {
-    await refreshYears()
-    if (availableYears.value.length > 0) await load()
+  watch([countryCode, age, pop], () => {
+    void onFiltersChanged('clamp')
+  })
+
+  watch(variable, (next) => {
+    constraints.applyOptimisticDefaults(next)
+    if (!supportsDistributionAnalytics(next)) {
+      empiricalCdf.value = false
+      empiricalPdf.value = false
+      lorenzCurve.value = false
+    }
+    void onFiltersChanged('variableChange')
   })
 
   watch(year, () => {
-    if (availableYears.value.includes(year.value)) void load()
+    if (years.value.includes(year.value)) void load()
   })
-  watch(probabilityDensity, (enabled) => {
+  watch(empiricalPdf, (enabled) => {
     if (enabled) {
-      populationDensity.value = true
+      empiricalCdf.value = true
       lorenzCurve.value = false
       variable.value = thresholdVariableFor(variable.value)
     }
   })
-  watch(populationDensity, (enabled) => {
-    if (!enabled) probabilityDensity.value = false
+  watch(empiricalCdf, (enabled) => {
+    if (!enabled) empiricalPdf.value = false
     if (enabled) lorenzCurve.value = false
   })
   watch(lorenzCurve, (enabled) => {
     if (enabled) {
-      populationDensity.value = false
-      probabilityDensity.value = false
+      empiricalCdf.value = false
+      empiricalPdf.value = false
       logScaleX.value = false
       logScaleY.value = false
     }
@@ -294,7 +295,7 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
       chartTypeLayers.value = normalized
     }
   }, { deep: true })
-  watch([chartTypeLayers, logScaleY, logScaleX, populationDensity, probabilityDensity, lorenzCurve], rebuild)
+  watch([chartTypeLayers, logScaleY, logScaleX, empiricalCdf, empiricalPdf, lorenzCurve], rebuild)
   watch([drillLevel, populationViewMode, customBreakpoints], rebuild, { deep: true })
 
   watch(populationViewMode, (mode) => {
@@ -316,8 +317,8 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
     chartTypeLayers,
     logScaleY,
     logScaleX,
-    populationDensity,
-    probabilityDensity,
+    empiricalCdf,
+    empiricalPdf,
     lorenzCurve,
     countries,
     variables,
@@ -326,6 +327,9 @@ export function createWidProfileState(options: WidProfileStateOptions = {}) {
     years,
     yearsLoading,
     yearRangeLabel,
+    paramAdjustmentHints,
+    adjustmentToastVisible,
+    adjustmentToastMessage,
     loading,
     error,
     populationViewMode,

@@ -30,10 +30,10 @@ export class WidPanelScope {
     return this.countries.value.find((item) => item.code === code)?.label ?? code
   }
 
-  async initCountries(): Promise<void> {
+  async initCountries(variable = 'ahweal'): Promise<void> {
     if (this.countries !== this.localCountries) return
     try {
-      this.localCountries.value = await this.app.listCountries.execute()
+      this.localCountries.value = await this.app.listCountries.execute({ variable })
     } catch {
       this.localCountries.value = [{ code: 'FR', label: formatCountryLabel('FR') }]
     }

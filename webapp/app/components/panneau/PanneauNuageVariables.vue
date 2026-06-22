@@ -48,6 +48,9 @@ const {
   years,
   yearsLoading,
   yearRangeLabel,
+  paramAdjustmentHints,
+  adjustmentToastVisible,
+  adjustmentToastMessage,
   loading,
   error: panelError,
   points,
@@ -101,6 +104,7 @@ onMounted(() => {
             density="compact"
             persistent-hint
           />
+          <ParamAdjustmentHint :message="paramAdjustmentHints.year" />
         </v-col>
       </v-row>
 
@@ -144,6 +148,8 @@ onMounted(() => {
                 <v-select
                   v-model="age"
                   :items="ageOptions"
+                  :loading="yearsLoading"
+                  :disabled="yearsLoading || ageOptions.length === 0"
                   item-title="label"
                   item-value="value"
                   label="Âge"
@@ -151,15 +157,19 @@ onMounted(() => {
                   hide-details
                   class="mb-3"
                 />
+                <ParamAdjustmentHint :message="paramAdjustmentHints.age" />
                 <v-select
                   v-model="pop"
                   :items="popOptions"
+                  :loading="yearsLoading"
+                  :disabled="yearsLoading || popOptions.length === 0"
                   item-title="label"
                   item-value="value"
                   label="Population"
                   density="compact"
                   hide-details
                 />
+                <ParamAdjustmentHint :message="paramAdjustmentHints.pop" />
               </v-expansion-panel-text>
             </v-expansion-panel>
           </v-expansion-panels>
@@ -231,6 +241,11 @@ onMounted(() => {
     </v-card>
     </div>
   </div>
+
+  <WidParamAdjustmentToast
+    v-model="adjustmentToastVisible"
+    :message="adjustmentToastMessage"
+  />
 </template>
 
 <style scoped>

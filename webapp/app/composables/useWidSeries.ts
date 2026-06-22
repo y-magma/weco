@@ -15,6 +15,7 @@ import {
   validateCustomBreakpoints,
 } from '~/visualization/populationPartition'
 import { WidDemographicFilters, WidPanelScope, yearCountLabel } from '~/composables/widPanelBase'
+import { useWidParamConstraints } from '~/composables/useWidParamConstraints'
 
 export interface WidSeriesStateOptions {
   countries?: Ref<CountryOption[]>
@@ -29,6 +30,13 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
   const countryCode = ref(options.initialCountryCode ?? 'FR')
   const partitionMode = ref<TimeSeriesPartitionMode>('wealth')
   const customBreakpoints = ref<number[]>([])
+
+  const constraints = useWidParamConstraints({
+    app: scope.app,
+    variable: filters.variable,
+    params: { countryCode, age: filters.age, pop: filters.pop },
+    countries: scope.countries,
+  })
 
   const trancheSeriesByCountry = ref<CountryTrancheSeries[]>([])
   const chartOption = ref<EChartsOption | null>(null)
@@ -164,15 +172,29 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
   }
 
   const init = async () => {
-    await scope.initCountries()
+    await scope.initCountries(filters.variable.value)
+    await constraints.loadCountriesForVariable(filters.variable.value)
+    await constraints.refreshConstraints('variableChange')
     await load()
   }
 
-  watch(
-    [countryCode, filters.variable, filters.age, filters.pop, partitionMode, customBreakpoints],
-    load,
-    { deep: true },
-  )
+  const refreshParamsAndLoad = async (mode: 'variableChange' | 'clamp') => {
+    await constraints.refreshConstraints(mode)
+    await load()
+  }
+
+  watch([countryCode, filters.age, filters.pop], () => {
+    void refreshParamsAndLoad('clamp')
+  })
+
+  watch([partitionMode, customBreakpoints], () => {
+    void load()
+  }, { deep: true })
+
+  watch(filters.variable, (next) => {
+    constraints.applyOptimisticDefaults(next)
+    void constraints.loadCountriesForVariable(next).then(() => refreshParamsAndLoad('variableChange'))
+  })
 
   return {
     countryCode,
@@ -181,10 +203,12 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
     pop: filters.pop,
     partitionMode,
     customBreakpoints,
-    countries: scope.countries,
+    countries: constraints.countries,
     variables: filters.variables,
-    ageOptions: filters.ageOptions,
-    popOptions: filters.popOptions,
+    ageOptions: constraints.ageOptions,
+    popOptions: constraints.popOptions,
+    paramsLoading: constraints.constraintsLoading,
+    yearRangeLabel: constraints.yearRangeLabel,
     partitionOptions,
     availableBoundaries,
     customPartitionValidation,

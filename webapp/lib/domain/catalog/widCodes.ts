@@ -9,7 +9,7 @@
 
 import { buildGPercentiles } from '@domain/services/percentiles'
 
-export type MeasureKind = 'average' | 'threshold' | 'other'
+export type MeasureKind = 'average' | 'threshold' | 'share' | 'gini' | 'other'
 
 export type WidVariableGroup = 'income' | 'wealth' | 'carbon'
 
@@ -35,7 +35,38 @@ export function measureKind(sixlet: string): MeasureKind {
   const head = sixlet.charAt(0).toLowerCase()
   if (head === 'a') return 'average'
   if (head === 't') return 'threshold'
+  if (head === 's') return 'share'
+  if (head === 'g') return 'gini'
   return 'other'
+}
+
+/** Percentile code for aggregate indicators (Gini) published at population level. */
+export const WID_SCALAR_PERCENTILE = 'p0p100'
+
+/**
+ * Percentile codes to request from the WID API for a given indicator.
+ * Gini is a single scalar (`p0p100`); distributional series use the 127 g-percentiles.
+ */
+export function profilePercentilesFor(sixlet: string): string[] {
+  if (measureKind(sixlet) === 'gini') return [WID_SCALAR_PERCENTILE]
+  return buildGPercentiles()
+}
+
+/** Expected number of percentile observations for completeness checks in the UI. */
+export function expectedProfilePointCount(sixlet: string): number {
+  return profilePercentilesFor(sixlet).length
+}
+
+/** Representative percentiles used to probe the year span of a profile variable. */
+export function profileYearProbePercentiles(sixlet: string): readonly string[] {
+  if (measureKind(sixlet) === 'gini') return [WID_SCALAR_PERCENTILE]
+  return ['p50p51', 'p0p1', 'p90p100'] as const
+}
+
+/** CDF / PDF / Lorenz modes apply only to average and threshold distributions. */
+export function supportsDistributionAnalytics(sixlet: string): boolean {
+  const kind = measureKind(sixlet)
+  return kind === 'average' || kind === 'threshold'
 }
 
 const GROUP_LABELS: Record<WidVariableGroup, string> = {
@@ -65,15 +96,23 @@ function v(
 /**
  * Variables exposées dans le panneau de visualisation.
  * Paires moyenne / seuil pour le patrimoine net et le revenu avant impôt,
+ * parts (s…) et Gini (g…) associés, revenus travail/capital (pllin / pkkin),
  * plus les variables distribuées CO₂ WID (préfixe l = moyenne par groupe).
  * Pour les variables carbone, utiliser age=999 (tous âges) et pop=i (individus).
  */
 export const WID_PROFILE_VARIABLES: WidVariable[] = [
   v('ahweal', 'Patrimoine net moyen', 'hweal', 'monnaie locale constante', 'wealth'),
   v('thweal', 'Patrimoine net — seuil', 'hweal', 'monnaie locale constante', 'wealth'),
+  v('shweal', 'Part du patrimoine net', 'hweal', 'part (0–1)', 'wealth'),
+  v('ghweal', 'Gini — patrimoine net', 'hweal', 'coefficient de Gini', 'wealth'),
   v('aptinc', 'Revenu avant impôt moyen', 'ptinc', 'monnaie locale constante', 'income'),
   v('tptinc', 'Revenu avant impôt — seuil', 'ptinc', 'monnaie locale constante', 'income'),
-  v('lpfghg', 'Empreinte carbone personnelle (GES)', 'pfghg', 'tCO₂eq / pers. / an', 'carbon'),
+  v('sptinc', 'Part du revenu avant impôt', 'ptinc', 'part (0–1)', 'income'),
+  v('gptinc', 'Gini — revenu avant impôt', 'ptinc', 'coefficient de Gini', 'income'),
+  v('apllin', 'Revenu du travail moyen', 'pllin', 'monnaie locale constante', 'income'),
+  v('tpllin', 'Revenu du travail — seuil', 'pllin', 'monnaie locale constante', 'income'),
+  v('apkkin', 'Revenu du capital moyen', 'pkkin', 'monnaie locale constante', 'income'),
+  v('tpkkin', 'Revenu du capital — seuil', 'pkkin', 'monnaie locale constante', 'income'),
   v('lpfcar', 'Empreinte CO₂ personnelle', 'pfcar', 'tCO₂ / pers. / an', 'carbon'),
 ]
 
@@ -115,6 +154,33 @@ export const WID_POP_OPTIONS: CodeOption[] = [
 
 export const WID_DEFAULT_AGE = '992'
 export const WID_DEFAULT_POP = 'j'
+
+export interface WidParamCombo {
+  age: string
+  pop: string
+}
+
+/** Canonical age/pop defaults by variable group (optimistic UI + resolve order). */
+export const WID_GROUP_DEFAULTS: Record<WidVariableGroup, WidParamCombo[]> = {
+  wealth: [
+    { age: '992', pop: 'j' },
+    { age: '992', pop: 'i' },
+    { age: '999', pop: 'i' },
+  ],
+  income: [
+    { age: '992', pop: 'j' },
+    { age: '992', pop: 'i' },
+    { age: '999', pop: 'i' },
+  ],
+  carbon: [{ age: '999', pop: 'i' }],
+}
+
+/** Fallback combos shown before API metadata arrives. */
+export function knownParamCombosForVariable(sixlet: string): WidParamCombo[] {
+  const meta = findWidVariable(sixlet)
+  if (!meta) return [{ age: WID_DEFAULT_AGE, pop: WID_DEFAULT_POP }]
+  return WID_GROUP_DEFAULTS[meta.group]
+}
 
 /** Build the API variable code `sixlet_percentile_age_pop`. */
 export function buildVariableCode(

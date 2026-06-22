@@ -4,6 +4,7 @@ import { buildTimeSeriesOption } from '~/visualization/timeSeries'
 import type { CountryOption, DataSeries } from '@domain/entities'
 import { TIME_SERIES_COMPARE_POPULATION_OPTIONS } from '~/visualization/timeSeriesPartition'
 import { WidDemographicFilters, WidPanelScope, yearCountLabel } from '~/composables/widPanelBase'
+import { useWidParamConstraints } from '~/composables/useWidParamConstraints'
 
 export interface WidSeriesCompareStateOptions {
   countries?: Ref<CountryOption[]>
@@ -18,6 +19,14 @@ export function createWidSeriesCompareState(options: WidSeriesCompareStateOption
 
   const countryCodes = ref<string[]>(options.initialCountryCodes ?? ['FR', 'US'])
   const percentile = ref(options.initialPercentile ?? 'p50p51')
+  const paramCountryCode = ref(countryCodes.value[0] ?? 'FR')
+
+  const constraints = useWidParamConstraints({
+    app: scope.app,
+    variable: filters.variable,
+    params: { countryCode: paramCountryCode, age: filters.age, pop: filters.pop },
+    countries: scope.countries,
+  })
 
   const seriesList = ref<DataSeries[]>([])
   const chartOption = ref<EChartsOption | null>(null)
@@ -85,11 +94,27 @@ export function createWidSeriesCompareState(options: WidSeriesCompareStateOption
   }
 
   const init = async () => {
-    await scope.initCountries()
+    await scope.initCountries(filters.variable.value)
+    paramCountryCode.value = countryCodes.value[0] ?? 'FR'
+    await constraints.loadCountriesForVariable(filters.variable.value)
+    await constraints.refreshConstraints('variableChange')
     await load()
   }
 
-  watch([countryCodes, filters.variable, percentile, filters.age, filters.pop], load, { deep: true })
+  const refreshParamsAndLoad = async (mode: 'variableChange' | 'clamp') => {
+    paramCountryCode.value = countryCodes.value[0] ?? 'FR'
+    await constraints.refreshConstraints(mode)
+    await load()
+  }
+
+  watch([countryCodes, percentile, filters.age, filters.pop], () => {
+    void refreshParamsAndLoad('clamp')
+  }, { deep: true })
+
+  watch(filters.variable, (next) => {
+    constraints.applyOptimisticDefaults(next)
+    void constraints.loadCountriesForVariable(next).then(() => refreshParamsAndLoad('variableChange'))
+  })
 
   return {
     countryCodes,
@@ -97,10 +122,12 @@ export function createWidSeriesCompareState(options: WidSeriesCompareStateOption
     percentile,
     age: filters.age,
     pop: filters.pop,
-    countries: scope.countries,
+    countries: constraints.countries,
     variables: filters.variables,
-    ageOptions: filters.ageOptions,
-    popOptions: filters.popOptions,
+    ageOptions: constraints.ageOptions,
+    popOptions: constraints.popOptions,
+    paramsLoading: constraints.constraintsLoading,
+    yearRangeLabel: constraints.yearRangeLabel,
     populationOptions,
     loading: scope.loading,
     error: scope.error,

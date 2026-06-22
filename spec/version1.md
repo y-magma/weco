@@ -85,7 +85,7 @@ p99.99p99.991, …, p99.999p100         (zoom top 0,01 %)
 | Transformation          | Détail                                                                              |
 | ----------------------- | ----------------------------------------------------------------------------------- |
 | **Tri des percentiles** | Parser le rang (borne basse) pour ordonner les 127 tranches                         |
-| **Filtrage age/pop**    | Fixer une combinaison unique par série                                              |
+| **Filtrage age/pop**    | Fixer une combinaison unique par série ; listes restreintes aux combos disponibles (API WID) ; défauts par groupe de variable |
 | **Échange d'axes**      | Permuter les tableaux X/Y — c'est la « réciproque » ; **pas de librairie dédiée**   |
 | **Valeurs manquantes**  | Trou explicite, pas d'interpolation cachée ([A3](./A-raw-data/A3-forme-du-brut.md)) |
 

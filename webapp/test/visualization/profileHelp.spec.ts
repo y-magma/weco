@@ -22,8 +22,8 @@ describe('buildActiveCalculationHelp', () => {
       chartType: 'line',
       logScaleX: false,
       logScaleY: false,
-      populationDensity: false,
-      probabilityDensity: false,
+      empiricalCdf: false,
+      empiricalPdf: false,
       lorenzCurve: false,
       profile: baseProfile,
     })
@@ -31,17 +31,17 @@ describe('buildActiveCalculationHelp', () => {
     expect(help.paragraphs.some((p) => p.includes('profil par centile'))).toBe(true)
   })
 
-  it('describes probability density when enabled', () => {
+  it('describes empirical PDF when enabled', () => {
     const help = buildActiveCalculationHelp({
       chartType: 'bar',
       logScaleX: false,
       logScaleY: false,
-      populationDensity: true,
-      probabilityDensity: true,
+      empiricalCdf: true,
+      empiricalPdf: true,
       lorenzCurve: false,
       profile: baseProfile,
     })
-    expect(help.paragraphs.some((p) => p.includes('densité de probabilité'))).toBe(true)
+    expect(help.paragraphs.some((p) => p.includes('PDF empirique'))).toBe(true)
     expect(help.paragraphs.some((p) => p.includes('Δ(rang'))).toBe(true)
   })
 
@@ -50,8 +50,8 @@ describe('buildActiveCalculationHelp', () => {
       chartType: 'line',
       logScaleX: false,
       logScaleY: false,
-      populationDensity: false,
-      probabilityDensity: false,
+      empiricalCdf: false,
+      empiricalPdf: false,
       lorenzCurve: true,
       profile: baseProfile,
     })

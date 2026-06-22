@@ -2,6 +2,7 @@
 definePageMeta({ layout: 'default' })
 
 const { countriesError } = useWidCountriesProvider()
+const { sourceId } = usePanneauDataSourceProvider()
 </script>
 
 <template>
@@ -26,7 +27,12 @@ const { countriesError } = useWidCountriesProvider()
       {{ countriesError }}
     </v-alert>
 
-    <PanneauSerieTemporelle chart-height="420px" />
+    <PanneauDataSourceSection v-model="sourceId" class="mb-4" />
+
+    <PanneauSerieTemporelle
+      chart-height="420px"
+      :show-data-source-section="false"
+    />
 
     <v-divider class="my-6" />
 
@@ -39,6 +45,9 @@ const { countriesError } = useWidCountriesProvider()
       </v-col>
     </v-row>
 
-    <PanneauSerieTemporelleCompare chart-height="420px" />
+    <PanneauSerieTemporelleCompare
+      chart-height="420px"
+      :show-data-source-section="false"
+    />
   </div>
 </template>
