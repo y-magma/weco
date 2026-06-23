@@ -785,6 +785,8 @@ export interface ProfileDataZoomOptions {
   valueFilterMode?: 'filter' | 'none'
   /** `none` pans/scales the rank axis without filtering series (needed on strict log X). */
   rankFilterMode?: 'filter' | 'none'
+  /** Vertical value-axis slider (Y zoom remains via inside dataZoom / mouse wheel). */
+  showValueSlider?: boolean
 }
 
 /** Native ECharts sliders: rank/population axis + value axis (horizontal or vertical). */
@@ -796,6 +798,7 @@ export function buildProfileDataZoom(
   const rankOnX = !valueOnX
   const valueFilterMode = options?.valueFilterMode ?? 'filter'
   const rankFilterMode = options?.rankFilterMode ?? 'filter'
+  const showValueSlider = options?.showValueSlider ?? true
   const { bottomSlider, bottomSliderHeight, gridBottom } = PROFILE_CHART_LAYOUT
   const rankRange = dataZoomRange(initialWindow?.rankStart, initialWindow?.rankEnd)
   const valueRange = dataZoomRange(initialWindow?.valueStart, initialWindow?.valueEnd)
@@ -850,7 +853,9 @@ export function buildProfileDataZoom(
         ...valueRange,
       }
 
-  return [rankInside, valueInside, rankSlider, valueSlider]
+  return showValueSlider
+    ? [rankInside, valueInside, rankSlider, valueSlider]
+    : [rankInside, valueInside, rankSlider]
 }
 
 /**

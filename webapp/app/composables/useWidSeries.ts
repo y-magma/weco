@@ -3,17 +3,18 @@ import type { Ref } from 'vue'
 import { buildStackedTimeSeriesOption, type CountryTrancheSeries } from '~/visualization/timeSeries'
 import type { CountryOption, DataSeries } from '@domain/entities'
 import {
-  breakpointsForMode,
+  isCustomPartitionComplete,
+  validatePartialCustomBreakpoints,
+} from '~/visualization/populationPartition'
+import {
+  breakpointsForTimeSeriesPopulationMode,
   buildTimeSeriesTranches,
   standardPopulationBoundaries,
-  TIME_SERIES_PARTITION_OPTIONS,
-  type TimeSeriesPartitionMode,
+  TIME_SERIES_POPULATION_VIEW_OPTIONS,
+  trancheLabelModeForPopulation,
+  type TimeSeriesPopulationMode,
   type TimeSeriesTranche,
 } from '~/visualization/timeSeriesPartition'
-import {
-  isCustomPartitionComplete as isPopulationPartitionComplete,
-  validateCustomBreakpoints,
-} from '~/visualization/populationPartition'
 import { WidDemographicFilters, WidPanelScope, yearCountLabel } from '~/composables/widPanelBase'
 import { useWidParamConstraints } from '~/composables/useWidParamConstraints'
 
@@ -28,7 +29,7 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
   const filters = new WidDemographicFilters(options.initialVariable)
 
   const countryCode = ref(options.initialCountryCode ?? 'FR')
-  const partitionMode = ref<TimeSeriesPartitionMode>('wealth')
+  const partitionMode = ref<TimeSeriesPopulationMode>('distribution')
   const customBreakpoints = ref<number[]>([])
 
   const constraints = useWidParamConstraints({
@@ -41,27 +42,30 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
   const trancheSeriesByCountry = ref<CountryTrancheSeries[]>([])
   const chartOption = ref<EChartsOption | null>(null)
 
-  const partitionOptions = TIME_SERIES_PARTITION_OPTIONS
+  const partitionViewOptions = TIME_SERIES_POPULATION_VIEW_OPTIONS
   const availableBoundaries = standardPopulationBoundaries()
 
   const customPartitionValidation = computed(() =>
-    validateCustomBreakpoints(customBreakpoints.value, availableBoundaries),
+    validatePartialCustomBreakpoints(customBreakpoints.value, availableBoundaries),
   )
 
+  const customPartitionReady = computed(() => customPartitionValidation.value.valid)
+
   const customPartitionComplete = computed(() =>
-    isPopulationPartitionComplete(customBreakpoints.value) && customPartitionValidation.value.valid,
+    isCustomPartitionComplete(customBreakpoints.value) && customPartitionValidation.value.valid,
   )
 
   const activeBreakpoints = computed(() => {
-    if (partitionMode.value === 'custom') {
-      return customPartitionComplete.value ? customBreakpoints.value : []
+    const mode = partitionMode.value
+    if (mode === 'custom') {
+      return customPartitionReady.value ? customBreakpoints.value : []
     }
-    return breakpointsForMode(partitionMode.value, customBreakpoints.value)
+    return breakpointsForTimeSeriesPopulationMode(mode)
   })
 
   const activeTranches = computed<TimeSeriesTranche[]>(() => {
     if (activeBreakpoints.value.length === 0) return []
-    return buildTimeSeriesTranches(activeBreakpoints.value, partitionMode.value)
+    return buildTimeSeriesTranches(activeBreakpoints.value, trancheLabelModeForPopulation(partitionMode.value))
   })
 
   const trancheCountLabel = computed(() => {
@@ -114,7 +118,7 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
     const tranches = activeTranches.value
     if (tranches.length === 0) {
       scope.error.value = partitionMode.value === 'custom'
-        ? (customPartitionValidation.value.error ?? 'Définissez les tranches personnalisées jusqu’à 100 %.')
+        ? (customPartitionValidation.value.error ?? 'Choisissez au moins une borne de fin pour afficher la série.')
         : 'Aucune tranche sélectionnée'
       trancheSeriesByCountry.value = []
       chartOption.value = null
@@ -175,7 +179,9 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
     await scope.initCountries(filters.variable.value)
     await constraints.loadCountriesForVariable(filters.variable.value)
     await constraints.refreshConstraints('variableChange')
-    await load()
+    if (activeBreakpoints.value.length > 0) {
+      await load()
+    }
   }
 
   const refreshParamsAndLoad = async (mode: 'variableChange' | 'clamp') => {
@@ -209,9 +215,10 @@ export function createWidSeriesState(options: WidSeriesStateOptions = {}) {
     popOptions: constraints.popOptions,
     paramsLoading: constraints.constraintsLoading,
     yearRangeLabel: constraints.yearRangeLabel,
-    partitionOptions,
+    partitionViewOptions,
     availableBoundaries,
     customPartitionValidation,
+    customPartitionReady,
     customPartitionComplete,
     activeTranches,
     loading: scope.loading,

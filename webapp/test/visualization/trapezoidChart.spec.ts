@@ -146,6 +146,17 @@ describe('buildTrapezoidProfileOption — log axes', () => {
     expect(yAxis.max).toBeGreaterThan(maxPointY)
   })
 
+  it('omits the vertical value slider (Y zoom via inside dataZoom / mouse wheel)', () => {
+    const option = buildTrapezoidProfileOption(profile, approximation, {
+      trapezoidBreakpoints: [50, 100],
+      showTrapezoids: true,
+    })
+    const zooms = option.dataZoom as { type?: string, orient?: string, yAxisIndex?: number }[]
+    const valueSlider = zooms.find((z) => z.type === 'slider' && z.orient === 'vertical' && z.yAxisIndex === 0)
+    expect(valueSlider).toBeUndefined()
+    expect(zooms.some((z) => z.type === 'inside' && z.yAxisIndex === 0)).toBe(true)
+  })
+
   it('uses axis panning (not data filtering) on log Y so zoom-out restores the full range', () => {
     const option = buildTrapezoidProfileOption(profile, approximation, {
       logScaleY: true,

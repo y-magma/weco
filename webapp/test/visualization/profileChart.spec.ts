@@ -121,6 +121,12 @@ describe('buildProfileDataZoom', () => {
     expect(zooms.find((z) => z.type === 'slider' && z.xAxisIndex === 0)).toBeDefined()
   })
 
+  it('can omit the value slider while keeping inside Y zoom', () => {
+    const zooms = buildProfileDataZoom(false, undefined, { showValueSlider: false })
+    expect(zooms.find((z) => z.type === 'slider' && z.orient === 'vertical')).toBeUndefined()
+    expect(zooms.some((z) => z.type === 'inside' && z.yAxisIndex === 0)).toBe(true)
+  })
+
   it('uses a horizontal slider for the value axis in empirical CDF view', () => {
     const zooms = buildProfileDataZoom(true)
     const valueSlider = zooms.find((z) => z.type === 'slider' && z.xAxisIndex === 0)

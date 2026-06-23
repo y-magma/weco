@@ -2,7 +2,6 @@
 import {
   describeCustomIntervals,
   formatBoundaryLabel,
-  parseBoundaryInput,
   selectableCustomBoundaries,
   validateNextCustomBreakpoint,
 } from '~/visualization/populationPartition'
@@ -47,11 +46,12 @@ const {
   customBreakpoints,
   availableBoundaries,
   customPartitionValidation,
+  customPartitionReady,
   customPartitionComplete,
   variables,
   ageOptions,
   popOptions,
-  partitionOptions,
+  partitionViewOptions,
   activeTranches,
   loading,
   error: panelError,
@@ -69,7 +69,7 @@ const {
 const paramsInSidebar = inject<Ref<boolean>>('paramsInSidebar', ref(false))
 const { sourceId, sourceLabel } = usePanneauDataSource()
 
-const customBreakpointInput = ref('')
+const customBreakpointInput = ref<number | null>(null)
 const customBreakpointError = ref<string | null>(null)
 
 const selectableBoundaries = computed(() =>
@@ -87,6 +87,14 @@ const customIntervalLabels = computed(() =>
   describeCustomIntervals(customBreakpoints.value),
 )
 
+const customPartitionReadyHint = computed(() => {
+  const base = `Découpage prêt — ${customIntervalLabels.value.length} intervalle(s).`
+  if (!customPartitionComplete.value) {
+    return `${base} Vous pouvez ajouter d'autres bornes ou étendre jusqu'à 100 %.`
+  }
+  return base
+})
+
 const nextBoundaryHint = computed(() => {
   const last = customBreakpoints.value.length > 0
     ? customBreakpoints.value[customBreakpoints.value.length - 1]!
@@ -94,13 +102,8 @@ const nextBoundaryHint = computed(() => {
   return `Borne de fin après ${formatBoundaryLabel(last)}`
 })
 
-const addCustomBreakpoint = (raw: string | number | null) => {
-  const text = raw == null ? '' : String(raw)
-  const value = parseBoundaryInput(text)
-  if (value === null) {
-    customBreakpointError.value = 'Saisissez un pourcentage entre 0 et 100.'
-    return
-  }
+const addCustomBreakpoint = (value: number | null) => {
+  if (value == null) return
   const validation = validateNextCustomBreakpoint(
     value,
     customBreakpoints.value,
@@ -111,8 +114,13 @@ const addCustomBreakpoint = (raw: string | number | null) => {
     return
   }
   customBreakpoints.value = [...customBreakpoints.value, value]
-  customBreakpointInput.value = ''
+  customBreakpointInput.value = null
   customBreakpointError.value = null
+}
+
+const onCustomBoundarySelected = (value: number | null) => {
+  if (value == null) return
+  addCustomBreakpoint(value)
 }
 
 const removeLastCustomBreakpoint = () => {
@@ -122,12 +130,12 @@ const removeLastCustomBreakpoint = () => {
 
 const resetCustomBreakpoints = () => {
   customBreakpoints.value = []
-  customBreakpointInput.value = ''
+  customBreakpointInput.value = null
   customBreakpointError.value = null
 }
 
 watch(partitionMode, () => {
-  customBreakpointInput.value = ''
+  customBreakpointInput.value = null
   customBreakpointError.value = null
 })
 
@@ -179,73 +187,41 @@ onMounted(() => {
             hide-details
           />
         </v-col>
-        <v-col class="panel-filters-row__item">
-          <v-select
-            v-model="partitionMode"
-            :items="partitionOptions"
-            item-title="label"
-            item-value="value"
-            label="Tranches de population"
-            density="compact"
-            hide-details
-          />
-        </v-col>
       </v-row>
 
-      <v-expand-transition>
-        <div
-          v-if="partitionMode === 'custom'"
-          class="custom-partition-panel mt-2 pa-3 rounded border"
-        >
-          <div class="text-body-2 font-weight-medium mb-2">
-            Tranches personnalisées
-          </div>
-          <p class="text-body-2 text-medium-emphasis mb-3">
-            Saisissez les bornes de <strong>fin</strong> de chaque intervalle. Terminez par <strong>100 %</strong>.
-            <br>
-            Exemple : 50, 90, 99, 99.9, 100 → bas 50 %, 50–90 %, 90–99 %, top 1 %, top 0,1 %.
-          </p>
+      <div class="custom-partition-panel mt-3 pa-3 rounded border">
+        <div class="text-body-2 font-weight-medium mb-2">
+          Tranches de population
+        </div>
 
-          <div v-if="customIntervalLabels.length > 0" class="d-flex flex-wrap ga-1 mb-3">
-            <v-chip
-              v-for="(label, idx) in customIntervalLabels"
-              :key="idx"
-              size="small"
-              variant="tonal"
-              color="primary"
-            >
-              {{ label }}
-            </v-chip>
-          </div>
+        <v-select
+          v-model="partitionMode"
+          :items="partitionViewOptions"
+          item-title="label"
+          item-value="value"
+          label="Mode de découpage"
+          density="compact"
+          hide-details
+        />
 
-          <v-row dense align="center">
-            <v-col cols="12" sm="6" md="4">
-              <v-combobox
+        <template v-if="partitionMode === 'custom'">
+          <v-row dense align="center" class="mt-1">
+            <v-col cols="12">
+              <v-select
                 v-model="customBreakpointInput"
                 :items="selectableBoundaryItems"
                 item-title="title"
                 item-value="value"
                 :label="nextBoundaryHint"
                 :error-messages="customBreakpointError ? [customBreakpointError] : []"
-                :disabled="customPartitionComplete || selectableBoundaries.length === 0"
+                :disabled="selectableBoundaries.length === 0"
                 density="compact"
                 hide-details="auto"
                 clearable
-                @keydown.enter.prevent="addCustomBreakpoint(customBreakpointInput)"
+                @update:model-value="onCustomBoundarySelected"
               />
             </v-col>
-            <v-col cols="auto">
-              <v-btn
-                size="small"
-                color="primary"
-                variant="tonal"
-                :disabled="customPartitionComplete || !customBreakpointInput"
-                @click="addCustomBreakpoint(customBreakpointInput)"
-              >
-                Ajouter
-              </v-btn>
-            </v-col>
-            <v-col cols="auto">
+            <v-col cols="12" class="custom-partition-actions d-flex flex-wrap ga-1">
               <v-btn
                 size="small"
                 variant="text"
@@ -254,8 +230,6 @@ onMounted(() => {
               >
                 Annuler dernière
               </v-btn>
-            </v-col>
-            <v-col cols="auto">
               <v-btn
                 size="small"
                 variant="text"
@@ -267,15 +241,19 @@ onMounted(() => {
             </v-col>
           </v-row>
 
-          <v-alert
-            v-if="customPartitionComplete"
-            type="success"
-            density="compact"
-            variant="tonal"
-            class="mt-3"
-          >
-            Découpage complet — {{ customIntervalLabels.length }} intervalle(s).
-          </v-alert>
+          <div v-if="customPartitionReady" class="mt-2">
+            <v-tooltip location="top" :text="customPartitionReadyHint">
+              <template #activator="{ props: tooltipProps }">
+                <v-icon
+                  v-bind="tooltipProps"
+                  icon="mdi-check-circle"
+                  color="success"
+                  size="small"
+                  aria-label="Découpage prêt"
+                />
+              </template>
+            </v-tooltip>
+          </div>
           <v-alert
             v-else-if="customBreakpoints.length > 0 && customPartitionValidation.error"
             type="warning"
@@ -286,16 +264,16 @@ onMounted(() => {
             {{ customPartitionValidation.error }}
           </v-alert>
           <v-alert
-            v-else-if="!customPartitionComplete"
+            v-else-if="!customPartitionReady"
             type="info"
             density="compact"
             variant="tonal"
             class="mt-3"
           >
-            Le graphique s'affichera une fois le découpage terminé par la borne 100 %.
+            Choisissez au moins une borne de fin pour afficher la série.
           </v-alert>
-        </div>
-      </v-expand-transition>
+        </template>
+      </div>
 
       <v-row dense class="mt-2">
         <v-col cols="12" md="6">
@@ -386,7 +364,7 @@ onMounted(() => {
       </div>
 
       <div
-        v-if="activeTranches.length > 0 && partitionMode !== 'custom'"
+        v-if="activeTranches.length > 0"
         class="d-flex flex-wrap ga-1 mb-2"
       >
         <v-chip
@@ -426,6 +404,10 @@ onMounted(() => {
 
 .custom-partition-panel {
   border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.custom-partition-actions {
+  padding-top: 0;
 }
 
 /* ── Sidebar mode: filters left, chart right ── */

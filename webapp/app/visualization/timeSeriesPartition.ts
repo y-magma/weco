@@ -11,8 +11,24 @@ import {
 
 export type TimeSeriesPartitionMode = 'wealth' | 'step10' | 'step25' | 'custom'
 
+/** Modes de découpage pour la série temporelle empilée. */
+export type TimeSeriesPopulationMode = 'distribution' | 'whole' | 'step10' | 'step25' | 'custom'
+
 /** Bornes par défaut (style infographie : bas 50 %, 50–90 %, 90–99 %, top 1 %, top 0,1 %). */
 export const TIME_SERIES_DEFAULT_BREAKPOINTS = [50, 90, 99, 99.9, 100] as const
+
+/** Preset infographie : bas 50 %, 50–90 %, 90–99 %, top 1 %, top 0,1 %. */
+export const TIME_SERIES_DISTRIBUTION_BREAKPOINTS = TIME_SERIES_DEFAULT_BREAKPOINTS
+
+export const TIME_SERIES_WHOLE_BREAKPOINTS = [100] as const
+
+export const TIME_SERIES_POPULATION_VIEW_OPTIONS: { value: TimeSeriesPopulationMode, label: string }[] = [
+  { value: 'distribution', label: 'Tranche par défaut' },
+  { value: 'whole', label: 'Ensemble de la population' },
+  { value: 'step10', label: 'Tranches de 10 % de pop' },
+  { value: 'step25', label: 'Tranches de 25 % de pop' },
+  { value: 'custom', label: 'Tranches personnalisées' },
+]
 
 export const TIME_SERIES_PARTITION_OPTIONS: { value: TimeSeriesPartitionMode, label: string }[] = [
   { value: 'wealth', label: 'Distribution patrimoniale (défaut)' },
@@ -28,9 +44,11 @@ export const TIME_SERIES_COMPARE_POPULATION_OPTIONS: { value: string, label: str
   { value: 'p90p99', label: '90–99 %' },
   { value: 'p99p99.9', label: 'Top 1 %' },
   { value: 'p99.9p100', label: 'Top 0,1 %' },
-  { value: 'p50p51', label: 'Médiane (p50–51)' },
+  { value: 'custom', label: 'Tranche personnalisée' },
   { value: 'p0p100', label: 'Ensemble de la population' },
 ]
+
+export const TIME_SERIES_COMPARE_CUSTOM_SENTINEL = 'custom' as const
 
 /** Palette inspirée de l'infographie (bas → haut). */
 export const TIME_SERIES_TRANCHE_COLORS = [
@@ -50,6 +68,7 @@ const WEALTH_TRANCHE_LABELS: Record<string, string> = {
   p0p50: 'Bas 50 %',
   p50p90: '50–90 %',
   p90p99: '90–99 %',
+  p99p100: 'Top 1 %',
   'p99p99.9': 'Top 1 %',
   'p99.9p100': 'Top 0,1 %',
 }
@@ -75,6 +94,21 @@ export function standardPopulationBoundaries(): number[] {
     }
   }
   return [...set].sort((a, b) => a - b)
+}
+
+export function breakpointsForTimeSeriesPopulationMode(mode: TimeSeriesPopulationMode): number[] {
+  if (mode === 'distribution') return [...TIME_SERIES_DISTRIBUTION_BREAKPOINTS]
+  if (mode === 'whole') return [...TIME_SERIES_WHOLE_BREAKPOINTS]
+  if (mode === 'step10') return buildStepBreakpoints(10)
+  if (mode === 'step25') return buildStepBreakpoints(25)
+  return []
+}
+
+export function trancheLabelModeForPopulation(mode: TimeSeriesPopulationMode): TimeSeriesPartitionMode {
+  if (mode === 'distribution') return 'wealth'
+  if (mode === 'step10') return 'step10'
+  if (mode === 'step25') return 'step25'
+  return 'custom'
 }
 
 export function breakpointsForMode(mode: TimeSeriesPartitionMode, custom: number[]): number[] {

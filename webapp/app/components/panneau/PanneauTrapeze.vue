@@ -145,6 +145,14 @@ const customIntervalLabels = computed(() =>
   describeCustomIntervals(customBreakpoints.value),
 )
 
+const customPartitionReadyHint = computed(() => {
+  const base = `Découpage prêt — ${customIntervalLabels.value.length} intervalle(s).`
+  if (!customPartitionComplete.value) {
+    return `${base} Vous pouvez ajouter d'autres bornes ou étendre jusqu'à 100 %.`
+  }
+  return base
+})
+
 const nextBoundaryHint = computed(() => {
   const last = customBreakpoints.value.length > 0
     ? customBreakpoints.value[customBreakpoints.value.length - 1]!
@@ -379,7 +387,7 @@ onMounted(() => {
 
           <template v-if="approxPartitionMode === 'custom'">
             <v-row dense align="center" class="mt-1">
-              <v-col cols="12" sm="6" md="4">
+              <v-col cols="12">
                 <v-select
                   v-model="customBreakpointInput"
                   :items="selectableBoundaryItems"
@@ -394,7 +402,7 @@ onMounted(() => {
                   @update:model-value="onCustomBoundarySelected"
                 />
               </v-col>
-              <v-col cols="auto">
+              <v-col cols="12" class="custom-partition-actions d-flex flex-wrap ga-1">
                 <v-btn
                   size="small"
                   variant="text"
@@ -403,8 +411,6 @@ onMounted(() => {
                 >
                   Annuler dernière
                 </v-btn>
-              </v-col>
-              <v-col cols="auto">
                 <v-btn
                   size="small"
                   variant="text"
@@ -417,19 +423,7 @@ onMounted(() => {
             </v-row>
 
             <v-alert
-              v-if="customPartitionReady"
-              type="success"
-              density="compact"
-              variant="tonal"
-              class="mt-3"
-            >
-              Découpage prêt — {{ customIntervalLabels.length }} intervalle(s).
-              <span v-if="!customPartitionComplete">
-                Vous pouvez ajouter d'autres bornes ou étendre jusqu'à 100 %.
-              </span>
-            </v-alert>
-            <v-alert
-              v-else-if="customBreakpoints.length > 0 && customPartitionValidation.error"
+              v-if="customBreakpoints.length > 0 && customPartitionValidation.error"
               type="warning"
               density="compact"
               variant="tonal"
@@ -448,7 +442,7 @@ onMounted(() => {
             </v-alert>
           </template>
 
-          <div v-if="approxReady" class="mt-3">
+          <div v-if="approxReady" class="mt-3 d-flex align-center justify-space-between ga-2">
             <v-btn
               size="x-small"
               variant="text"
@@ -459,26 +453,41 @@ onMounted(() => {
               Visibilité des intervalles
               ({{ visibleApproxIntervalCount }}/{{ approxIntervalLabels.length }})
             </v-btn>
-            <v-expand-transition>
-              <div
-                v-show="showIntervalVisibilityPanel"
-                class="d-flex flex-wrap ga-1 mt-2"
-              >
-                <v-chip
-                  v-for="(label, idx) in approxIntervalLabels"
-                  :key="idx"
+            <v-tooltip
+              v-if="approxPartitionMode === 'custom' && customPartitionReady"
+              location="top"
+              :text="customPartitionReadyHint"
+            >
+              <template #activator="{ props: tooltipProps }">
+                <v-icon
+                  v-bind="tooltipProps"
+                  icon="mdi-check-circle"
+                  color="success"
                   size="small"
-                  :variant="isApproxIntervalVisible(idx) ? 'tonal' : 'outlined'"
-                  :color="isApproxIntervalVisible(idx) ? 'primary' : 'default'"
-                  :prepend-icon="isApproxIntervalVisible(idx) ? 'mdi-eye' : 'mdi-eye-off'"
-                  class="interval-visibility-chip"
-                  @click="toggleApproxIntervalVisibility(idx)"
-                >
-                  {{ label }}
-                </v-chip>
-              </div>
-            </v-expand-transition>
+                  aria-label="Découpage prêt"
+                />
+              </template>
+            </v-tooltip>
           </div>
+          <v-expand-transition>
+            <div
+              v-if="approxReady && showIntervalVisibilityPanel"
+              class="d-flex flex-wrap ga-1 mt-2"
+            >
+              <v-chip
+                v-for="(label, idx) in approxIntervalLabels"
+                :key="idx"
+                size="small"
+                :variant="isApproxIntervalVisible(idx) ? 'tonal' : 'outlined'"
+                :color="isApproxIntervalVisible(idx) ? 'primary' : 'default'"
+                :prepend-icon="isApproxIntervalVisible(idx) ? 'mdi-eye' : 'mdi-eye-off'"
+                class="interval-visibility-chip"
+                @click="toggleApproxIntervalVisibility(idx)"
+              >
+                {{ label }}
+              </v-chip>
+            </div>
+          </v-expand-transition>
         </div>
 
         <div class="mt-3">
@@ -752,6 +761,10 @@ onMounted(() => {
 
 .custom-partition-panel {
   border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.custom-partition-actions {
+  padding-top: 0;
 }
 
 .method-toggle {
