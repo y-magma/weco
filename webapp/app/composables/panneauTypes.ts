@@ -1,4 +1,4 @@
-export type PanneauType = 'temps' | 'trapeze'
+export type PanneauType = 'temps' | 'temps-compare' | 'exploration'
 
 export interface PanneauTypeMeta {
   id: PanneauType
@@ -7,6 +7,8 @@ export interface PanneauTypeMeta {
   subtitle: string
   text: string
   route: string
+  /** Affiché sur la page Exploration des données (/panneau). */
+  showInExplorer?: boolean
 }
 
 export const PANNEAU_TYPES: PanneauTypeMeta[] = [
@@ -15,18 +17,31 @@ export const PANNEAU_TYPES: PanneauTypeMeta[] = [
     icon: 'mdi-chart-timeline-variant',
     title: 'Série temporelle',
     subtitle: 'Un pays, plusieurs tranches',
-    text: 'Suivre un indicateur année après année pour un pays.',
+    text: 'Suivre un indicateur année après année pour un pays, ou comparer une tranche entre plusieurs pays.',
     route: '/panneau/temps',
+    showInExplorer: true,
   },
   {
-    id: 'trapeze',
+    id: 'temps-compare',
+    icon: 'mdi-chart-multiple',
+    title: 'Comparaison multi-pays',
+    subtitle: 'Une tranche, plusieurs pays',
+    text: 'Comparer la même tranche de population entre plusieurs pays.',
+    route: '/panneau/temps',
+    showInExplorer: false,
+  },
+  {
+    id: 'exploration',
     icon: 'mdi-chart-areaspline',
     title: 'Profil d\'inégalité et approximations',
     subtitle: 'Du plus modeste au plus aisé',
     text: 'Visualiser la répartition dans la population et approximer la courbe par trapèzes et rectangles.',
-    route: '/panneau/trapeze',
+    route: '/panneau/exploration',
+    showInExplorer: true,
   },
 ]
+
+export const EXPLORER_PANNEAU_TYPES = PANNEAU_TYPES.filter((item) => item.showInExplorer)
 
 export function findPanneauType(id: PanneauType): PanneauTypeMeta {
   return PANNEAU_TYPES.find((item) => item.id === id) ?? PANNEAU_TYPES[0]!

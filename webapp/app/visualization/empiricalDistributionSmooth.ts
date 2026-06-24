@@ -245,8 +245,8 @@ function wealthSampleGrid(knots: CdfKnot[], sampleCount: number, logX: boolean):
   const xs = knots.map((k) => k.x).filter((x) => Number.isFinite(x))
   if (xs.length === 0) return []
 
-  let lo = Math.min(...xs)
-  let hi = Math.max(...xs)
+  const lo = Math.min(...xs)
+  const hi = Math.max(...xs)
   if (hi - lo < EPS) return [lo]
 
   const count = Math.max(2, sampleCount)

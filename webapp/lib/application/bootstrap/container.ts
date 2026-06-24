@@ -3,6 +3,7 @@ import {
   getDefaultDataSource,
   initializeDataSources,
   listDataSources,
+  type DataSourcesConfig,
 } from '@infrastructure/data-sources/registry'
 import { ListCountriesUseCase } from '@application/use-cases/ListCountriesUseCase'
 import { ListAvailableParamsUseCase } from '@application/use-cases/ListAvailableParamsUseCase'
@@ -10,10 +11,8 @@ import { ListProfileYearsUseCase } from '@application/use-cases/ListProfileYears
 import { LoadProfileUseCase } from '@application/use-cases/LoadProfileUseCase'
 import { LoadTimeSeriesUseCase } from '@application/use-cases/LoadTimeSeriesUseCase'
 
-export interface ApplicationConfig {
-  widApiKey?: string
-  widApiBaseUrl?: string
-}
+/** @deprecated Use DataSourcesConfig */
+export type ApplicationConfig = DataSourcesConfig
 
 export interface ApplicationContainer {
   listCountries: ListCountriesUseCase
@@ -27,11 +26,8 @@ export interface ApplicationContainer {
 
 let container: ApplicationContainer | null = null
 
-export function createApplicationContainer(config?: ApplicationConfig): ApplicationContainer {
-  initializeDataSources({
-    widApiKey: config?.widApiKey,
-    widApiBaseUrl: config?.widApiBaseUrl,
-  })
+export function createApplicationContainer(config?: DataSourcesConfig): ApplicationContainer {
+  initializeDataSources(config)
 
   const getSource = (): DataSourcePort => getDefaultDataSource()
 
@@ -46,7 +42,7 @@ export function createApplicationContainer(config?: ApplicationConfig): Applicat
   }
 }
 
-export function getApplicationContainer(config?: ApplicationConfig): ApplicationContainer {
+export function getApplicationContainer(config?: DataSourcesConfig): ApplicationContainer {
   if (!container) {
     container = createApplicationContainer(config)
   }

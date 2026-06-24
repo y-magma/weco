@@ -14,4 +14,23 @@ describe('ListCountriesUseCase', () => {
     expect(mockSource.listCountries).toHaveBeenCalledOnce()
     expect(result).toEqual([{ code: 'FR', label: 'France' }])
   })
+
+  it('uses explicit source when provided', async () => {
+    const defaultSource: Pick<DataSourcePort, 'listCountries'> = {
+      listCountries: vi.fn().mockResolvedValue([{ code: 'US', label: 'United States' }]),
+    }
+    const explicitSource: Pick<DataSourcePort, 'listCountries'> = {
+      listCountries: vi.fn().mockResolvedValue([{ code: 'FR', label: 'France' }]),
+    }
+    const useCase = new ListCountriesUseCase(() => defaultSource as DataSourcePort)
+
+    const result = await useCase.execute(
+      { variable: 'ahweal' },
+      { source: explicitSource as DataSourcePort },
+    )
+
+    expect(explicitSource.listCountries).toHaveBeenCalledOnce()
+    expect(defaultSource.listCountries).not.toHaveBeenCalled()
+    expect(result).toEqual([{ code: 'FR', label: 'France' }])
+  })
 })

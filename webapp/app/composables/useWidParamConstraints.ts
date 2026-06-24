@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import type { ApplicationContainer } from '@application/bootstrap/container'
-import type { CountryOption, WidParamAvailabilityEntity } from '@domain/entities'
+import type { CountryOption, ParamAvailabilityEntity } from '@domain/entities'
+import type { DataSourcePort } from '@domain/ports/DataSourcePort'
 import {
   knownParamCombosForVariable,
   WID_AGE_OPTIONS,
@@ -18,8 +19,8 @@ import {
   type ParamAdjustmentHints,
   type WidParamResolveMode,
 } from '@domain/services/widParamAvailability'
-import { widParamMetadataStore } from '@infrastructure/cache/widParamMetadataStore'
-import { yearRangeLabel } from '~/composables/widPanelBase'
+import { paramMetadataStore } from '@infrastructure/cache/paramMetadataStore'
+import { yearRangeLabel } from '~/composables/panelBase'
 
 export interface WidParamRefs {
   countryCode: Ref<string>
@@ -30,6 +31,8 @@ export interface WidParamRefs {
 
 export interface WidParamConstraintsOptions {
   app: ApplicationContainer
+  /** Active data source (for cache key and use-case routing). */
+  source: Ref<DataSourcePort>
   /** Primary variable (always required). */
   variable: Ref<string>
   /** Secondary variable for scatter intersection. */
@@ -37,6 +40,8 @@ export interface WidParamConstraintsOptions {
   params: WidParamRefs
   /** Shared country list; refreshed per variable when provided. */
   countries?: Ref<CountryOption[]>
+  /** When false, skip API calls (non-WID time-series sources). */
+  enabled?: Ref<boolean>
 }
 
 function filterCodeOptions(all: CodeOption[], allowed: string[]): CodeOption[] {
@@ -47,15 +52,19 @@ function filterCodeOptions(all: CodeOption[], allowed: string[]): CodeOption[] {
 
 async function fetchAvailability(
   app: ApplicationContainer,
+  source: DataSourcePort,
   countryCode: string,
   variable: string,
-): Promise<WidParamAvailabilityEntity> {
-  const cached = widParamMetadataStore.get(countryCode, variable)
+): Promise<ParamAvailabilityEntity> {
+  const cached = paramMetadataStore.get(source.id, countryCode, variable)
   if (cached) return cached
 
-  const availability = await app.listAvailableParams.execute({ countryCode, variable })
+  const availability = await app.listAvailableParams.execute(
+    { countryCode, variable },
+    { source },
+  )
   if (availability.combos.length > 0) {
-    widParamMetadataStore.set(countryCode, variable, availability)
+    paramMetadataStore.set(source.id, countryCode, variable, availability)
   }
   return availability
 }
@@ -72,7 +81,7 @@ export function useWidParamConstraints(options: WidParamConstraintsOptions) {
   const adjustmentToastVisible = ref(false)
   const adjustmentToastMessage = ref('')
   let adjustmentToastTimer: ReturnType<typeof setTimeout> | undefined
-  const paramAvailability = ref<WidParamAvailabilityEntity>(
+  const paramAvailability = ref<ParamAvailabilityEntity>(
     buildParamAvailability(knownParamCombosForVariable(options.variable.value)),
   )
   const availableYears = ref<number[]>([])
@@ -113,8 +122,12 @@ export function useWidParamConstraints(options: WidParamConstraintsOptions) {
   })
 
   async function loadCountriesForVariable(sixlet: string): Promise<void> {
+    if (options.enabled && !options.enabled.value) return
     try {
-      countriesForVariable.value = await options.app.listCountries.execute({ variable: sixlet })
+      countriesForVariable.value = await options.app.listCountries.execute(
+        { variable: sixlet },
+        { source: options.source.value },
+      )
     } catch {
       countriesForVariable.value = options.countries?.value ?? []
     }
@@ -124,11 +137,12 @@ export function useWidParamConstraints(options: WidParamConstraintsOptions) {
     countryCode: string,
     primary: string,
     secondary?: string,
-  ): Promise<WidParamAvailabilityEntity> {
-    const primaryAvailability = await fetchAvailability(options.app, countryCode, primary)
+  ): Promise<ParamAvailabilityEntity> {
+    const source = options.source.value
+    const primaryAvailability = await fetchAvailability(options.app, source, countryCode, primary)
     if (!secondary || secondary === primary) return primaryAvailability
 
-    const secondaryAvailability = await fetchAvailability(options.app, countryCode, secondary)
+    const secondaryAvailability = await fetchAvailability(options.app, source, countryCode, secondary)
     return intersectParamAvailability(primaryAvailability, secondaryAvailability)
   }
 
@@ -138,15 +152,20 @@ export function useWidParamConstraints(options: WidParamConstraintsOptions) {
     age: string,
     pop: string,
   ): Promise<number[]> {
+    const source = options.source.value
     const yearLists = await Promise.all(
       variables.map((variable) =>
-        options.app.listProfileYears.execute({ countryCode, variable, age, pop }),
+        options.app.listProfileYears.execute(
+          { countryCode, variable, age, pop },
+          { source },
+        ),
       ),
     )
     return variables.length > 1 ? intersectYears(...yearLists) : (yearLists[0] ?? [])
   }
 
   async function refreshConstraints(mode: WidParamResolveMode): Promise<boolean> {
+    if (options.enabled && !options.enabled.value) return false
     const countryCode = options.params.countryCode.value
     const primary = options.variable.value
     const secondary = options.variableSecondary?.value
@@ -303,17 +322,22 @@ export function useWidParamConstraints(options: WidParamConstraintsOptions) {
 }
 
 /** Prefetch metadata for catalogue variables (default country FR). */
-export async function prefetchWidMetadata(
+export async function prefetchParamMetadata(
   app: ApplicationContainer,
-  sixlets: readonly string[],
+  indicatorIds: readonly string[],
   countryCode = 'FR',
+  source?: DataSourcePort,
 ): Promise<void> {
+  const activeSource = source ?? app.getDefaultSource()
   await Promise.all(
-    sixlets.map(async (sixlet) => {
+    indicatorIds.map(async (variable) => {
       try {
-        const availability = await app.listAvailableParams.execute({ countryCode, variable: sixlet })
+        const availability = await app.listAvailableParams.execute(
+          { countryCode, variable },
+          { source: activeSource },
+        )
         if (availability.combos.length > 0) {
-          widParamMetadataStore.set(countryCode, sixlet, availability)
+          paramMetadataStore.set(activeSource.id, countryCode, variable, availability)
         }
       } catch {
         // Prefetch is best-effort.
@@ -321,3 +345,6 @@ export async function prefetchWidMetadata(
     }),
   )
 }
+
+/** @deprecated Use prefetchParamMetadata */
+export const prefetchWidMetadata = prefetchParamMetadata

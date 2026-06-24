@@ -46,7 +46,8 @@ export default defineNuxtConfig({
   },
 
   routeRules: {
-    '/profil': { redirect: '/panneau/trapeze' },
+    '/profil': { redirect: '/panneau/exploration' },
+    '/panneau/trapeze': { redirect: '/panneau/exploration' },
     '/panneau-visualisation': { redirect: '/panneau' },
     '/nuage': { redirect: '/panneau' },
     '/grille-visus': { redirect: '/grille' },
@@ -58,7 +59,7 @@ export default defineNuxtConfig({
       routes: [
         '/',
         '/panneau',
-        '/panneau/trapeze',
+        '/panneau/exploration',
         '/panneau/temps',
         '/grille',
         '/spec',

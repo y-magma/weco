@@ -1,4 +1,5 @@
-import { formatCompactAxisValue } from '~/visualization/axisFormat'
+import type { MeasureKind } from '@domain/catalog/widCodes'
+import { formatCompactAxisValue, formatFractionAxisValue } from '~/visualization/axisFormat'
 import {
   SYMLOG_VALUE_AXIS_DESCRIPTION,
   formatSymlogTick,
@@ -111,6 +112,67 @@ export function formatRankAxisLabel(displayValue: number): string {
   const rank = rankFromDisplayCoordinate(displayValue)
   if (!Number.isFinite(rank) || rank < 0 || rank >= 100) return ''
   return `${formatRankPercent(rank)} %`
+}
+
+export const fractionValueScale: AxisScale = {
+  id: 'fraction-value',
+  toPlotCoord: (raw) => (Number.isFinite(raw) ? raw : null),
+  toDisplayValue: (stored) => stored,
+  formatTick: (stored) => formatFractionAxisValue(stored),
+  echartsType: 'value',
+  echartsScale: true,
+  acceptsRaw: () => true,
+  axisBounds(lo, hi) {
+    const floor = lo < 0 ? lo : 0
+    const padded = padLinear(floor, hi)
+    return { min: padded.lo, max: padded.hi, base: 0 }
+  },
+  applyZoom(axis, range) {
+    if (range.min != null) axis.min = range.min
+    if (range.max != null) axis.max = range.max
+  },
+}
+
+export const strictLogFractionScale: AxisScale = {
+  id: 'strict-log-fraction',
+  toPlotCoord: (raw) => (raw > 0 && Number.isFinite(raw) ? raw : null),
+  toDisplayValue: (stored) => stored,
+  formatTick: (stored) => formatFractionAxisValue(stored),
+  echartsType: 'log',
+  echartsScale: false,
+  acceptsRaw: (raw) => raw > 0,
+  axisBounds(lo, hi) {
+    const min = Math.max(1e-12, lo / 2)
+    return { min, max: hi * 2, base: min }
+  },
+  applyZoom(axis, range) {
+    let min = range.min
+    let max = range.max
+    if (min != null) min = Math.max(1e-12, min)
+    if (max != null && min != null) max = Math.max(max, min * 1.001)
+    if (min != null) axis.min = min
+    if (max != null) axis.max = max
+  },
+}
+
+export function isFractionMeasureKind(kind: MeasureKind): boolean {
+  return kind === 'share' || kind === 'gini'
+}
+
+/** Strict log for trapèze, time-series and CDF wealth axes (positive values only). */
+export function resolveValueScaleForMeasure(kind: MeasureKind, log: boolean): AxisScale {
+  if (isFractionMeasureKind(kind)) {
+    return log ? strictLogFractionScale : fractionValueScale
+  }
+  return log ? strictLogValueScale : linearValueScale
+}
+
+/** Symlog wealth Y for standard profile charts (negative values visible). */
+export function resolveProfileValueScale(kind: MeasureKind, log: boolean): AxisScale {
+  if (isFractionMeasureKind(kind)) {
+    return log ? strictLogFractionScale : fractionValueScale
+  }
+  return log ? symlogValueScale : linearValueScale
 }
 
 export const linearValueScale: AxisScale = {
@@ -305,16 +367,21 @@ export function resolveProfileAxisScales(options: {
   logScaleY: boolean
   empiricalCdf: boolean
   showPdf: boolean
+  measureKind?: MeasureKind
 }): ProfileAxisScales {
-  const { logScaleX, logScaleY, empiricalCdf, showPdf } = options
+  const { logScaleX, logScaleY, empiricalCdf, showPdf, measureKind = 'average' } = options
 
   const rankLog = empiricalCdf ? (showPdf ? false : logScaleY) : logScaleX
   const valueLog = empiricalCdf ? logScaleX : logScaleY
   const densityLog = showPdf ? logScaleY : false
 
+  const valueScale = empiricalCdf
+    ? resolveValueScaleForMeasure(measureKind, valueLog)
+    : resolveProfileValueScale(measureKind, valueLog)
+
   return {
     rank: rankLog ? rankTopLogScale : linearRankScale,
-    value: valueLog ? strictLogValueScale : linearValueScale,
+    value: valueScale,
     density: densityLog ? strictLogDensityScale : linearDensityScale,
   }
 }

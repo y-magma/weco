@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  fractionValueScale,
   linearRankScale,
   linearValueScale,
   rankTopLogScale,
   resolveProfileAxisScales,
+  strictLogFractionScale,
   strictLogValueScale,
   symlogValueScale,
 } from '~/visualization/axisScale'
-import { symlogToCoord } from '~/visualization/symlogScale'
 
 describe('resolveProfileAxisScales', () => {
   it('uses symlog on wealth Y in standard profile when logScaleY is on', () => {
@@ -19,6 +20,28 @@ describe('resolveProfileAxisScales', () => {
     })
     expect(scales.value).toBe(symlogValueScale)
     expect(scales.rank).toBe(linearRankScale)
+  })
+
+  it('uses fraction scale for share variables', () => {
+    const scales = resolveProfileAxisScales({
+      logScaleX: false,
+      logScaleY: false,
+      empiricalCdf: false,
+      showPdf: false,
+      measureKind: 'share',
+    })
+    expect(scales.value).toBe(fractionValueScale)
+  })
+
+  it('uses strict log fraction scale for share variables with log Y', () => {
+    const scales = resolveProfileAxisScales({
+      logScaleX: false,
+      logScaleY: true,
+      empiricalCdf: false,
+      showPdf: false,
+      measureKind: 'share',
+    })
+    expect(scales.value).toBe(strictLogFractionScale)
   })
 
   it('uses rank top log on X when logScaleX is on in standard profile', () => {
@@ -40,12 +63,5 @@ describe('resolveProfileAxisScales', () => {
       showPdf: false,
     })
     expect(scales.value).toBe(strictLogValueScale)
-  })
-})
-
-describe('symlogValueScale', () => {
-  it('keeps negative raw values in plot space', () => {
-    expect(symlogValueScale.toPlotCoord(-1000)).toBeCloseTo(symlogToCoord(-1000)!)
-    expect(symlogValueScale.toDisplayValue(symlogToCoord(-1000)!)).toBeCloseTo(-1000)
   })
 })

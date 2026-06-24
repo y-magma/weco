@@ -85,6 +85,23 @@ describe('buildTimeSeriesOption', () => {
     const dataZoom = option.dataZoom as { filterMode?: string }[]
     expect(dataZoom.every((item) => item.filterMode === 'none')).toBe(true)
   })
+
+  it('formats fractional share values on the y-axis', () => {
+    const shareSeries: DataSeries = {
+      id: 'FR-shweal',
+      label: 'FR · Part du patrimoine net',
+      points: [
+        { year: 2020, value: 0.001 },
+        { year: 2021, value: 0.05 },
+      ],
+    }
+    const option = buildTimeSeriesOption([shareSeries], 'Part du patrimoine net', {
+      measureKind: 'share',
+    })
+    const formatter = (option.yAxis as { axisLabel: { formatter: (v: number) => string } }).axisLabel.formatter
+    expect(formatter(0.001)).toBe('0,001')
+    expect(formatter(0.05)).toBe('0,05')
+  })
 })
 
 describe('buildStackedTimeSeriesOption', () => {

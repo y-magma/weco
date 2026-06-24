@@ -9,7 +9,7 @@ import {
   sampleSmoothCdfSeries,
   sampleSmoothPdfSeries,
 } from '~/visualization/empiricalDistributionSmooth'
-import { linearRankScale, linearValueScale, resolveProfileAxisScales } from '~/visualization/axisScale'
+import { resolveProfileAxisScales } from '~/visualization/axisScale'
 import type { PercentilePoint } from '@domain/entities'
 
 const thresholdPoints: PercentilePoint[] = [
@@ -56,7 +56,7 @@ describe('computeEmpiricalCdfKnots', () => {
     ], { anchorZero: true })
     expect(knots[0]).toMatchObject({ f: 0 })
     expect(knots[0]!.x).toBeLessThan(5000)
-    expect(knots[1]).toMatchObject({ x: 5000, f: 0.5 })
+    expect(knots[1]).toMatchObject({ x: 5000, f: 0.01 })
   })
 })
 

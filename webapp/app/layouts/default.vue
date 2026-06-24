@@ -1,20 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref } from 'vue'
 
 // Drawer visibility — togglable on all screen sizes.
 const drawerOpen = ref(true)
-const route = useRoute()
-
-// True only on the sub-pages of /panneau (not the index listing)
-const isPanneauSubPage = computed(() =>
-  route.path.startsWith('/panneau/'),
-)
-
-// When the nav drawer is collapsed on a panneau sub-page, show filters in sidebar mode
-const paramsInSidebar = computed(() => !drawerOpen.value && isPanneauSubPage.value)
-
-provide('paramsInSidebar', paramsInSidebar)
 
 const navItems = [
   { title: 'Home', to: '/', icon: 'mdi-home' },

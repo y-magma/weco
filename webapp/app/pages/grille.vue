@@ -11,7 +11,8 @@ interface GridPanel {
 let nextPanelId = 1
 
 const panels = ref<GridPanel[]>([])
-const { countriesError } = useWidCountriesProvider()
+const { sourceId } = usePanneauDataSourceProvider()
+const { countriesError } = useCountriesProvider()
 
 function addPanel(type: PanneauType) {
   panels.value.push({ id: nextPanelId++, type })
@@ -29,7 +30,7 @@ function removePanel(id: number) {
         <h1 class="text-h4 font-weight-bold mb-1">Grille de visualisations</h1>
         <p class="text-body-1 text-medium-emphasis mb-0">
           Composez plusieurs explorations en parallèle — séries temporelles
-          et profil d'inégalité avec approximations.
+          (un pays ou comparaison multi-pays) et profil d'inégalité avec approximations.
         </p>
       </v-col>
     </v-row>
@@ -42,6 +43,8 @@ function removePanel(id: number) {
     >
       {{ countriesError }}
     </v-alert>
+
+    <PanneauDataSourceSection v-model="sourceId" class="mb-4" />
 
     <div
       v-if="panels.length === 0"
@@ -64,17 +67,32 @@ function removePanel(id: number) {
           v-if="panel.type === 'temps'"
           :panel-index="index"
           collapsible
+          layout="stacked"
           :panel-type="panel.type"
           :default-filters-expanded="false"
+          :show-data-source-section="false"
           removable
           @remove="removePanel(panel.id)"
         />
-        <PanneauTrapeze
-          v-else-if="panel.type === 'trapeze'"
+        <PanneauSerieTemporelleCompare
+          v-else-if="panel.type === 'temps-compare'"
           :panel-index="index"
           collapsible
+          layout="stacked"
           :panel-type="panel.type"
           :default-filters-expanded="false"
+          :show-data-source-section="false"
+          removable
+          @remove="removePanel(panel.id)"
+        />
+        <PanneauExploration
+          v-else-if="panel.type === 'exploration'"
+          :panel-index="index"
+          collapsible
+          layout="stacked"
+          :panel-type="panel.type"
+          :default-filters-expanded="false"
+          :show-data-source-section="false"
           removable
           @remove="removePanel(panel.id)"
         />

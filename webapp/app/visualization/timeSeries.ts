@@ -1,6 +1,8 @@
+import type { MeasureKind } from '@domain/catalog/widCodes'
 import type { DataSeries } from '@domain/entities'
 import type { EChartsOption } from 'echarts'
-import { formatCompactAxisValue } from '~/visualization/axisFormat'
+import { buildEchartsAxis, resolveValueScaleForMeasure } from '~/visualization/axisScale'
+import { formatAxisValue } from '~/visualization/axisFormat'
 import {
   buildChartAxisDataZoom,
   buildChartToolbox,
@@ -18,6 +20,7 @@ export interface TimeSeriesChartOptions {
   subtitle?: string
   /** Label de l'axe Y (ex. l'unité de la variable sélectionnée). */
   yAxisLabel?: string
+  measureKind?: MeasureKind
 }
 
 function valuesByYear(points: DataSeries['points']): Map<number, number> {
@@ -33,7 +36,9 @@ export function buildTimeSeriesOption(
   title = 'Time series comparison',
   options: TimeSeriesChartOptions = {},
 ): EChartsOption {
-  const { logScaleY = false, subtitle, yAxisLabel } = options
+  const { logScaleY = false, subtitle, yAxisLabel, measureKind = 'average' } = options
+  const valueScale = resolveValueScaleForMeasure(measureKind, logScaleY)
+  const yAxisBase = buildEchartsAxis(yAxisLabel ?? 'Valeur', valueScale, { nameGap: 48 })
   const years = Array.from(
     new Set(seriesList.flatMap((series) => series.points.map((point) => point.year))),
   ).sort((a, b) => a - b)
@@ -50,7 +55,7 @@ export function buildTimeSeriesOption(
     tooltip: {
       trigger: 'axis',
       valueFormatter: (value) =>
-        value === null || value === undefined ? '—' : formatCompactAxisValue(Number(value)),
+        value === null || value === undefined ? '—' : formatAxisValue(Number(value), measureKind),
     },
     legend: {
       show: seriesList.length > 0,
@@ -72,15 +77,8 @@ export function buildTimeSeriesOption(
       name: 'Année',
     },
     yAxis: {
-      type: logScaleY ? 'log' : 'value',
+      ...yAxisBase,
       scale: !logScaleY,
-      name: yAxisLabel,
-      nameLocation: 'middle',
-      nameGap: 48,
-      nameTextStyle: { fontSize: 11 },
-      axisLabel: {
-        formatter: (value: number) => formatCompactAxisValue(value),
-      },
     },
     series: seriesList.map((series) => {
       const byYear = valuesByYear(series.points)
@@ -139,11 +137,13 @@ export function buildStackedTimeSeriesOption(
   title: string,
   subtitle?: string,
   yAxisLabel?: string,
+  measureKind: MeasureKind = 'average',
 ): EChartsOption {
   if (countries.length === 0) {
     return { title: { text: title, left: 'center' } }
   }
 
+  const valueScale = resolveValueScaleForMeasure(measureKind, false)
   const years = collectYears(countries)
   const multi = countries.length > 1
   const grids = countries.map((country, index) => {
@@ -167,14 +167,10 @@ export function buildStackedTimeSeriesOption(
   }))
 
   const yAxes = countries.map((country, index) => ({
+    ...buildEchartsAxis(index === 0 ? (yAxisLabel ?? 'Valeur') : '', valueScale, { nameGap: 42 }),
     type: 'value' as const,
     gridIndex: index,
     name: index === 0 ? (yAxisLabel ?? 'Valeur') : undefined,
-    nameLocation: 'middle' as const,
-    nameGap: 42,
-    axisLabel: {
-      formatter: (value: number) => formatCompactAxisValue(value),
-    },
   }))
 
   const series = countries.flatMap((country, countryIndex) =>
@@ -211,7 +207,7 @@ export function buildStackedTimeSeriesOption(
       trigger: 'axis',
       axisPointer: { type: 'cross' },
       valueFormatter: (value) =>
-        value === null || value === undefined ? '—' : formatCompactAxisValue(Number(value)),
+        value === null || value === undefined ? '—' : formatAxisValue(Number(value), measureKind),
     },
     legend: {
       show: true,

@@ -3,8 +3,9 @@ import type { DataSourcePort } from '@domain/ports/DataSourcePort'
 const PANNEAU_DATA_SOURCE_KEY = Symbol('panneauDataSourceId')
 
 /** Shared source selection for panels on the same page (e.g. temps.vue). */
-export function usePanneauDataSourceProvider(initialId = 'wid') {
-  const sourceId = ref(initialId)
+export function usePanneauDataSourceProvider(initialId?: string) {
+  const { defaultSource } = useDataSources()
+  const sourceId = ref(initialId ?? defaultSource.value.id)
   provide(PANNEAU_DATA_SOURCE_KEY, sourceId)
   return { sourceId }
 }
@@ -12,10 +13,9 @@ export function usePanneauDataSourceProvider(initialId = 'wid') {
 /** Reactive data-source selection for panel filters. */
 export function usePanneauDataSource() {
   const injected = inject<Ref<string> | null>(PANNEAU_DATA_SOURCE_KEY, null)
-  const localSourceId = ref('wid')
-  const sourceId = injected ?? localSourceId
-
   const { sources, defaultSource } = useDataSources()
+  const localSourceId = ref(defaultSource.value.id)
+  const sourceId = injected ?? localSourceId
 
   const selectedSource = computed<DataSourcePort>(() =>
     sources.value.find((source) => source.id === sourceId.value) ?? defaultSource.value,

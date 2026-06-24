@@ -3,7 +3,6 @@ import type { CountryOption } from '@domain/entities'
 
 const sourceId = defineModel<string>({ default: 'wid' })
 
-const runtimeConfig = useRuntimeConfig()
 const { sources, defaultSource } = useDataSources()
 
 const sourceItems = computed(() =>
@@ -20,23 +19,24 @@ const selectedSource = computed(() =>
   sources.value.find((source) => source.id === sourceId.value) ?? defaultSource.value,
 )
 
-const countries = inject<Ref<CountryOption[]>>('widCountries', ref([]))
-const countriesError = inject<Ref<string | null>>('widCountriesError', ref(null))
+const countries = inject<Ref<CountryOption[]>>('panelCountries', ref([]))
+const countriesError = inject<Ref<string | null>>('panelCountriesError', ref(null))
 
 const connectionStatus = computed(() => {
   if (countriesError.value) {
     return { label: 'Non connecté', color: 'error' as const }
   }
-  if (sourceId.value === 'wid') {
-    if (countries.value.length > 0) {
-      return { label: 'Connecté', color: 'success' as const }
-    }
-    if (!runtimeConfig.public.widApiKey) {
-      return { label: 'Clé API absente', color: 'warning' as const }
-    }
-    return { label: 'Connexion…', color: 'default' as const }
+  const status = selectedSource.value.getStatus()
+  if (status.lastError) {
+    return { label: 'Non connecté', color: 'error' as const }
   }
-  return { label: 'Connecté', color: 'success' as const }
+  if (countries.value.length > 0 || status.lastFetchAt) {
+    return { label: 'Connecté', color: 'success' as const }
+  }
+  if (!status.enabled) {
+    return { label: 'Source indisponible', color: 'warning' as const }
+  }
+  return { label: 'Connexion…', color: 'default' as const }
 })
 
 const sourceHelpParagraphs = computed(() => [

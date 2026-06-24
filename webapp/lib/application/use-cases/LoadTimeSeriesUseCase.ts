@@ -1,5 +1,6 @@
 import type { DataSeries, FetchVariableTimeSeriesParams } from '@domain/entities'
 import type { DataSourcePort } from '@domain/ports/DataSourcePort'
+import type { UseCaseSourceOptions } from '@application/use-cases/ListCountriesUseCase'
 
 export interface LoadTimeSeriesRequest {
   countryCodes: string[]
@@ -15,8 +16,11 @@ export interface LoadTimeSeriesResult {
 export class LoadTimeSeriesUseCase {
   constructor(private readonly getSource: () => DataSourcePort) {}
 
-  async execute(request: LoadTimeSeriesRequest): Promise<LoadTimeSeriesResult> {
-    const source = this.getSource()
+  async execute(
+    request: LoadTimeSeriesRequest,
+    options?: UseCaseSourceOptions,
+  ): Promise<LoadTimeSeriesResult> {
+    const source = options?.source ?? this.getSource()
     const codes = request.countryCodes.length > 0 ? request.countryCodes : ['FR']
 
     const results = await Promise.allSettled(

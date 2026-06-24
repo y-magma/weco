@@ -11,6 +11,7 @@ import {
   thresholdVariableFor,
   WID_PROFILE_VARIABLES,
   WID_SCALAR_PERCENTILE,
+  WID_STRICT_DISTRIBUTION_VARIABLES,
 } from '@domain/catalog/widCodes'
 
 describe('measureKind', () => {
@@ -23,7 +24,7 @@ describe('measureKind', () => {
     expect(measureKind('sptinc')).toBe('share')
     expect(measureKind('ghweal')).toBe('gini')
     expect(measureKind('gptinc')).toBe('gini')
-    expect(measureKind('lpfcar')).toBe('other')
+    expect(measureKind('lpfcar')).toBe('groupLevel')
   })
 
   it('is case-insensitive', () => {
@@ -53,7 +54,16 @@ describe('supportsDistributionAnalytics', () => {
     expect(supportsDistributionAnalytics('tpllin')).toBe(true)
     expect(supportsDistributionAnalytics('sptinc')).toBe(false)
     expect(supportsDistributionAnalytics('gptinc')).toBe(false)
-    expect(supportsDistributionAnalytics('lpfcar')).toBe(false)
+    expect(supportsDistributionAnalytics('lpfcar')).toBe(true)
+  })
+})
+
+describe('WID_STRICT_DISTRIBUTION_VARIABLES', () => {
+  it('includes threshold variables and group-level carbon without t… twins', () => {
+    const sixlets = WID_STRICT_DISTRIBUTION_VARIABLES.map((v) => v.sixlet)
+    expect(sixlets).toContain('thweal')
+    expect(sixlets).toContain('lpfcar')
+    expect(sixlets).not.toContain('ahweal')
   })
 })
 
@@ -92,9 +102,10 @@ describe('thresholdVariableFor', () => {
     expect(thresholdVariableFor('apkkin')).toBe('tpkkin')
   })
 
-  it('keeps a threshold variable unchanged', () => {
+  it('keeps a threshold or group-level variable unchanged', () => {
     expect(thresholdVariableFor('thweal')).toBe('thweal')
     expect(thresholdVariableFor('tptinc')).toBe('tptinc')
+    expect(thresholdVariableFor('lpfcar')).toBe('lpfcar')
   })
 
 })
@@ -125,10 +136,11 @@ describe('WID_PROFILE_VARIABLES', () => {
     expect(sixlets).toEqual(expect.arrayContaining(['apllin', 'tpllin', 'apkkin', 'tpkkin']))
   })
 
-  it('includes the carbon footprint variable', () => {
+  it('includes the carbon footprint variable as group-level', () => {
     const carbonVars = WID_PROFILE_VARIABLES.filter((v) => v.group === 'carbon')
     expect(carbonVars.map((v) => v.sixlet)).toContain('lpfcar')
     for (const v of carbonVars) {
+      expect(v.kind).toBe('groupLevel')
       expect(v.unit).toMatch(/tCO/)
     }
   })

@@ -1,12 +1,11 @@
 import type { EChartsOption } from 'echarts'
 import type { Ref } from 'vue'
-import type { CountryOption, PercentileProfile } from '@domain/entities'
+import type { CountryOption, PercentileProfile, SourceIndicator } from '@domain/entities'
 import {
   findWidVariable,
   supportsDistributionAnalytics,
   thresholdVariableFor,
-  WID_PROFILE_VARIABLES,
-  WID_THRESHOLD_VARIABLES,
+  WID_STRICT_DISTRIBUTION_VARIABLES,
 } from '@domain/catalog/widCodes'
 import { useWidParamConstraints } from '~/composables/useWidParamConstraints'
 import {
@@ -74,19 +73,52 @@ export const TRAPEZOID_ORIGINAL_VIEW_OPTIONS: {
   { value: 'bar', label: 'Bâtons' },
 ]
 
-const WID_NON_GINI_VARIABLES = WID_PROFILE_VARIABLES.filter((item) => item.kind !== 'gini')
-
-export interface WidTrapezoidStateOptions {
-  countries?: Ref<CountryOption[]>
-  initialVariable?: string
+function defaultIndicatorId(indicators: readonly SourceIndicator[]): string {
+  return indicators[0]?.id ?? 'ahweal'
 }
 
-export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) {
+function indicatorSupportsDistributionAnalytics(
+  sourceId: string,
+  indicatorId: string,
+): boolean {
+  if (sourceId === 'wid') return supportsDistributionAnalytics(indicatorId)
+  const kind = findWidVariable(indicatorId)?.kind
+  return kind === 'average' || kind === 'threshold' || kind === 'share'
+}
+
+function thresholdIndicatorFor(sourceId: string, indicatorId: string, indicators: readonly SourceIndicator[]): string {
+  if (sourceId === 'wid') return thresholdVariableFor(indicatorId)
+  const current = indicators.find((item) => item.id === indicatorId)
+  if (!current?.concept) return indicatorId
+  const pair = indicators.find(
+    (item) => item.concept === current.concept && item.kind === 'threshold',
+  )
+  return pair?.id ?? indicatorId
+}
+
+export interface ExplorationPanelStateOptions {
+  countries?: Ref<CountryOption[]>
+  initialVariable?: string
+  panelIndex?: number
+}
+
+export function createExplorationPanelState(options: ExplorationPanelStateOptions = {}) {
   const app = useApplication()
+  const { selectedSource } = usePanneauDataSource()
   const sharedCountries = options.countries
 
+  const hasPercentileProfile = computed(
+    () => selectedSource.value.capabilities?.percentileProfile === true,
+  )
+
+  const indicators = computed<readonly SourceIndicator[]>(
+    () => selectedSource.value.indicators ?? [],
+  )
+
   const countryCode = ref('FR')
-  const variable = ref(options.initialVariable ?? 'ahweal')
+  const variable = ref(
+    options.initialVariable ?? defaultIndicatorId(indicators.value),
+  )
   const year = ref(2021)
   const age = ref('992')
   const pop = ref('j')
@@ -102,9 +134,7 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
   const empiricalPdf = ref(false)
   const showEmpiricalDistribution = ref(true)
   const showSmoothDistribution = ref(false)
-  // Granularité d'affichage de la courbe d'origine (paramètres avancés).
   const populationViewMode = ref<PopulationViewMode>('step1')
-  // Tranches de population servant d'intervalles d'approximation (sélecteur migré du profil).
   const approxPartitionMode = ref<PopulationViewMode>('custom')
   const customBreakpoints = ref<number[]>([])
   const drillLevel = ref(0)
@@ -118,18 +148,27 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
 
   const constraints = useWidParamConstraints({
     app,
+    source: selectedSource,
     variable,
     params: { countryCode, age, pop, year },
     countries: sharedCountriesRef,
+    enabled: hasPercentileProfile,
   })
 
   const profile = ref<PercentileProfile | null>(null)
   const approximation = ref<MeanPreservingApproximation | null>(null)
   const chartOption = ref<EChartsOption | null>(null)
 
-  const variables = computed(() =>
-    empiricalPdf.value ? WID_THRESHOLD_VARIABLES : WID_NON_GINI_VARIABLES,
-  )
+  const variables = computed(() => {
+    const nonGini = indicators.value.filter((item) => item.kind !== 'gini')
+    if (!empiricalPdf.value) return nonGini
+    if (selectedSource.value.id === 'wid') {
+      const strictIds = new Set(WID_STRICT_DISTRIBUTION_VARIABLES.map((item) => item.sixlet))
+      return nonGini.filter((item) => strictIds.has(item.id))
+    }
+    return nonGini.filter((item) => item.kind === 'threshold' || item.kind === 'other')
+  })
+
   const countries = constraints.countries
   const ageOptions = constraints.ageOptions
   const popOptions = constraints.popOptions
@@ -138,13 +177,33 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
   const populationViewOptions = TRAPEZOID_POPULATION_VIEW_OPTIONS
   const partitionViewOptions = POPULATION_VIEW_OPTIONS
 
-  const variableMeta = computed(() => findWidVariable(variable.value))
+  const variableMeta = computed(() => {
+    const match = indicators.value.find((item) => item.id === variable.value)
+    if (match) return match
+    if (selectedSource.value.id === 'wid') {
+      const wid = findWidVariable(variable.value)
+      if (!wid) return undefined
+      return {
+        id: wid.sixlet,
+        label: wid.label,
+        unit: wid.unit,
+        kind: wid.kind,
+        group: wid.group,
+        groupLabel: wid.groupLabel,
+        concept: wid.concept,
+      } satisfies SourceIndicator
+    }
+    return undefined
+  })
+
   const years = constraints.years
   const yearsLoading = constraints.constraintsLoading
   const yearRangeLabel = constraints.yearRangeLabel
   const paramAdjustmentHints = constraints.paramAdjustmentHints
   const adjustmentToastVisible = constraints.adjustmentToastVisible
   const adjustmentToastMessage = constraints.adjustmentToastMessage
+
+  const sourceOptions = computed(() => ({ source: selectedSource.value }))
 
   const availableBoundaries = computed(() =>
     profile.value ? extractAvailableBoundaries(profile.value.points) : [0, 100],
@@ -191,7 +250,6 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
     if (target !== null) drillLevel.value = clampDrillLevel(target)
   }
 
-  /** Bornes de fin des intervalles d'approximation selon le mode de tranches choisi. */
   const approxBreakpoints = computed<number[]>(() => {
     if (!profile.value) return []
     const mode = approxPartitionMode.value
@@ -325,21 +383,41 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
   }
 
   const loadCountries = async () => {
-    if (sharedCountriesRef.value.length > 0 && constraints.countries.value.length > 0) return
     await constraints.loadCountriesForVariable(variable.value)
   }
 
   const refreshAndLoad = async (mode: 'variableChange' | 'clamp') => {
+    if (!hasPercentileProfile.value) {
+      error.value = 'Cette source ne propose pas de profil de distribution.'
+      profile.value = null
+      approximation.value = null
+      chartOption.value = null
+      return
+    }
     const ready = await constraints.refreshConstraints(mode)
     if (constraints.constraintsError.value) {
       error.value = constraints.constraintsError.value
     } else {
       error.value = null
     }
-    if (ready) await load()
+    if (ready) {
+      await load()
+    } else {
+      profile.value = null
+      approximation.value = null
+      chartOption.value = null
+    }
   }
 
   const load = async () => {
+    if (!hasPercentileProfile.value) {
+      error.value = 'Cette source ne propose pas de profil de distribution.'
+      profile.value = null
+      approximation.value = null
+      chartOption.value = null
+      return
+    }
+
     loading.value = true
     error.value = null
     drillLevel.value = 0
@@ -350,8 +428,7 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
         year: year.value,
         age: age.value,
         pop: pop.value,
-      })
-      customBreakpoints.value = []
+      }, sourceOptions.value)
       hiddenApproxIntervals.value = new Set()
       showEmpiricalDistribution.value = true
       showSmoothDistribution.value = false
@@ -367,6 +444,10 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
   }
 
   const init = async () => {
+    if (!hasPercentileProfile.value) {
+      error.value = 'Cette source ne propose pas de profil de distribution.'
+      return
+    }
     try {
       await loadCountries()
     } catch (err) {
@@ -381,8 +462,9 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
   })
 
   watch(variable, (next) => {
+    customBreakpoints.value = []
     constraints.applyOptimisticDefaults(next)
-    if (!supportsDistributionAnalytics(next)) {
+    if (!indicatorSupportsDistributionAnalytics(selectedSource.value.id, next)) {
       empiricalCdf.value = false
       empiricalPdf.value = false
       lorenzCurve.value = false
@@ -398,7 +480,11 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
     if (enabled) {
       empiricalCdf.value = true
       lorenzCurve.value = false
-      variable.value = thresholdVariableFor(variable.value)
+      variable.value = thresholdIndicatorFor(
+        selectedSource.value.id,
+        variable.value,
+        indicators.value,
+      )
     }
   })
 
@@ -453,6 +539,24 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
     hiddenApproxIntervals.value = new Set()
   })
 
+  watch(() => selectedSource.value.id, async () => {
+    const panelIndex = options.panelIndex ?? 0
+    const indicatorList = selectedSource.value.indicators ?? []
+    const nextVariable = indicatorList[panelIndex]?.id ?? defaultIndicatorId(indicatorList)
+    variable.value = nextVariable
+    customBreakpoints.value = []
+    profile.value = null
+    approximation.value = null
+    chartOption.value = null
+    if (!hasPercentileProfile.value) {
+      error.value = 'Cette source ne propose pas de profil de distribution.'
+      return
+    }
+    error.value = null
+    await loadCountries()
+    await refreshAndLoad('variableChange')
+  })
+
   return {
     countryCode,
     variable,
@@ -496,6 +600,7 @@ export function createWidTrapezoidState(options: WidTrapezoidStateOptions = {}) 
     approximation,
     chartOption,
     variableMeta,
+    hasPercentileProfile,
     availableBoundaries,
     customPartitionValidation,
     customPartitionReady,

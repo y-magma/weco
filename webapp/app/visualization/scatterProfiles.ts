@@ -1,6 +1,8 @@
+import type { MeasureKind } from '@domain/catalog/widCodes'
 import type { ProfileScatterPoint } from '@domain/services/joinProfiles'
 import type { EChartsOption } from 'echarts'
-import { formatCompactAxisValue } from '~/visualization/axisFormat'
+import { buildEchartsAxis, resolveValueScaleForMeasure } from '~/visualization/axisScale'
+import { formatAxisValue } from '~/visualization/axisFormat'
 import {
   buildChartAxisDataZoom,
   buildChartToolbox,
@@ -18,6 +20,8 @@ export interface ProfileScatterOptions {
   xUnit?: string
   /** Unité affichée entre parenthèses sur l'axe Y. */
   yUnit?: string
+  xMeasureKind?: MeasureKind
+  yMeasureKind?: MeasureKind
   /** Log scale on the X axis. Non-positive X values are dropped. */
   logScaleX?: boolean
   /** Log scale on the Y axis. Non-positive Y values are dropped. */
@@ -35,9 +39,21 @@ export function buildProfileScatterOption(
   points: ProfileScatterPoint[],
   options: ProfileScatterOptions,
 ): EChartsOption {
-  const { xLabel, yLabel, xUnit, yUnit, logScaleX = false, logScaleY = false, title } = options
+  const {
+    xLabel,
+    yLabel,
+    xUnit,
+    yUnit,
+    xMeasureKind = 'average',
+    yMeasureKind = 'average',
+    logScaleX = false,
+    logScaleY = false,
+    title,
+  } = options
   const xAxisName = xUnit ? `${xLabel} (${xUnit})` : xLabel
   const yAxisName = yUnit ? `${yLabel} (${yUnit})` : yLabel
+  const xScale = resolveValueScaleForMeasure(xMeasureKind, logScaleX)
+  const yScale = resolveValueScaleForMeasure(yMeasureKind, logScaleY)
 
   const data = points
     .filter((point) => !(logScaleX && point.x <= 0) && !(logScaleY && point.y <= 0))
@@ -59,8 +75,8 @@ export function buildProfileScatterOption(
         const v = p?.value
         if (!v) return ''
         return `Percentile ${p.name ?? ''} (rang ${v[2]})<br/>`
-          + `${xLabel}: ${v[0].toLocaleString('fr-FR')}<br/>`
-          + `${yLabel}: ${v[1].toLocaleString('fr-FR')}`
+          + `${xLabel}: ${formatAxisValue(v[0], xMeasureKind)}<br/>`
+          + `${yLabel}: ${formatAxisValue(v[1], yMeasureKind)}`
       },
     },
     grid: { left: 64, right: 24, top: 56, bottom: SCATTER_GRID_BOTTOM },
@@ -84,26 +100,14 @@ export function buildProfileScatterOption(
       inRange: { color: ['#1565C0', '#00897B', '#EF6C00'] },
     },
     xAxis: {
-      type: logScaleX ? 'log' : 'value',
-      name: xAxisName,
-      nameLocation: 'middle',
-      nameGap: 32,
-      nameTextStyle: { fontSize: 11 },
+      ...buildEchartsAxis(xAxisName, xScale, { nameGap: 32 }),
       scale: !logScaleX,
-      axisLabel: {
-        formatter: (value: number) => formatCompactAxisValue(value),
-      },
+      nameTextStyle: { fontSize: 11 },
     },
     yAxis: {
-      type: logScaleY ? 'log' : 'value',
-      name: yAxisName,
-      nameLocation: 'middle',
-      nameGap: 56,
-      nameTextStyle: { fontSize: 11 },
+      ...buildEchartsAxis(yAxisName, yScale, { nameGap: 56 }),
       scale: !logScaleY,
-      axisLabel: {
-        formatter: (value: number) => formatCompactAxisValue(value),
-      },
+      nameTextStyle: { fontSize: 11 },
     },
     series: [
       {

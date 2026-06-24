@@ -4,19 +4,18 @@ import type {
   EChartsOption,
 } from 'echarts'
 import type { PercentilePoint, PercentileProfile } from '@domain/entities'
+import { measureKind, type MeasureKind } from '@domain/catalog/widCodes'
 import {
   buildEchartsAxis,
   formatStoredAxisValue,
   linearRankScale,
-  linearValueScale,
   mergeLogValueAxisExtent,
   rankTopLogScale,
+  resolveValueScaleForMeasure,
   strictLogRankScale,
-  strictLogValueScale,
   type AxisScaleBounds,
   type RankAxisScale,
 } from '~/visualization/axisScale'
-import { formatCompactAxisValue } from '~/visualization/axisFormat'
 import { buildChartToolbox } from '~/visualization/chartZoom'
 import { buildPartitionPoints } from '~/visualization/populationPartition'
 import {
@@ -151,7 +150,12 @@ function trapezoidSeriesData(
   })
 }
 
-function resolveTrapezoidAxisScales(logRichZoom: boolean, logScaleX: boolean, logScaleY: boolean) {
+function resolveTrapezoidAxisScales(
+  logRichZoom: boolean,
+  logScaleX: boolean,
+  logScaleY: boolean,
+  variableKind: MeasureKind = 'average',
+) {
   const rank = logScaleX
     ? strictLogRankScale
     : logRichZoom
@@ -159,7 +163,7 @@ function resolveTrapezoidAxisScales(logRichZoom: boolean, logScaleX: boolean, lo
       : linearRankScale
   return {
     rank,
-    value: logScaleY ? strictLogValueScale : linearValueScale,
+    value: resolveValueScaleForMeasure(variableKind, logScaleY),
   }
 }
 
@@ -214,7 +218,12 @@ function buildTrapezoidContext(profile: PercentileProfile, options: TrapezoidCha
   const logScaleX = options.logScaleX === true
   const logScaleY = options.logScaleY === true
 
-  const { rank: rankScale, value: valueScale } = resolveTrapezoidAxisScales(logRichZoom, logScaleX, logScaleY)
+  const { rank: rankScale, value: valueScale } = resolveTrapezoidAxisScales(
+    logRichZoom,
+    logScaleX,
+    logScaleY,
+    measureKind(profile.variable),
+  )
   const valueAxisName = options.yAxisLabel ?? (profile.unit ? `Valeur · ${profile.unit}` : 'Valeur')
 
   const rankAxisConfig = buildEchartsAxis('Part de population (%)', rankScale, { nameGap: 32 })
@@ -395,21 +404,24 @@ function trapezoidTooltip(
       const { lo, hi, yLo, yHi } = p.data.poly
       return [
         `Intervalle : ${lo} → ${hi} %`,
-        `Nœuds : ${formatCompactAxisValue(yLo)} → ${formatCompactAxisValue(yHi)}`,
-        `Moyenne : ${formatCompactAxisValue((yLo + yHi) / 2)}`,
+        `Nœuds : ${valueScale.formatTick(yLo)} → ${valueScale.formatTick(yHi)}`,
+        `Moyenne : ${valueScale.formatTick((yLo + yHi) / 2)}`,
       ].join('<br/>')
     }
     if (p.seriesName === 'Approximation' && p.data?.node) {
       return [
         `Rang : ${p.data.node.x} %`,
-        `${valueAxisName} : ${formatCompactAxisValue(p.data.node.y)}`,
+        `${valueAxisName} : ${valueScale.formatTick(p.data.node.y)}`,
       ].join('<br/>')
     }
     const point = p.data?.point
     if (point) {
+      const shown = point.value === null || !Number.isFinite(point.value)
+        ? '—'
+        : valueScale.formatTick(valueScale.toPlotCoord(point.value) ?? point.value)
       return [
         point.percentile,
-        `${valueAxisName} : ${point.value?.toLocaleString('fr-FR') ?? '—'}`,
+        `${valueAxisName} : ${shown}`,
       ].join('<br/>')
     }
     return ''

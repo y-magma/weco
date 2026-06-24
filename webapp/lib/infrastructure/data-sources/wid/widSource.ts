@@ -6,11 +6,11 @@ import type {
   ListAvailableParamsParams,
   ListCountriesParams,
   ListProfileYearsParams,
+  ParamAvailabilityEntity,
   PercentilePoint,
   PercentileProfile,
-  WidParamAvailabilityEntity,
 } from '@domain/entities'
-import { findWidVariable, measureKind } from '@domain/catalog/widCodes'
+import { findWidVariable, measureKind, WID_PROFILE_VARIABLES } from '@domain/catalog/widCodes'
 import { buildParamAvailability } from '@domain/services/widParamAvailability'
 import type { DataSourcePort, DataSourceStatus } from '@domain/ports/DataSourcePort'
 import {
@@ -40,6 +40,16 @@ export class WidDataSource implements DataSourcePort {
     timeSeries: true,
     scatter: true,
   } as const
+
+  readonly indicators = WID_PROFILE_VARIABLES.map((v) => ({
+    id: v.sixlet,
+    label: v.label,
+    unit: v.unit,
+    group: v.group,
+    groupLabel: v.groupLabel,
+    kind: v.kind,
+    concept: v.concept,
+  }))
 
   private readonly liveClient?: WidClient
   private lastFetchAt?: string
@@ -90,9 +100,9 @@ export class WidDataSource implements DataSourcePort {
     }
   }
 
-  async listAvailableParams(params: ListAvailableParamsParams): Promise<WidParamAvailabilityEntity> {
+  async listAvailableParams(params: ListAvailableParamsParams): Promise<ParamAvailabilityEntity> {
     const cacheKey = dataSourceCache.buildKey(this.id, 'available-params', params)
-    const cached = dataSourceCache.get<WidParamAvailabilityEntity>(cacheKey)
+    const cached = dataSourceCache.get<ParamAvailabilityEntity>(cacheKey)
     if (cached) return cached
 
     const client = this.requireLiveClient()

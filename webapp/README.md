@@ -94,7 +94,7 @@ webapp/
 
 1. Implement `DataSourcePort` in `lib/domain/ports/DataSourcePort.ts`
 2. Create adapter under `lib/infrastructure/data-sources/<name>/`
-3. Register in `lib/infrastructure/data-sources/registry.ts`
+3. Register in `lib/infrastructure/data-sources/registry.ts` (via `initializeDataSources` or `registerDataSource`)
 
 ## Data
 

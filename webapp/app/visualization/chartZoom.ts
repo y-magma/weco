@@ -14,12 +14,19 @@ export interface ChartAxisDataZoomOptions {
   filterMode?: DataZoomComponentOption['filterMode']
 }
 
-/** Toolbox shared by time-series, scatter and profile panels (save, horizontal zoom, restore). */
-export function buildChartToolbox(): ToolboxComponentOption {
+export interface ChartToolboxOptions {
+  /** Rectangular area zoom on both axes (profile panels). Default: horizontal only. */
+  rectZoom?: boolean
+}
+
+/** Toolbox shared by time-series, scatter and profile panels (save, zoom, restore). */
+export function buildChartToolbox(options: ChartToolboxOptions = {}): ToolboxComponentOption {
   return {
     feature: {
       saveAsImage: {},
-      dataZoom: { yAxisIndex: 'none' },
+      dataZoom: options.rectZoom
+        ? { xAxisIndex: 0, yAxisIndex: 0 }
+        : { yAxisIndex: 'none' },
       restore: {},
     },
   }

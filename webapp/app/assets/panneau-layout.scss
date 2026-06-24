@@ -1,0 +1,129 @@
+/* Tri-column panneau layout: params left | chart | params right */
+
+.panneau--tri-column .panneau__layout {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.panneau--tri-column .panneau__params-left,
+.panneau--tri-column .panneau__params-right {
+  width: 280px;
+  min-width: 280px;
+  flex-shrink: 0;
+}
+
+.panneau--tri-column .panneau__chart {
+  flex: 1;
+  min-width: 0;
+}
+
+.panneau--tri-column .panneau__params-left :deep(.panel-filters-row) {
+  flex-wrap: wrap !important;
+  overflow-x: visible !important;
+}
+
+.panneau--tri-column .panneau__params-left :deep(.panel-filters-row__item) {
+  flex: 1 1 100% !important;
+  min-width: 0 !important;
+}
+
+.panneau--tri-column .panneau__params-left :deep(.panel-filters-stack .v-col),
+.panneau--tri-column .panneau__params-left :deep(.v-col:not(.v-col-auto)) {
+  flex: 0 0 100% !important;
+  max-width: 100% !important;
+}
+
+.panneau-params-right {
+  margin-bottom: 0;
+}
+
+/* Split-column panneau layout: all params left | chart */
+
+.panneau--split-column .panneau__layout {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.panneau--split-column .panneau__params-left {
+  width: 280px;
+  min-width: 280px;
+  flex-shrink: 0;
+}
+
+.panneau--split-column .panneau__chart {
+  flex: 1;
+  min-width: 0;
+}
+
+.panneau--split-column .panneau__params-left :deep(.panel-filters-row) {
+  flex-wrap: wrap !important;
+  overflow-x: visible !important;
+}
+
+.panneau--split-column .panneau__params-left :deep(.panel-filters-row__item) {
+  flex: 1 1 100% !important;
+  min-width: 0 !important;
+}
+
+.panneau--split-column .panneau__params-left :deep(.panel-filters-stack .v-col),
+.panneau--split-column .panneau__params-left :deep(.v-col:not(.v-col-auto)) {
+  flex: 0 0 100% !important;
+  max-width: 100% !important;
+}
+
+.panneau--split-column .panneau__params-left :deep(.panneau-data-source-section .v-row) {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.panneau--split-column .panneau__params-left :deep(.panneau-data-source-section .v-col) {
+  flex: 0 0 100% !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Stacked panneau layout: all params above chart (grille trapèze) */
+
+.panneau--stacked .panneau__layout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panneau--stacked .panneau__params-left {
+  order: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+.panneau--stacked .panneau__chart {
+  order: 2;
+  width: 100%;
+  min-width: 0;
+}
+
+.panneau--stacked :deep(.panneau-filters-shell) {
+  margin-bottom: 0;
+}
+
+.panneau--stacked .panneau__params-left :deep(.panel-filters-stack .v-col),
+.panneau--stacked .panneau__params-left :deep(.panel-filters-row .v-col),
+.panneau--stacked .panneau__params-left :deep(.v-col:not(.v-col-auto)) {
+  flex: 0 0 100% !important;
+  max-width: 100% !important;
+}
+
+.panneau--stacked .panneau__params-left :deep(.panneau-data-source-section .v-row) {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.panneau--stacked .panneau__params-left :deep(.panneau-data-source-section .v-col) {
+  flex: 0 0 100% !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}

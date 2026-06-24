@@ -1,19 +1,11 @@
-import type { ComputedRef, Ref } from 'vue'
+import type { Ref } from 'vue'
 import type { ApplicationContainer } from '@application/bootstrap/container'
 import type { CountryOption } from '@domain/entities'
 import { formatCountryLabel } from '@domain/catalog/countryLabels'
-import {
-  findWidVariable,
-  WID_AGE_OPTIONS,
-  WID_DEFAULT_AGE,
-  WID_DEFAULT_POP,
-  WID_POP_OPTIONS,
-  WID_PROFILE_VARIABLES,
-  type WidVariable,
-} from '@domain/catalog/widCodes'
+import type { DataSourcePort } from '@domain/ports/DataSourcePort'
 
-/** Shared reactive scope for WID panel composables. */
-export class WidPanelScope {
+/** Shared reactive scope for panel composables. */
+export class PanelScope {
   readonly app: ApplicationContainer
   readonly localCountries = ref<CountryOption[]>([])
   readonly countries: Ref<CountryOption[]>
@@ -30,29 +22,16 @@ export class WidPanelScope {
     return this.countries.value.find((item) => item.code === code)?.label ?? code
   }
 
-  async initCountries(variable = 'ahweal'): Promise<void> {
+  async initCountries(source: DataSourcePort, variable = 'ahweal'): Promise<void> {
     if (this.countries !== this.localCountries) return
     try {
-      this.localCountries.value = await this.app.listCountries.execute({ variable })
+      this.localCountries.value = await this.app.listCountries.execute(
+        { variable },
+        { source },
+      )
     } catch {
       this.localCountries.value = [{ code: 'FR', label: formatCountryLabel('FR') }]
     }
-  }
-}
-
-/** Variable / age / pop filters shared by time-series panels. */
-export class WidDemographicFilters {
-  readonly variable: Ref<string>
-  readonly age = ref(WID_DEFAULT_AGE)
-  readonly pop = ref(WID_DEFAULT_POP)
-  readonly variables = WID_PROFILE_VARIABLES
-  readonly ageOptions = WID_AGE_OPTIONS
-  readonly popOptions = WID_POP_OPTIONS
-  readonly variableMeta: ComputedRef<WidVariable | undefined>
-
-  constructor(initialVariable = 'ahweal') {
-    this.variable = ref(initialVariable)
-    this.variableMeta = computed(() => findWidVariable(this.variable.value))
   }
 }
 

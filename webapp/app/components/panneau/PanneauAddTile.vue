@@ -34,7 +34,7 @@ function chooseType(type: PanneauType) {
 
   <v-dialog
     v-model="dialogOpen"
-    max-width="420"
+    max-width="480"
   >
     <v-card title="Choisir un type de panneau">
       <v-card-text class="pb-0">

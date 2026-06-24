@@ -9,7 +9,7 @@
 
 import { buildGPercentiles } from '@domain/services/percentiles'
 
-export type MeasureKind = 'average' | 'threshold' | 'share' | 'gini' | 'other'
+export type MeasureKind = 'average' | 'threshold' | 'share' | 'gini' | 'groupLevel' | 'other'
 
 export type WidVariableGroup = 'income' | 'wealth' | 'carbon'
 
@@ -37,7 +37,13 @@ export function measureKind(sixlet: string): MeasureKind {
   if (head === 't') return 'threshold'
   if (head === 's') return 'share'
   if (head === 'g') return 'gini'
+  if (head === 'l') return 'groupLevel'
   return 'other'
+}
+
+/** Threshold semantics for CDF/PDF/Lorenz (lower-bound placement, strict PDF eligibility). */
+export function isThresholdLikeKind(kind: MeasureKind): boolean {
+  return kind === 'threshold' || kind === 'groupLevel'
 }
 
 /** Percentile code for aggregate indicators (Gini) published at population level. */
@@ -63,10 +69,10 @@ export function profileYearProbePercentiles(sixlet: string): readonly string[] {
   return ['p50p51', 'p0p1', 'p90p100'] as const
 }
 
-/** CDF / PDF / Lorenz modes apply only to average and threshold distributions. */
+/** CDF / PDF / Lorenz modes apply to average, threshold and group-level (l…) distributions. */
 export function supportsDistributionAnalytics(sixlet: string): boolean {
   const kind = measureKind(sixlet)
-  return kind === 'average' || kind === 'threshold'
+  return kind === 'average' || isThresholdLikeKind(kind)
 }
 
 const GROUP_LABELS: Record<WidVariableGroup, string> = {
@@ -97,7 +103,7 @@ function v(
  * Variables exposées dans le panneau de visualisation.
  * Paires moyenne / seuil pour le patrimoine net et le revenu avant impôt,
  * parts (s…) et Gini (g…) associés, revenus travail/capital (pllin / pkkin),
- * plus les variables distribuées CO₂ WID (préfixe l = moyenne par groupe).
+ * plus l’empreinte CO₂ (`lpfcar`, préfixe l = niveau par groupe, sémantique seuil pour CDF/PDF).
  * Pour les variables carbone, utiliser age=999 (tous âges) et pop=i (individus).
  */
 export const WID_PROFILE_VARIABLES: WidVariable[] = [
@@ -122,11 +128,16 @@ export function findWidVariable(sixlet: string): WidVariable | undefined {
 
 export const WID_THRESHOLD_VARIABLES = WID_PROFILE_VARIABLES.filter((item) => item.kind === 'threshold')
 
-/** Retourne la variable seuil jumelle (même concept). */
+/** Variables sélectionnables en PDF empirique (seuil t… ou niveau l… sans jumelle t…). */
+export const WID_STRICT_DISTRIBUTION_VARIABLES = WID_PROFILE_VARIABLES.filter((item) =>
+  isThresholdLikeKind(item.kind),
+)
+
+/** Retourne la variable seuil jumelle (même concept), ou la variable courante si aucune paire t… n’existe. */
 export function thresholdVariableFor(sixlet: string): string {
   const current = findWidVariable(sixlet)
   if (!current) return sixlet
-  if (current.kind === 'threshold') return sixlet
+  if (isThresholdLikeKind(current.kind)) return sixlet
   const pair = WID_PROFILE_VARIABLES.find(
     (item) => item.concept === current.concept && item.kind === 'threshold',
   )

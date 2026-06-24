@@ -67,7 +67,7 @@ webapp/
 | `index.vue` | `/` | Accueil |
 | `panneau/index.vue` | `/panneau` | Hub des types de panneau |
 | `panneau/temps.vue` | `/panneau/temps` | Série temporelle |
-| `panneau/trapeze.vue` | `/panneau/trapeze` | Profil d'inégalité et approximations |
+| `panneau/exploration.vue` | `/panneau/exploration` | Profil d'inégalité et approximations |
 | `grille.vue` | `/grille` | Grille multi-panneaux |
 | `spec.vue` | `/spec` | Rendu Markdown de `spec/` |
 | `sources.vue` | `/sources` | Statut des sources de données |
@@ -78,8 +78,11 @@ webapp/
 | Fichier | Rôle |
 |---------|------|
 | `useApplication.ts` | Accès au container applicatif (`$application`) |
-| `useWidTrapezoid.ts` | État réactif profil + approximations → `LoadProfileUseCase` |
-| `useWidSeries.ts` | État réactif série → `LoadTimeSeriesUseCase` |
+| `useExplorationPanel.ts` | État réactif panneau exploration → `LoadProfileUseCase` |
+| `useTimeSeriesPanel.ts` | État réactif série → `LoadTimeSeriesUseCase` |
+| `useTimeSeriesComparePanel.ts` | Comparaison multi-pays → `LoadTimeSeriesUseCase` |
+| `useCountriesProvider.ts` | Pays partagés + prefetch métadonnées par source |
+| `usePanneauDataSource.ts` | Sélection de source partagée entre panneaux |
 | `useSpec.ts` | Page `/spec` via `specAdapter` |
 | `panneauTypes.ts` | Catalogue des types de panneau |
 
@@ -102,12 +105,12 @@ Les composables **n'appellent jamais l'infrastructure directement** — uniqueme
 
 | Use case | Rôle |
 |----------|------|
-| `ListCountriesUseCase` | Liste des pays WID |
+| `ListCountriesUseCase` | Liste des pays pour une source |
 | `ListProfileYearsUseCase` | Années disponibles pour un profil |
 | `LoadProfileUseCase` | Profil 127 g-percentiles |
 | `LoadTimeSeriesUseCase` | Séries temporelles par tranche de population |
 
-Le **bootstrap** (`bootstrap/container.ts`) initialise le registre WID et instancie les use cases. Plugin Nuxt : `app/plugins/application.client.ts`.
+Le **bootstrap** (`bootstrap/container.ts`) initialise le registre des sources et instancie les use cases. Plugin Nuxt : `app/plugins/application.client.ts`.
 
 ---
 
@@ -131,6 +134,7 @@ Code **100 % pur** (pas de Vue, pas de fetch, pas d'ECharts).
 | `http/` | `fetchJson`, `fetchText` |
 | `cache/` | Cache mémoire TTL |
 | `data-sources/wid/` | `WidClient`, `WidDataSource` |
+| `data-sources/stub/` | `StubDataSource` (tests) |
 | `data-sources/registry.ts` | Enregistrement des sources |
 | `csv/` | `CsvReaderFactory` (PapaParse) |
 | `spec/` | Chargement Markdown depuis `spec/` du dépôt |
@@ -142,13 +146,13 @@ Code **100 % pur** (pas de Vue, pas de fetch, pas d'ECharts).
 ## 5. Parcours de données (exemple profil)
 
 ```
-panneau/trapeze.vue
-  provide('widCountries')
-  └─ PanneauTrapeze.vue
-       └─ createWidTrapezoidState()
-            ├─ app.loadProfile.execute()      ← use case
-            │    └─ WidDataSource.fetchPercentileProfile()  ← infra
-            └─ buildTrapezoidOption()         ← visualization
+panneau/exploration.vue
+  useCountriesProvider() → panelCountries
+  └─ PanneauExploration.vue
+       └─ createExplorationPanelState()
+            ├─ app.loadProfile.execute({ source })  ← use case
+            │    └─ DataSourcePort.fetchPercentileProfile()  ← infra
+            └─ buildTrapezoidProfileOption()        ← visualization (approximation)
        └─ EChart.vue
 ```
 

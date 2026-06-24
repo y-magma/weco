@@ -35,8 +35,8 @@ export interface PercentileProfile {
   pop: string
   label: string
   unit?: string
-  /** 'average' (a…) or 'threshold' (t…). */
-  kind: 'average' | 'threshold' | 'other'
+  /** Measure kind from the WID sixlet prefix (a…, t…, l…, etc.). */
+  kind: 'average' | 'threshold' | 'groupLevel' | 'share' | 'gini' | 'other'
   points: PercentilePoint[]
   /** True when produced from offline sample data instead of the live API. */
   sample: boolean
@@ -69,15 +69,31 @@ export interface ListAvailableParamsParams {
   variable: string
 }
 
-export interface WidParamComboEntity {
+export interface ParamComboEntity {
   age: string
   pop: string
 }
 
-export interface WidParamAvailabilityEntity {
-  combos: WidParamComboEntity[]
+export interface ParamAvailabilityEntity {
+  combos: ParamComboEntity[]
   ages: string[]
   pops: string[]
+}
+
+/** @deprecated Use ParamComboEntity */
+export type WidParamComboEntity = ParamComboEntity
+
+/** @deprecated Use ParamAvailabilityEntity */
+export type WidParamAvailabilityEntity = ParamAvailabilityEntity
+
+export interface SourceIndicator {
+  id: string
+  label: string
+  unit?: string
+  group?: string
+  groupLabel?: string
+  kind?: 'average' | 'threshold' | 'share' | 'gini' | 'scalar' | 'other'
+  concept?: string
 }
 
 export interface FetchVariableTimeSeriesParams {

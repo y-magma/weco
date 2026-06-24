@@ -6,8 +6,9 @@ import type {
   ListAvailableParamsParams,
   ListCountriesParams,
   ListProfileYearsParams,
+  ParamAvailabilityEntity,
   PercentileProfile,
-  WidParamAvailabilityEntity,
+  SourceIndicator,
 } from '@domain/entities'
 
 export interface DataSourceStatus {
@@ -33,9 +34,10 @@ export interface DataSourcePort {
   readonly description: string
   readonly website?: string
   readonly capabilities?: DataSourceCapabilities
+  readonly indicators?: readonly SourceIndicator[]
 
   listCountries(params?: ListCountriesParams): Promise<CountryOption[]>
-  listAvailableParams(params: ListAvailableParamsParams): Promise<WidParamAvailabilityEntity>
+  listAvailableParams(params: ListAvailableParamsParams): Promise<ParamAvailabilityEntity>
   fetchPercentileProfile(params: FetchProfileParams): Promise<PercentileProfile>
   fetchVariableTimeSeries(params: FetchVariableTimeSeriesParams): Promise<DataSeries>
   listProfileYears(params: ListProfileYearsParams): Promise<number[]>

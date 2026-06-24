@@ -4,6 +4,7 @@ import type {
   EChartsOption,
 } from 'echarts'
 import type { PercentilePoint, PercentileProfile } from '@domain/entities'
+import { measureKind } from '@domain/catalog/widCodes'
 import { parsePercentileInterval } from '@domain/services/percentiles'
 import { buildChartToolbox } from '~/visualization/chartZoom'
 import {
@@ -785,11 +786,11 @@ export interface ProfileDataZoomOptions {
   valueFilterMode?: 'filter' | 'none'
   /** `none` pans/scales the rank axis without filtering series (needed on strict log X). */
   rankFilterMode?: 'filter' | 'none'
-  /** Vertical value-axis slider (Y zoom remains via inside dataZoom / mouse wheel). */
+  /** Horizontal value-axis slider (CDF / PDF : richesse en abscisse). Y zoom via inside dataZoom. */
   showValueSlider?: boolean
 }
 
-/** Native ECharts sliders: rank/population axis + value axis (horizontal or vertical). */
+/** Native ECharts sliders: horizontal rank/value sliders + inside zoom on both axes. */
 export function buildProfileDataZoom(
   valueOnX: boolean,
   initialWindow?: ProfileDataZoomWindow,
@@ -798,8 +799,8 @@ export function buildProfileDataZoom(
   const rankOnX = !valueOnX
   const valueFilterMode = options?.valueFilterMode ?? 'filter'
   const rankFilterMode = options?.rankFilterMode ?? 'filter'
-  const showValueSlider = options?.showValueSlider ?? true
-  const { bottomSlider, bottomSliderHeight, gridBottom } = PROFILE_CHART_LAYOUT
+  const showHorizontalValueSlider = options?.showValueSlider ?? true
+  const { bottomSlider, bottomSliderHeight } = PROFILE_CHART_LAYOUT
   const rankRange = dataZoomRange(initialWindow?.rankStart, initialWindow?.rankEnd)
   const valueRange = dataZoomRange(initialWindow?.valueStart, initialWindow?.valueEnd)
 
@@ -811,51 +812,37 @@ export function buildProfileDataZoom(
     ? { type: 'inside' as const, xAxisIndex: 0, filterMode: valueFilterMode, ...valueRange }
     : { type: 'inside' as const, yAxisIndex: 0, filterMode: valueFilterMode, ...valueRange }
 
-  const rankSlider = rankOnX
-    ? {
-        type: 'slider' as const,
-        xAxisIndex: 0,
-        height: bottomSliderHeight,
-        bottom: bottomSlider,
-        filterMode: rankFilterMode,
-        ...rankRange,
-      }
-    : {
-        type: 'slider' as const,
-        orient: 'vertical' as const,
-        yAxisIndex: 0,
-        width: bottomSliderHeight,
-        left: 10,
-        top: 56,
-        bottom: gridBottom,
-        filterMode: rankFilterMode,
-        ...rankRange,
-      }
+  const sliders: Array<{
+    type: 'slider'
+    xAxisIndex: 0
+    height: number
+    bottom: number
+    filterMode: 'filter' | 'none'
+  }> = []
 
-  const valueSlider = valueOnX
-    ? {
-        type: 'slider' as const,
-        xAxisIndex: 0,
-        height: bottomSliderHeight,
-        bottom: bottomSlider,
-        filterMode: valueFilterMode,
-        ...valueRange,
-      }
-    : {
-        type: 'slider' as const,
-        orient: 'vertical' as const,
-        yAxisIndex: 0,
-        width: bottomSliderHeight,
-        left: 10,
-        top: 56,
-        bottom: gridBottom + bottomSliderHeight + bottomSlider,
-        filterMode: valueFilterMode,
-        ...valueRange,
-      }
+  if (rankOnX) {
+    sliders.push({
+      type: 'slider',
+      xAxisIndex: 0,
+      height: bottomSliderHeight,
+      bottom: bottomSlider,
+      filterMode: rankFilterMode,
+      ...rankRange,
+    })
+  }
 
-  return showValueSlider
-    ? [rankInside, valueInside, rankSlider, valueSlider]
-    : [rankInside, valueInside, rankSlider]
+  if (valueOnX && showHorizontalValueSlider) {
+    sliders.push({
+      type: 'slider',
+      xAxisIndex: 0,
+      height: bottomSliderHeight,
+      bottom: bottomSlider,
+      filterMode: valueFilterMode,
+      ...valueRange,
+    })
+  }
+
+  return [rankInside, valueInside, ...sliders]
 }
 
 /**
@@ -890,7 +877,13 @@ export function buildProfileOption(
     : ordered
 
   const valueAxisName = profile.unit ? `Valeur · ${profile.unit}` : 'Valeur'
-  const scales = resolveProfileAxisScales({ logScaleX, logScaleY, empiricalCdf, showPdf })
+  const scales = resolveProfileAxisScales({
+    logScaleX,
+    logScaleY,
+    empiricalCdf,
+    showPdf,
+    measureKind: measureKind(profile.variable),
+  })
   const { rank: rankScale, value: valueScale, density: densityScale } = scales
   const smoothSpline = showSmoothDist && (empiricalCdf || showPdf)
     ? buildSmoothDistributionSpline(chartPoints, { logX: wealthLogForSpline })
@@ -913,12 +906,12 @@ export function buildProfileOption(
       subtextStyle: { fontSize: 11, color: '#616161' },
     },
     grid: {
-      left: valueOnX ? 72 : 88,
+      left: 72,
       right: 24,
       top: 56,
       bottom: PROFILE_CHART_LAYOUT.gridBottom,
     },
-    toolbox: buildChartToolbox(),
+    toolbox: buildChartToolbox({ rectZoom: true }),
     dataZoom: buildProfileDataZoom(valueOnX),
   }
 

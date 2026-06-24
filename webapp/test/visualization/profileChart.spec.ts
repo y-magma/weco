@@ -114,24 +114,24 @@ describe('buildProfileDataZoom', () => {
     expect(zooms.every((z) => z.filterMode === 'filter')).toBe(true)
   })
 
-  it('uses a vertical slider for the value axis in the default view', () => {
+  it('omits vertical sliders; Y zoom remains via inside dataZoom', () => {
     const zooms = buildProfileDataZoom(false)
-    const valueSlider = zooms.find((z) => z.type === 'slider' && z.orient === 'vertical' && z.yAxisIndex === 0)
-    expect(valueSlider).toBeDefined()
-    expect(zooms.find((z) => z.type === 'slider' && z.xAxisIndex === 0)).toBeDefined()
+    expect(zooms.find((z) => z.type === 'slider' && (z as { orient?: string }).orient === 'vertical')).toBeUndefined()
+    expect(zooms.find((z) => z.type === 'slider' && (z as { xAxisIndex?: number }).xAxisIndex === 0)).toBeDefined()
+    expect(zooms.some((z) => z.type === 'inside' && (z as { yAxisIndex?: number }).yAxisIndex === 0)).toBe(true)
   })
 
-  it('can omit the value slider while keeping inside Y zoom', () => {
-    const zooms = buildProfileDataZoom(false, undefined, { showValueSlider: false })
-    expect(zooms.find((z) => z.type === 'slider' && z.orient === 'vertical')).toBeUndefined()
-    expect(zooms.some((z) => z.type === 'inside' && z.yAxisIndex === 0)).toBe(true)
-  })
-
-  it('uses a horizontal slider for the value axis in empirical CDF view', () => {
+  it('omits vertical sliders in empirical CDF view (rank on Y)', () => {
     const zooms = buildProfileDataZoom(true)
-    const valueSlider = zooms.find((z) => z.type === 'slider' && z.xAxisIndex === 0)
-    expect(valueSlider).toBeDefined()
-    expect(zooms.find((z) => z.type === 'slider' && z.orient === 'vertical' && z.yAxisIndex === 0)).toBeDefined()
+    expect(zooms.find((z) => z.type === 'slider' && (z as { orient?: string }).orient === 'vertical')).toBeUndefined()
+    expect(zooms.find((z) => z.type === 'slider' && (z as { xAxisIndex?: number }).xAxisIndex === 0)).toBeDefined()
+    expect(zooms.some((z) => z.type === 'inside' && (z as { yAxisIndex?: number }).yAxisIndex === 0)).toBe(true)
+  })
+
+  it('can omit the horizontal value slider in CDF view', () => {
+    const zooms = buildProfileDataZoom(true, undefined, { showValueSlider: false })
+    expect(zooms.filter((z) => z.type === 'slider')).toHaveLength(0)
+    expect(zooms.some((z) => z.type === 'inside' && (z as { yAxisIndex?: number }).yAxisIndex === 0)).toBe(true)
   })
 })
 
@@ -268,7 +268,10 @@ describe('buildProfileOption', () => {
   it('includes the shared chart toolbox', () => {
     const option = buildProfileOption(makeProfile())
     expect(option.toolbox).toBeDefined()
-    expect((option.toolbox as { feature?: { dataZoom?: unknown } }).feature?.dataZoom).toEqual({ yAxisIndex: 'none' })
+    expect((option.toolbox as { feature?: { dataZoom?: unknown } }).feature?.dataZoom).toEqual({
+      xAxisIndex: 0,
+      yAxisIndex: 0,
+    })
   })
 
   it('orders points by rank on a linear X axis (average → interval midpoint)', () => {

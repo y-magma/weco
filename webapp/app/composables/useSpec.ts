@@ -34,13 +34,26 @@ export function useSpec() {
 
   const resolveLink = (href: string) => resolveSpecLink(href, selectedId.value)
 
+  const handleContentClick = (event: MouseEvent) => {
+    const anchor = (event.target as HTMLElement | null)?.closest('a')
+    if (!anchor) return
+    const href = anchor.getAttribute('href')
+    if (!href || href.startsWith('http://') || href.startsWith('https://') || href.startsWith('#')) return
+    event.preventDefault()
+    const resolved = resolveLink(href)
+    if (resolved) selectDoc(resolved)
+  }
+
   return {
     blocks,
     docs,
     selectedId,
     selectedDoc,
+    current: selectedDoc,
     renderedHtml,
     selectDoc,
+    select: selectDoc,
     resolveLink,
+    handleContentClick,
   }
 }

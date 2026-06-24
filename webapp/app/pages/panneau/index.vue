@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PANNEAU_TYPES } from '~/composables/panneauTypes'
+import { EXPLORER_PANNEAU_TYPES } from '~/composables/panneauTypes'
 </script>
 
 <template>
@@ -15,7 +15,7 @@ import { PANNEAU_TYPES } from '~/composables/panneauTypes'
 
     <v-row>
       <v-col
-        v-for="panel in PANNEAU_TYPES"
+        v-for="panel in EXPLORER_PANNEAU_TYPES"
         :key="panel.id"
         cols="12"
         md="4"

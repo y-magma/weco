@@ -1,8 +1,8 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'default' })
 
-const { countriesError } = useWidCountriesProvider()
 const { sourceId } = usePanneauDataSourceProvider()
+const { countriesError } = useCountriesProvider()
 </script>
 
 <template>

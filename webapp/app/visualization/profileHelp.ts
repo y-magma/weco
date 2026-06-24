@@ -1,5 +1,5 @@
 import type { PercentileProfile } from '@domain/entities'
-import { expectedProfilePointCount, WID_G_PERCENTILE_COUNT } from '@domain/catalog/widCodes'
+import { expectedProfilePointCount, isThresholdLikeKind, WID_G_PERCENTILE_COUNT } from '@domain/catalog/widCodes'
 
 import type { ProfileChartType } from '~/visualization/profile'
 
@@ -54,7 +54,7 @@ export const PROFILE_HELP = {
       'Plateau (Δx = 0) : les tranches consécutives à la même richesse sont fusionnées ; le bin est émis au prochain saut strictement positif.',
       'Abscisse = richesse (largeur ]valeurᵢ, valeurⱼ] en mode Bandes, borne basse en mode Ligne). Ordonnée = PDF empirique (unité : 1 / unité de richesse, ex. 1/EUR).',
       'Les intervalles où la richesse décroît (Δx < 0) ou les valeurs manquantes sont ignorés.',
-      'Interprétation la plus rigoureuse avec une variable seuil (t…). Seules les variables seuil sont sélectionnables dans ce mode. En mode Bandes, l’histogramme est le plus lisible.',
+      'Interprétation la plus rigoureuse avec une variable seuil (t…) ou un niveau de groupe (l…, ex. empreinte CO₂). Seules ces variables sont sélectionnables dans ce mode. En mode Bandes, l’histogramme est le plus lisible.',
     ],
   },
   smoothDistribution: {
@@ -132,17 +132,17 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
   const { chartType, logScaleX, logScaleY, empiricalCdf, empiricalPdf, lorenzCurve, profile } = ctx
   const unit = profile?.unit ?? 'unité'
   const kind = profile?.kind
-  const kindLabel = kind === 'threshold'
-    ? 'seuil (t…)'
+  const kindLabel = kind && isThresholdLikeKind(kind)
+    ? kind === 'groupLevel'
+      ? 'niveau de groupe (l…)'
+      : 'seuil (t…)'
     : kind === 'average'
       ? 'moyenne (a…)'
       : kind === 'share'
         ? 'part (s…)'
         : kind === 'gini'
           ? 'Gini (g…)'
-          : profile?.variable.startsWith('l')
-            ? 'émissions de groupe (l…)'
-            : 'autre'
+          : 'autre'
 
   const pointCount = profile?.points.length ?? 0
   const expectedPoints = profile ? expectedProfilePointCount(profile.variable) : WID_G_PERCENTILE_COUNT
@@ -167,14 +167,16 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
       'Vue active : courbe de Lorenz (cumul population vs cumul patrimoine).',
       'Abscisse X = part cumulée de la population (%). Ordonnée Y = part cumulée du patrimoine (%).',
       'Par tranche ]rᵢ, rᵢ₊₁] : masse = (rᵢ₊₁ − rᵢ) / 100 × (valeurᵢ + valeurᵢ₊₁) / 2 ; part cumulée = 100 × Σ masse / total.',
-      kind === 'threshold'
-        ? 'Variable seuil : les valeurs sont des seuils de richesse — approximation standard pour une Lorenz empirique.'
+      kind && isThresholdLikeKind(kind)
+        ? kind === 'groupLevel'
+          ? 'Variable niveau de groupe : les valeurs sont des seuils empiriques — approximation standard pour une Lorenz empirique (pas de jumelle t… WID).'
+          : 'Variable seuil : les valeurs sont des seuils de richesse — approximation standard pour une Lorenz empirique.'
         : 'Variable moyenne : les valeurs sont des moyennes par tranche — approximation indicative de la concentration.',
     )
   } else if (empiricalPdf) {
     paragraphs.push(
       'Vue active : PDF empirique (dérivée de la CDF).',
-      'Seules les variables seuil (préfixe t…) sont disponibles dans ce mode.',
+      'Seules les variables à sémantique seuil (préfixe t…) ou niveau de groupe (préfixe l…, ex. empreinte CO₂) sont disponibles dans ce mode.',
       'Abscisse X = richesse. Ordonnée Y = f(x) = Δ(rang % / 100) / Δ(valeur) entre tranches consécutives.',
       `Formule par intervalle [valeurᵢ, valeurᵢ₊₁] : f = (rangᵢ₊₁ − rangᵢ) / (100 × (valeurᵢ₊₁ − valeurᵢ)).`,
     )
@@ -182,8 +184,10 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
     paragraphs.push(
       'Vue active : CDF empirique (axes inversés).',
       'Abscisse X = richesse (valeur). Ordonnée Y = part de population cumulée (rang percentile en %).',
-      kind === 'threshold'
-        ? 'Variable seuil : la courbe relie les points d’une fonction de répartition F(x) empirique.'
+      kind && isThresholdLikeKind(kind)
+        ? kind === 'groupLevel'
+          ? 'Variable niveau de groupe : la courbe relie les points d’une fonction de répartition F(x) empirique (seuil par tranche, sans code t… WID).'
+          : 'Variable seuil : la courbe relie les points d’une fonction de répartition F(x) empirique.'
         : 'Variable moyenne : transposition visuelle — l’axe Y n’est pas une CDF mathématique exacte.',
     )
   } else {
@@ -240,9 +244,11 @@ export function buildActiveCalculationHelp(ctx: ProfileHelpContext): {
       paragraphs.push(
         'Position sur l’axe population : centre de la tranche ]i, k] (ex. p50p51 → 50,5 %) pour les variables moyenne (a…).',
       )
-    } else if (kind === 'threshold') {
+    } else if (kind && isThresholdLikeKind(kind)) {
       paragraphs.push(
-        'Position sur l’axe population : borne basse i de la tranche (ex. p50p51 → 50 %) pour les variables seuil (t…).',
+        kind === 'groupLevel'
+          ? 'Position sur l’axe population : borne basse i de la tranche (ex. p50p51 → 50 %) pour les variables niveau de groupe (l…).'
+          : 'Position sur l’axe population : borne basse i de la tranche (ex. p50p51 → 50 %) pour les variables seuil (t…).',
       )
     }
   }
