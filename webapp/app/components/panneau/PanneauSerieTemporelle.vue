@@ -65,6 +65,7 @@ const {
   error: panelError,
   loadWarning,
   trancheSeriesByCountry,
+  scalarSeries,
   chartOption,
   variableMeta,
   yearCountLabel,
@@ -72,6 +73,8 @@ const {
   paramsLoading,
   trancheCountLabel,
   hasPercentileProfile,
+  hasDecileProfile,
+  isDecileBundle,
   load,
 } = state
 
@@ -192,6 +195,16 @@ onMounted(() => {
               />
             </v-col>
           </v-row>
+
+          <v-alert
+            v-if="hasDecileProfile && isDecileBundle"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mt-3 mb-0"
+          >
+            Ratios inter-déciles OECD (P90/P10, P50/P10, P90/P50). Les tranches WID, l'âge et la population ne s'appliquent pas.
+          </v-alert>
 
           <div
             v-if="hasPercentileProfile"
@@ -359,8 +372,11 @@ onMounted(() => {
           </v-alert>
 
           <div class="d-flex flex-wrap ga-2 mb-2">
-            <v-chip v-if="trancheSeriesByCountry.length" size="x-small" color="primary" variant="tonal">
+            <v-chip v-if="trancheSeriesByCountry.length || scalarSeries.length" size="x-small" color="primary" variant="tonal">
               Source : {{ sourceLabel }}
+            </v-chip>
+            <v-chip v-if="variableMeta?.concept" size="x-small" variant="tonal">
+              Concept : {{ variableMeta.concept }}
             </v-chip>
             <v-chip v-if="variableMeta?.unit" size="x-small" variant="tonal">
               Unité : {{ variableMeta.unit }}

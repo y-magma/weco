@@ -41,7 +41,7 @@ const connectionStatus = computed(() => {
 
 const sourceHelpParagraphs = computed(() => [
   selectedSource.value.description,
-  'En V1, seule WID.world est disponible. D\'autres sources (OECD, Eurostat, import CSV…) seront ajoutées ultérieurement.',
+  'Plusieurs sources sont disponibles (WID.world, OECD IDD…). Les concepts et échelles peuvent différer — comparez en changeant de source, pas en superposant les courbes.',
   'Changer de source réinitialisera les paramètres pays, variable, année, âge et population.',
 ])
 </script>

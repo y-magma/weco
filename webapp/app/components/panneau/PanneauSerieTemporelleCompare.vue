@@ -67,6 +67,10 @@ const {
   yearRangeLabel,
   paramsLoading,
   hasPercentileProfile,
+  hasDecileProfile,
+  isDecileBundle,
+  decileRatio,
+  decileRatioOptions,
   load,
 } = state
 
@@ -109,7 +113,15 @@ onMounted(() => {
           <PanneauDataSourceSection v-if="showDataSourceSection" v-model="sourceId" />
 
           <p class="text-body-2 text-medium-emphasis mb-3">
-            Comparer la même tranche de population entre plusieurs pays.
+            <template v-if="hasPercentileProfile">
+              Comparer la même tranche de population entre plusieurs pays.
+            </template>
+            <template v-else-if="hasDecileProfile && isDecileBundle">
+              Comparer un ratio inter-déciles OECD entre plusieurs pays.
+            </template>
+            <template v-else>
+              Comparer la même variable entre plusieurs pays.
+            </template>
           </p>
 
           <v-row dense class="panel-filters-stack">
@@ -152,7 +164,28 @@ onMounted(() => {
                 hide-details
               />
             </v-col>
+            <v-col v-if="hasDecileProfile && isDecileBundle" cols="12">
+              <v-select
+                v-model="decileRatio"
+                :items="decileRatioOptions"
+                item-title="label"
+                item-value="id"
+                label="Ratio décile"
+                density="compact"
+                hide-details
+              />
+            </v-col>
           </v-row>
+
+          <v-alert
+            v-if="hasDecileProfile && isDecileBundle"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mt-0 mb-0"
+          >
+            Ratios inter-déciles OECD uniquement — pas de tranches WID ni de profils centile.
+          </v-alert>
 
           <v-expand-transition>
             <div

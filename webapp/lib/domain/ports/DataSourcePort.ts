@@ -23,6 +23,8 @@ export interface DataSourceStatus {
 
 export interface DataSourceCapabilities {
   percentileProfile: boolean
+  /** Coarse decile-related series (e.g. OECD inter-decile ratios). */
+  decileProfile?: boolean
   timeSeries: boolean
   scatter: boolean
 }
