@@ -734,8 +734,13 @@ export function computePdfBandAxisBounds(
 export const PROFILE_CHART_LAYOUT = {
   bottomSlider: 4,
   bottomSliderHeight: 18,
+  rightSlider: 4,
+  rightSliderWidth: 18,
+  gridTop: 56,
   /** Space below the plot for tick labels + axis name, above the horizontal slider. */
   gridBottom: 90,
+  /** Space right of plot for vertical slider (Y axis name stays on the left). */
+  gridRight: 48,
 } as const
 
 /** Initial visible window for profile dataZoom (band-framed overlay views). */
@@ -786,11 +791,32 @@ export interface ProfileDataZoomOptions {
   valueFilterMode?: 'filter' | 'none'
   /** `none` pans/scales the rank axis without filtering series (needed on strict log X). */
   rankFilterMode?: 'filter' | 'none'
-  /** Horizontal value-axis slider (CDF / PDF : richesse en abscisse). Y zoom via inside dataZoom. */
+  /** Value-axis slider (horizontal when richesse en abscisse, vertical otherwise). */
   showValueSlider?: boolean
+  /** Plot top — vertical slider starts here (align with grid.top). */
+  gridTop?: number
 }
 
-/** Native ECharts sliders: horizontal rank/value sliders + inside zoom on both axes. */
+type ProfileSlider = {
+  type: 'slider'
+  filterMode: 'filter' | 'none'
+  start?: number
+  end?: number
+  startValue?: number
+  endValue?: number
+} & (
+  | { xAxisIndex: 0, height: number, bottom: number }
+  | {
+    orient: 'vertical'
+    yAxisIndex: 0
+    width: number
+    right: number
+    top: number
+    bottom: number
+  }
+)
+
+/** Native ECharts sliders: rank/value on X (bottom) or Y (right) + inside zoom on both axes. */
 export function buildProfileDataZoom(
   valueOnX: boolean,
   initialWindow?: ProfileDataZoomWindow,
@@ -799,8 +825,16 @@ export function buildProfileDataZoom(
   const rankOnX = !valueOnX
   const valueFilterMode = options?.valueFilterMode ?? 'filter'
   const rankFilterMode = options?.rankFilterMode ?? 'filter'
-  const showHorizontalValueSlider = options?.showValueSlider ?? true
-  const { bottomSlider, bottomSliderHeight } = PROFILE_CHART_LAYOUT
+  const showValueSlider = options?.showValueSlider ?? true
+  const {
+    bottomSlider,
+    bottomSliderHeight,
+    rightSlider,
+    rightSliderWidth,
+    gridBottom,
+    gridTop: defaultGridTop,
+  } = PROFILE_CHART_LAYOUT
+  const gridTop = options?.gridTop ?? defaultGridTop
   const rankRange = dataZoomRange(initialWindow?.rankStart, initialWindow?.rankEnd)
   const valueRange = dataZoomRange(initialWindow?.valueStart, initialWindow?.valueEnd)
 
@@ -812,13 +846,19 @@ export function buildProfileDataZoom(
     ? { type: 'inside' as const, xAxisIndex: 0, filterMode: valueFilterMode, ...valueRange }
     : { type: 'inside' as const, yAxisIndex: 0, filterMode: valueFilterMode, ...valueRange }
 
-  const sliders: Array<{
-    type: 'slider'
-    xAxisIndex: 0
-    height: number
-    bottom: number
-    filterMode: 'filter' | 'none'
-  }> = []
+  const hasBottomSlider = rankOnX || (valueOnX && showValueSlider)
+  const verticalBottom = gridBottom + (hasBottomSlider ? bottomSliderHeight + bottomSlider : 0)
+  const verticalSliderBase = {
+    type: 'slider' as const,
+    orient: 'vertical' as const,
+    yAxisIndex: 0 as const,
+    width: rightSliderWidth,
+    right: rightSlider,
+    top: gridTop,
+    bottom: verticalBottom,
+  }
+
+  const sliders: ProfileSlider[] = []
 
   if (rankOnX) {
     sliders.push({
@@ -829,17 +869,31 @@ export function buildProfileDataZoom(
       filterMode: rankFilterMode,
       ...rankRange,
     })
+  } else {
+    sliders.push({
+      ...verticalSliderBase,
+      filterMode: rankFilterMode,
+      ...rankRange,
+    })
   }
 
-  if (valueOnX && showHorizontalValueSlider) {
-    sliders.push({
-      type: 'slider',
-      xAxisIndex: 0,
-      height: bottomSliderHeight,
-      bottom: bottomSlider,
-      filterMode: valueFilterMode,
-      ...valueRange,
-    })
+  if (showValueSlider) {
+    if (valueOnX) {
+      sliders.push({
+        type: 'slider',
+        xAxisIndex: 0,
+        height: bottomSliderHeight,
+        bottom: bottomSlider,
+        filterMode: valueFilterMode,
+        ...valueRange,
+      })
+    } else {
+      sliders.push({
+        ...verticalSliderBase,
+        filterMode: valueFilterMode,
+        ...valueRange,
+      })
+    }
   }
 
   return [rankInside, valueInside, ...sliders]
@@ -907,11 +961,11 @@ export function buildProfileOption(
     },
     grid: {
       left: 72,
-      right: 24,
-      top: 56,
+      right: PROFILE_CHART_LAYOUT.gridRight,
+      top: PROFILE_CHART_LAYOUT.gridTop,
       bottom: PROFILE_CHART_LAYOUT.gridBottom,
     },
-    toolbox: buildChartToolbox({ rectZoom: true }),
+    toolbox: buildChartToolbox(),
     dataZoom: buildProfileDataZoom(valueOnX),
   }
 

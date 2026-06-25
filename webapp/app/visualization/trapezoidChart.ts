@@ -288,7 +288,7 @@ function buildTrapezoidContext(profile: PercentileProfile, options: TrapezoidCha
     dataZoom: buildProfileDataZoom(false, undefined, {
       valueFilterMode: logScaleY ? 'none' : 'filter',
       rankFilterMode: logScaleX ? 'none' : 'filter',
-      showValueSlider: false,
+      gridTop: 72,
     }),
     baseline,
     plotBaseline,
@@ -370,7 +370,7 @@ function chartShell(
     legend: { show: legendItems.length > 1, top: 28, data: legendItems },
     grid: {
       left: 64,
-      right: 24,
+      right: PROFILE_CHART_LAYOUT.gridRight,
       top: 72,
       bottom: PROFILE_CHART_LAYOUT.gridBottom,
     },

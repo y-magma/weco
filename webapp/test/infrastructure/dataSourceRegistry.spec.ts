@@ -8,6 +8,9 @@ import {
 } from '@infrastructure/data-sources/registry'
 import { createStubDataSource } from '@infrastructure/data-sources/stub/stubSource'
 import { createOecdIddDataSource } from '@infrastructure/data-sources/oecd-idd/oecdIddSource'
+import { createWorldBankDataSource } from '@infrastructure/data-sources/worldbank/worldBankSource'
+import { PIP_DECILE_BUNDLE_ID } from '@infrastructure/data-sources/worldbank/worldBankDeciles'
+import { resetWorldBankCountryCache } from '@infrastructure/data-sources/worldbank/worldBankCountries'
 import { OECD_DECILE_BUNDLE_ID } from '@infrastructure/data-sources/oecd-idd/oecdDeciles'
 import { createWidDataSource } from '@infrastructure/data-sources/wid/widSource'
 import { resetApplicationContainer } from '@application/bootstrap/container'
@@ -27,7 +30,7 @@ describe('data source registry', () => {
     })
     registerDataSource(createStubDataSource())
 
-    expect(listDataSources()).toHaveLength(3)
+    expect(listDataSources()).toHaveLength(4)
     expect(getDefaultDataSource().id).toBe('stub')
   })
 
@@ -38,7 +41,7 @@ describe('data source registry', () => {
     expect(getDefaultDataSource().id).toBe('stub')
   })
 
-  it('registers WID and OECD after prod-like init with default wid', () => {
+  it('registers WID, OECD and World Bank after prod-like init with default wid', () => {
     initializeDataSources({
       defaultSourceId: 'wid',
       wid: { apiKey: 'test-key' },
@@ -47,6 +50,7 @@ describe('data source registry', () => {
     const ids = listDataSources().map((source) => source.id)
     expect(ids).toContain('wid')
     expect(ids).toContain('oecd-idd')
+    expect(ids).toContain('worldbank')
     expect(getDefaultDataSource().id).toBe('wid')
   })
 })
@@ -136,5 +140,59 @@ DATAFLOW,OECD.WISE.INE:DSD_WISE_IDD@DF_IDD(1.0),Income distribution database,I,F
     expect(result.series).toHaveLength(1)
     expect(result.series[0]!.points).toEqual([{ year: 2022, value: 0.297 }])
     expect(result.series[0]!.metadata?.decileRatio).toBe('D9_1_INC_DISP')
+  })
+})
+
+describe('World Bank source routing', () => {
+  const wid = createWidDataSource({ apiKey: 'key' })
+
+  const PIP_SAMPLE_CSV = `region_name,region_code,country_name,country_code,reporting_year,reporting_level,survey_acronym,survey_coverage,survey_year,welfare_type,survey_comparability,comparable_spell,poverty_line,headcount,poverty_gap,poverty_severity,watts,mean,median,mld,gini,polarization,decile1,decile2,decile3,decile4,decile5,decile6,decile7,decile8,decile9,decile10,cpi,ppp,reporting_pop,reporting_gdp,reporting_pce,is_interpolated,distribution_type,estimation_type,spl,spr,pg,estimate_type
+Europe & Central Asia,ECS,France,FRA,2020,national,EU-SILC,national,2020,income,2,2003 - 2023,3.65,0.001,0.0004,0.0003,0.0008,65,57,0.17,0.306,0.25,0.031,0.048,0.061,0.072,0.082,0.093,0.105,0.120,0.143,0.245,1,0.76,67000000,38000,20000,FALSE,micro,survey,29,0.13,0.62,
+Europe & Central Asia,ECS,France,FRA,2021,national,EU-SILC,national,2021,income,2,2003 - 2023,3.65,0.001,0.0004,0.0003,0.0008,65,57,0.17,0.315,0.25,0.029,0.047,0.060,0.071,0.081,0.092,0.105,0.120,0.145,0.248,1,0.76,67000000,38000,20000,FALSE,micro,survey,29,0.13,0.62,`
+
+  beforeEach(() => {
+    resetDataSourcesRegistry()
+    resetWorldBankCountryCache()
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/pip/v1/pip')) {
+        return { ok: true, text: async () => PIP_SAMPLE_CSV }
+      }
+      if (url.includes('/v2/country?')) {
+        return {
+          ok: true,
+          json: async () => [
+            { page: 1, pages: 1 },
+            [{ id: 'FRA', iso2Code: 'FR', name: 'France', region: { id: 'ECS' } }],
+          ],
+        }
+      }
+      return { ok: false, status: 404, statusText: 'Not Found' }
+    }))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('routes PIP decile bundle through percentile param', async () => {
+    const wb = createWorldBankDataSource()
+    const useCase = new LoadTimeSeriesUseCase(() => wid)
+    const result = await useCase.execute({
+      countryCodes: ['FR'],
+      params: {
+        variable: PIP_DECILE_BUNDLE_ID,
+        age: '',
+        pop: '',
+        percentile: 'decile5',
+      },
+      countryLabel: (code) => code,
+    }, { source: wb })
+
+    expect(result.series).toHaveLength(1)
+    expect(result.series[0]!.points).toEqual([
+      { year: 2020, value: 0.082 },
+      { year: 2021, value: 0.081 },
+    ])
+    expect(result.series[0]!.metadata?.decileRatio).toBe('decile5')
   })
 })

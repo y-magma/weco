@@ -17,6 +17,7 @@ import {
   rankFromDisplayCoordinate,
   rankFromTopLogCoordinate,
   normalizeChartTypeLayers,
+  PROFILE_CHART_LAYOUT,
   resolveProfileChartType,
   rankTopLogCoordinate,
 } from '~/visualization/profile'
@@ -114,23 +115,36 @@ describe('buildProfileDataZoom', () => {
     expect(zooms.every((z) => z.filterMode === 'filter')).toBe(true)
   })
 
-  it('omits vertical sliders; Y zoom remains via inside dataZoom', () => {
+  it('places vertical Y sliders on the right without overlapping axis names', () => {
     const zooms = buildProfileDataZoom(false)
-    expect(zooms.find((z) => z.type === 'slider' && (z as { orient?: string }).orient === 'vertical')).toBeUndefined()
+    const valueSlider = zooms.find((z) => z.type === 'slider' && (z as { orient?: string }).orient === 'vertical')
+    expect(valueSlider).toMatchObject({
+      orient: 'vertical',
+      yAxisIndex: 0,
+      right: PROFILE_CHART_LAYOUT.rightSlider,
+    })
+    expect(valueSlider).not.toHaveProperty('left')
     expect(zooms.find((z) => z.type === 'slider' && (z as { xAxisIndex?: number }).xAxisIndex === 0)).toBeDefined()
     expect(zooms.some((z) => z.type === 'inside' && (z as { yAxisIndex?: number }).yAxisIndex === 0)).toBe(true)
   })
 
-  it('omits vertical sliders in empirical CDF view (rank on Y)', () => {
+  it('places the rank slider vertically on the right in empirical CDF view', () => {
     const zooms = buildProfileDataZoom(true)
-    expect(zooms.find((z) => z.type === 'slider' && (z as { orient?: string }).orient === 'vertical')).toBeUndefined()
+    const rankSlider = zooms.find((z) => z.type === 'slider' && (z as { orient?: string }).orient === 'vertical')
+    expect(rankSlider).toMatchObject({
+      orient: 'vertical',
+      yAxisIndex: 0,
+      right: PROFILE_CHART_LAYOUT.rightSlider,
+    })
+    expect(rankSlider).not.toHaveProperty('left')
     expect(zooms.find((z) => z.type === 'slider' && (z as { xAxisIndex?: number }).xAxisIndex === 0)).toBeDefined()
     expect(zooms.some((z) => z.type === 'inside' && (z as { yAxisIndex?: number }).yAxisIndex === 0)).toBe(true)
   })
 
-  it('can omit the horizontal value slider in CDF view', () => {
+  it('can omit the horizontal value slider in CDF view while keeping rank Y slider', () => {
     const zooms = buildProfileDataZoom(true, undefined, { showValueSlider: false })
-    expect(zooms.filter((z) => z.type === 'slider')).toHaveLength(0)
+    expect(zooms.filter((z) => z.type === 'slider' && (z as { orient?: string }).orient !== 'vertical')).toHaveLength(0)
+    expect(zooms.find((z) => z.type === 'slider' && (z as { orient?: string }).orient === 'vertical')).toBeDefined()
     expect(zooms.some((z) => z.type === 'inside' && (z as { yAxisIndex?: number }).yAxisIndex === 0)).toBe(true)
   })
 })
@@ -268,10 +282,7 @@ describe('buildProfileOption', () => {
   it('includes the shared chart toolbox', () => {
     const option = buildProfileOption(makeProfile())
     expect(option.toolbox).toBeDefined()
-    expect((option.toolbox as { feature?: { dataZoom?: unknown } }).feature?.dataZoom).toEqual({
-      xAxisIndex: 0,
-      yAxisIndex: 0,
-    })
+    expect((option.toolbox as { feature?: { dataZoom?: unknown } }).feature?.dataZoom).toEqual({ yAxisIndex: 'none' })
   })
 
   it('orders points by rank on a linear X axis (average → interval midpoint)', () => {

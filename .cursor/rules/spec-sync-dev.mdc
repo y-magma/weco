@@ -1,0 +1,49 @@
+---
+description: Synchroniser spec/ avec webapp/ en phase dev — alimente la page /spec
+alwaysApply: true
+---
+
+# Sync spec ↔ dev
+
+Phase **dev** active. La page `/spec` affiche le contenu de `spec/` (via `webapp/lib/infrastructure/spec/specDocs.ts`). Toute modification pertinente dans `webapp/` doit se refléter dans `spec/` **dans la même session**, sans attendre une demande explicite.
+
+## Quand mettre à jour
+
+Après avoir ajouté, modifié, renommé ou supprimé du code applicatif qui correspond à une exigence documentée :
+
+- nouvelle fonction `build*Option`, traceur, composable ou page ;
+- nouvelle fonction statistique ou transformation B4 ;
+- nouvelle interaction (zoom, échelle log, export…) ;
+- nouveau module ECharts, source de données ou fichier déplacé ;
+- changement de statut MVP → implémenté.
+
+## Où mettre à jour
+
+| Zone code | Fichier(s) spec |
+|-----------|-----------------|
+| Traceurs, composants chart | `spec/C-visualizations/C2-representation-graphique/implementation.md` |
+| Modules ECharts | `spec/C-visualizations/C2-representation-graphique/bibliotheques.md` |
+| Interactions, échelles UI | `spec/C-visualizations/C3-interactions.md` |
+| Types de graphiques | `spec/C-visualizations/C1-graphiques-et-echelles.md` |
+| Programmes statistiques | `spec/D-statistics/D2-programmes-statistiques.md` |
+| Analyses | `spec/D-statistics/D1-analyses.md` |
+| Transformations dérivées | `spec/B-clean-data/B4-transformations-derivees.md` |
+| Formes de données / sources | `spec/A-raw-data/A3-forme-du-brut.md` |
+
+## Comment mettre à jour
+
+- Corriger les **chemins de fichiers** (`webapp/…`) et les **noms de fonctions**.
+- Ajuster la colonne **Statut** ou **Priorité** : `Existant`, `MVP`, `Phase 2`, `Priorité P2`.
+- Passer `Phase 2` → `Existant` (ou `MVP`) quand le code est livré et testé.
+- Ajouter une **ligne de tableau** si une nouvelle capacité n'y figure pas encore.
+- Conserver le style et la langue (français) des fichiers existants.
+
+## Interdits
+
+- **Ne pas modifier** `spec/plan.md` (référence utilisateur, lecture seule).
+- Ne pas réécrire l'intention produit : documenter l'**état réel du code**, pas de nouvelles exigences non demandées.
+- Ne pas créer de fichiers spec hors arborescence A→E sans accord explicite.
+
+## Fin de tâche
+
+Avant de considérer une tâche dev terminée : vérifier que les fichiers spec concernés sont à jour. Si aucun fichier spec ne couvre la zone modifiée, le signaler brièvement à l'utilisateur.

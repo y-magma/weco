@@ -75,6 +75,7 @@ const {
   hasPercentileProfile,
   hasDecileProfile,
   isDecileBundle,
+  decileBundleConfig,
   load,
 } = state
 
@@ -203,7 +204,7 @@ onMounted(() => {
             density="compact"
             class="mt-3 mb-0"
           >
-            Ratios inter-déciles OECD (P90/P10, P50/P10, P90/P50). Les tranches WID, l'âge et la population ne s'appliquent pas.
+            {{ decileBundleConfig?.seriesSubtitle ?? 'Bundle décile' }} — les tranches WID, l'âge et la population ne s'appliquent pas.
           </v-alert>
 
           <div

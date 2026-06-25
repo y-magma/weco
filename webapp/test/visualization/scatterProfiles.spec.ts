@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildProfileScatterOption } from '~/visualization/scatterProfiles'
+import { CHART_ZOOM_GRID_RIGHT } from '~/visualization/chartZoom'
 import type { ProfileScatterPoint } from '@domain/services/joinProfiles'
 
 const samplePoints: ProfileScatterPoint[] = [
@@ -32,11 +33,11 @@ describe('buildProfileScatterOption', () => {
     const visualMap = option.visualMap as { left: number, right: number, bottom: number, itemWidth: number, itemHeight?: number }
     expect((option.grid as { bottom: number }).bottom).toBeGreaterThanOrEqual(80)
     expect(visualMap.left).toBe(64)
-    expect(visualMap.right).toBe(24)
+    expect(visualMap.right).toBe(CHART_ZOOM_GRID_RIGHT)
     expect(visualMap.bottom).toBeGreaterThan(12)
     expect(visualMap.itemWidth).toBeGreaterThanOrEqual(12)
     expect(visualMap.itemHeight).toBeUndefined()
     expect(option.toolbox).toBeDefined()
-    expect((option.dataZoom as unknown[]).length).toBeGreaterThanOrEqual(2)
+    expect((option.dataZoom as unknown[]).length).toBeGreaterThanOrEqual(4)
   })
 })

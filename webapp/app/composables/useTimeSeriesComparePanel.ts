@@ -16,11 +16,9 @@ import {
 import { PanelScope, yearCountLabel } from '~/composables/panelBase'
 import { useWidParamConstraints } from '~/composables/useWidParamConstraints'
 import {
-  isOecdDecileBundleVariable,
-  OECD_DECILE_BUNDLE_ID,
-  OECD_DECILE_RATIO_OPTIONS,
-  type OecdDecileRatioId,
-} from '@infrastructure/data-sources/oecd-idd/oecdDeciles'
+  getDecileBundleConfig,
+  isDecileBundleVariable,
+} from '@infrastructure/data-sources/decileBundles'
 
 export interface TimeSeriesComparePanelStateOptions {
   countries?: Ref<CountryOption[]>
@@ -53,7 +51,9 @@ export function createTimeSeriesComparePanelState(
     options.initialVariable ?? indicators.value[0]?.id ?? 'ahweal',
   )
 
-  const isDecileBundle = computed(() => isOecdDecileBundleVariable(variable.value))
+  const isDecileBundle = computed(() => isDecileBundleVariable(variable.value))
+  const decileBundleConfig = computed(() => getDecileBundleConfig(variable.value))
+  const decileBundleOptions = computed(() => decileBundleConfig.value?.options ?? [])
   const variableMeta = computed(() =>
     indicators.value.find((item) => item.id === variable.value),
   )
@@ -73,7 +73,12 @@ export function createTimeSeriesComparePanelState(
 
   const countryCodes = ref<string[]>(options.initialCountryCodes ?? ['FR', 'US'])
   const percentile = ref(options.initialPercentile ?? 'p0p50')
-  const decileRatio = ref<OecdDecileRatioId>('D9_1_INC_DISP')
+  const decileSubSelection = ref('')
+  watch(decileBundleOptions, (options) => {
+    if (options.length > 0 && !options.some((item) => item.id === decileSubSelection.value)) {
+      decileSubSelection.value = options[0]!.id
+    }
+  }, { immediate: true })
   const customLo = ref(50)
   const customHi = ref(51)
   const paramCountryCode = ref(countryCodes.value[0] ?? 'FR')
@@ -145,8 +150,9 @@ export function createTimeSeriesComparePanelState(
     return populationOptions.find((item) => item.value === percentile.value)?.label ?? percentile.value
   })
 
-  const decileRatioLabel = computed(() =>
-    OECD_DECILE_RATIO_OPTIONS.find((item) => item.id === decileRatio.value)?.label ?? decileRatio.value,
+  const decileSubLabel = computed(() =>
+    decileBundleOptions.value.find((item) => item.id === decileSubSelection.value)?.label
+      ?? decileSubSelection.value,
   )
 
   const rebuild = () => {
@@ -159,7 +165,7 @@ export function createTimeSeriesComparePanelState(
     const subtitle = hasPercentileProfile.value
       ? `${populationLabel.value} · ${seriesList.value.length} pays`
       : isDecileBundle.value
-        ? `${decileRatioLabel.value} · ${seriesList.value.length} pays`
+        ? `${decileSubLabel.value} · ${seriesList.value.length} pays`
         : `${seriesList.value.length} pays`
     chartOption.value = buildTimeSeriesOption(seriesList.value, title, {
       subtitle,
@@ -183,8 +189,8 @@ export function createTimeSeriesComparePanelState(
       return
     }
 
-    if (isDecileBundle.value && !decileRatio.value) {
-      scope.error.value = 'Sélectionnez un ratio décile.'
+    if (isDecileBundle.value && !decileSubSelection.value) {
+      scope.error.value = `Sélectionnez un ${decileBundleConfig.value?.subSelectorLabel?.toLowerCase() ?? 'sous-indicateur'}.`
       seriesList.value = []
       chartOption.value = null
       return
@@ -198,11 +204,11 @@ export function createTimeSeriesComparePanelState(
       const result = await scope.app.loadTimeSeries.execute({
         countryCodes: codes,
         params: {
-          variable: isDecileBundle.value ? OECD_DECILE_BUNDLE_ID : variable.value,
+          variable: isDecileBundle.value ? decileBundleConfig.value!.bundleId : variable.value,
           age: age.value,
           pop: pop.value,
           ...(resolvedPercentile ? { percentile: resolvedPercentile } : {}),
-          ...(isDecileBundle.value ? { percentile: decileRatio.value } : {}),
+          ...(isDecileBundle.value ? { percentile: decileSubSelection.value } : {}),
         },
         countryLabel: scope.countryLabel.bind(scope),
       }, sourceOptions.value)
@@ -254,7 +260,7 @@ export function createTimeSeriesComparePanelState(
     await load()
   }
 
-  watch([countryCodes, percentile, decileRatio, customLo, customHi, age, pop], () => {
+  watch([countryCodes, percentile, decileSubSelection, customLo, customHi, age, pop], () => {
     void refreshParamsAndLoad('clamp')
   }, { deep: true })
 
@@ -314,9 +320,10 @@ export function createTimeSeriesComparePanelState(
     hasPercentileProfile,
     hasDecileProfile,
     isDecileBundle,
-    decileRatio,
-    decileRatioOptions: OECD_DECILE_RATIO_OPTIONS,
-    decileRatioLabel,
+    decileSubSelection,
+    decileBundleOptions,
+    decileBundleConfig,
+    decileSubLabel,
     populationLabel,
     yearCountLabel: computed(() =>
       yearCountLabel(seriesList.value.map((series) => series.points.length)),

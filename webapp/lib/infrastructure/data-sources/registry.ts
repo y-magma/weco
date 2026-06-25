@@ -1,5 +1,6 @@
 import type { DataSourcePort } from '@domain/ports/DataSourcePort'
 import { createOecdIddDataSource } from '@infrastructure/data-sources/oecd-idd/oecdIddSource'
+import { createWorldBankDataSource } from '@infrastructure/data-sources/worldbank/worldBankSource'
 import { createWidDataSource } from '@infrastructure/data-sources/wid/widSource'
 
 const registry = new Map<string, DataSourcePort>()
@@ -37,6 +38,7 @@ export function initializeDataSources(config?: DataSourcesConfig): void {
   }
 
   registerDataSource(createOecdIddDataSource())
+  registerDataSource(createWorldBankDataSource())
 
   defaultSourceId = config?.defaultSourceId ?? listDataSources().find((s) => s.id === 'wid')?.id
     ?? listDataSources()[0]?.id

@@ -41,6 +41,10 @@ import {
   type MeanPreservingApproximation,
   type TrapezoidMethod,
 } from '~/visualization/trapezoidApproximation'
+import {
+  PIP_DECILE_BUNDLE_ID,
+  PIP_DECILE_PROFILE_HELP,
+} from '@infrastructure/data-sources/worldbank/worldBankDeciles'
 
 export const TRAPEZOID_METHOD_OPTIONS: {
   value: TrapezoidMethod
@@ -111,6 +115,18 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     () => selectedSource.value.capabilities?.percentileProfile === true,
   )
 
+  const hasDecileProfile = computed(
+    () => selectedSource.value.capabilities?.decileProfile === true,
+  )
+
+  const hasProfile = computed(
+    () => hasPercentileProfile.value || hasDecileProfile.value,
+  )
+
+  const hasDecileProfileOnly = computed(
+    () => hasDecileProfile.value && !hasPercentileProfile.value,
+  )
+
   const indicators = computed<readonly SourceIndicator[]>(
     () => selectedSource.value.indicators ?? [],
   )
@@ -146,6 +162,9 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   const localCountries = ref<CountryOption[]>([])
   const sharedCountriesRef = sharedCountries ?? localCountries
 
+  const decileYears = ref<number[]>([])
+  const decileYearsLoading = ref(false)
+
   const constraints = useWidParamConstraints({
     app,
     source: selectedSource,
@@ -160,6 +179,9 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   const chartOption = ref<EChartsOption | null>(null)
 
   const variables = computed(() => {
+    if (hasDecileProfileOnly.value) {
+      return indicators.value.filter((item) => item.id === PIP_DECILE_BUNDLE_ID)
+    }
     const nonGini = indicators.value.filter((item) => item.kind !== 'gini')
     if (!empiricalPdf.value) return nonGini
     if (selectedSource.value.id === 'wid') {
@@ -169,7 +191,9 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     return nonGini.filter((item) => item.kind === 'threshold' || item.kind === 'other')
   })
 
-  const countries = constraints.countries
+  const countries = computed(() =>
+    hasDecileProfileOnly.value ? sharedCountriesRef.value : constraints.countries.value,
+  )
   const ageOptions = constraints.ageOptions
   const popOptions = constraints.popOptions
   const methodOptions = TRAPEZOID_METHOD_OPTIONS
@@ -196,9 +220,20 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     return undefined
   })
 
-  const years = constraints.years
-  const yearsLoading = constraints.constraintsLoading
-  const yearRangeLabel = constraints.yearRangeLabel
+  const years = computed(() =>
+    hasDecileProfileOnly.value ? decileYears.value : constraints.years.value,
+  )
+  const yearsLoading = computed(() =>
+    hasDecileProfileOnly.value ? decileYearsLoading.value : constraints.constraintsLoading.value,
+  )
+  const decileYearRangeLabel = computed(() => {
+    if (decileYears.value.length === 0) return ''
+    const sorted = [...decileYears.value].sort((a, b) => a - b)
+    return `${sorted[0]}–${sorted[sorted.length - 1]}`
+  })
+  const yearRangeLabel = computed(() =>
+    hasDecileProfileOnly.value ? decileYearRangeLabel.value : constraints.yearRangeLabel.value,
+  )
   const paramAdjustmentHints = constraints.paramAdjustmentHints
   const adjustmentToastVisible = constraints.adjustmentToastVisible
   const adjustmentToastMessage = constraints.adjustmentToastMessage
@@ -219,7 +254,9 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     isCustomPartitionComplete(customBreakpoints.value) && customPartitionValidation.value.valid,
   )
 
-  const supportsDrillDown = computed(() => populationViewMode.value === 'step1')
+  const supportsDrillDown = computed(() =>
+    hasPercentileProfile.value && populationViewMode.value === 'step1',
+  )
 
   const drillBreadcrumb = computed(() => {
     if (!supportsDrillDown.value) return []
@@ -296,6 +333,9 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   const displayPoints = computed(() => {
     if (!profile.value) return []
     const points = profile.value.points
+    if (hasDecileProfileOnly.value) {
+      return [...points].sort((a, b) => a.rank - b.rank)
+    }
     if (populationViewMode.value === 'all') {
       return [...points].sort((a, b) => a.rank - b.rank)
     }
@@ -382,16 +422,57 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     chartOption.value = buildTrapezoidProfileOption(profile.value, built, chartOptionsBase())
   }
 
+  const loadDecileCountries = async () => {
+    sharedCountriesRef.value = await app.listCountries.execute(
+      { variable: variable.value },
+      sourceOptions.value,
+    )
+  }
+
+  const loadDecileYears = async () => {
+    decileYearsLoading.value = true
+    try {
+      decileYears.value = await app.listProfileYears.execute({
+        countryCode: countryCode.value,
+        variable: variable.value,
+        age: '',
+        pop: '',
+      }, sourceOptions.value)
+      if (decileYears.value.length > 0 && !decileYears.value.includes(year.value)) {
+        year.value = decileYears.value[0]!
+      }
+    } finally {
+      decileYearsLoading.value = false
+    }
+  }
+
   const loadCountries = async () => {
+    if (hasDecileProfileOnly.value) {
+      await loadDecileCountries()
+      return
+    }
     await constraints.loadCountriesForVariable(variable.value)
   }
 
   const refreshAndLoad = async (mode: 'variableChange' | 'clamp') => {
-    if (!hasPercentileProfile.value) {
+    if (!hasProfile.value) {
       error.value = 'Cette source ne propose pas de profil de distribution.'
       profile.value = null
       approximation.value = null
       chartOption.value = null
+      return
+    }
+    if (hasDecileProfileOnly.value) {
+      error.value = null
+      await loadDecileYears()
+      if (decileYears.value.length === 0) {
+        error.value = 'Aucune année disponible pour ce pays.'
+        profile.value = null
+        approximation.value = null
+        chartOption.value = null
+        return
+      }
+      await load()
       return
     }
     const ready = await constraints.refreshConstraints(mode)
@@ -410,7 +491,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   }
 
   const load = async () => {
-    if (!hasPercentileProfile.value) {
+    if (!hasProfile.value) {
       error.value = 'Cette source ne propose pas de profil de distribution.'
       profile.value = null
       approximation.value = null
@@ -444,7 +525,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   }
 
   const init = async () => {
-    if (!hasPercentileProfile.value) {
+    if (!hasProfile.value) {
       error.value = 'Cette source ne propose pas de profil de distribution.'
       return
     }
@@ -454,10 +535,19 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
       error.value = err instanceof Error ? err.message : 'Échec du chargement des pays'
       return
     }
+    if (hasDecileProfileOnly.value) {
+      originalViewMode.value = 'bar'
+      showHistogram.value = false
+      showTrapezoids.value = false
+    }
     await refreshAndLoad('variableChange')
   }
 
   watch([countryCode, age, pop], () => {
+    if (hasDecileProfileOnly.value) {
+      void loadDecileYears().then(() => load())
+      return
+    }
     void refreshAndLoad('clamp')
   })
 
@@ -542,17 +632,24 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   watch(() => selectedSource.value.id, async () => {
     const panelIndex = options.panelIndex ?? 0
     const indicatorList = selectedSource.value.indicators ?? []
-    const nextVariable = indicatorList[panelIndex]?.id ?? defaultIndicatorId(indicatorList)
+    const nextVariable = hasDecileProfileOnly.value
+      ? PIP_DECILE_BUNDLE_ID
+      : indicatorList[panelIndex]?.id ?? defaultIndicatorId(indicatorList)
     variable.value = nextVariable
     customBreakpoints.value = []
     profile.value = null
     approximation.value = null
     chartOption.value = null
-    if (!hasPercentileProfile.value) {
+    if (!hasProfile.value) {
       error.value = 'Cette source ne propose pas de profil de distribution.'
       return
     }
     error.value = null
+    if (hasDecileProfileOnly.value) {
+      originalViewMode.value = 'bar'
+      showHistogram.value = false
+      showTrapezoids.value = false
+    }
     await loadCountries()
     await refreshAndLoad('variableChange')
   })
@@ -601,6 +698,10 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     chartOption,
     variableMeta,
     hasPercentileProfile,
+    hasDecileProfile,
+    hasDecileProfileOnly,
+    hasProfile,
+    decileProfileHelp: PIP_DECILE_PROFILE_HELP,
     availableBoundaries,
     customPartitionValidation,
     customPartitionReady,

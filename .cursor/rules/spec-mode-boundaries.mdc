@@ -13,6 +13,7 @@ La phase spec est terminée. Le travail se fait dans `webapp/` :
 
 - Lecture, recherche, édition et commandes (build, tests, lint) dans `webapp/**` sont **autorisées**.
 - `spec/` reste la référence d'intention : la consulter pour comprendre le comportement attendu.
+- **`spec/` se synchronise avec le code** : après une modification applicative, mettre à jour les fichiers spec concernés (voir règle `spec-sync-dev`). La page `/spec` lit directement `spec/`.
 
 ## spec/plan.md — lecture seule
 

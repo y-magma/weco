@@ -8,7 +8,7 @@ import {
   buildOriginalProfileOption,
   buildTrapezoidProfileOption,
 } from '~/visualization/trapezoidChart'
-import { rankDisplayCoordinate, rankDisplayCoordinateUpper } from '~/visualization/profile'
+import { rankDisplayCoordinate, rankDisplayCoordinateUpper, PROFILE_CHART_LAYOUT } from '~/visualization/profile'
 
 function makeProfile(overrides: Partial<PercentileProfile> = {}): PercentileProfile {
   return {
@@ -146,14 +146,15 @@ describe('buildTrapezoidProfileOption — log axes', () => {
     expect(yAxis.max).toBeGreaterThan(maxPointY)
   })
 
-  it('omits the vertical value slider (Y zoom via inside dataZoom / mouse wheel)', () => {
+  it('includes a vertical value slider on the right (Y axis name stays on the left)', () => {
     const option = buildTrapezoidProfileOption(profile, approximation, {
       trapezoidBreakpoints: [50, 100],
       showTrapezoids: true,
     })
-    const zooms = option.dataZoom as { type?: string, orient?: string, yAxisIndex?: number }[]
+    const zooms = option.dataZoom as { type?: string, orient?: string, yAxisIndex?: number, right?: number, left?: number }[]
     const valueSlider = zooms.find((z) => z.type === 'slider' && z.orient === 'vertical' && z.yAxisIndex === 0)
-    expect(valueSlider).toBeUndefined()
+    expect(valueSlider).toMatchObject({ right: PROFILE_CHART_LAYOUT.rightSlider })
+    expect(valueSlider?.left).toBeUndefined()
     expect(zooms.some((z) => z.type === 'inside' && z.yAxisIndex === 0)).toBe(true)
   })
 

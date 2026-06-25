@@ -69,8 +69,10 @@ const {
   hasPercentileProfile,
   hasDecileProfile,
   isDecileBundle,
-  decileRatio,
-  decileRatioOptions,
+  decileSubSelection,
+  decileBundleOptions,
+  decileBundleConfig,
+  decileSubLabel,
   load,
 } = state
 
@@ -166,11 +168,11 @@ onMounted(() => {
             </v-col>
             <v-col v-if="hasDecileProfile && isDecileBundle" cols="12">
               <v-select
-                v-model="decileRatio"
-                :items="decileRatioOptions"
+                v-model="decileSubSelection"
+                :items="decileBundleOptions"
                 item-title="label"
                 item-value="id"
-                label="Ratio décile"
+                :label="decileBundleConfig?.subSelectorLabel ?? 'Sous-indicateur'"
                 density="compact"
                 hide-details
               />
@@ -184,7 +186,7 @@ onMounted(() => {
             density="compact"
             class="mt-0 mb-0"
           >
-            Ratios inter-déciles OECD uniquement — pas de tranches WID ni de profils centile.
+            {{ decileBundleConfig?.seriesSubtitle ?? 'Bundle décile' }} — pas de tranches WID ni de profils centile.
           </v-alert>
 
           <v-expand-transition>

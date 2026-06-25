@@ -101,6 +101,9 @@ const {
   intervalCountLabel,
   load,
   hasPercentileProfile,
+  hasDecileProfileOnly,
+  hasProfile,
+  decileProfileHelp,
 } = state
 
 const customBreakpointInput = ref<number | null>(null)
@@ -231,13 +234,23 @@ onMounted(() => {
           <PanneauDataSourceSection v-if="showDataSourceSection" v-model="sourceId" />
 
           <v-alert
-            v-if="!hasPercentileProfile"
+            v-if="!hasProfile"
             type="info"
             variant="tonal"
             density="compact"
             class="mb-3"
           >
-            Cette source ne propose pas de profil de distribution percentile.
+            Cette source ne propose pas de profil de distribution.
+          </v-alert>
+
+          <v-alert
+            v-if="hasDecileProfileOnly"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mb-3"
+          >
+            {{ decileProfileHelp }}
           </v-alert>
 
           <v-row dense class="panel-filters-stack">
@@ -283,7 +296,7 @@ onMounted(() => {
             </v-col>
           </v-row>
 
-          <div class="mt-3">
+          <div v-if="hasPercentileProfile" class="mt-3">
             <v-expansion-panels variant="accordion" density="compact">
               <v-expansion-panel>
                 <v-expansion-panel-title class="text-body-2 py-2">
@@ -354,9 +367,9 @@ onMounted(() => {
             </v-btn-toggle>
           </div>
 
-          <PanneauExplorationExtendedParams v-if="layout !== 'stacked'" scales-only />
+          <PanneauExplorationExtendedParams v-if="hasPercentileProfile && layout !== 'stacked'" scales-only />
 
-          <PanneauExplorationExtendedParams v-if="layout === 'stacked'" />
+          <PanneauExplorationExtendedParams v-if="hasPercentileProfile && layout === 'stacked'" />
 
           <v-row dense class="mt-2">
             <v-col cols="12" class="d-flex align-center justify-end">
@@ -446,7 +459,7 @@ onMounted(() => {
         </v-card>
       </div>
 
-      <div v-if="layout !== 'stacked'" class="panneau__params-right">
+      <div v-if="hasPercentileProfile && layout !== 'stacked'" class="panneau__params-right">
         <v-card variant="outlined" class="pa-3 panneau-params-right">
           <PanneauExplorationExtendedParams :show-scales-section="false" />
         </v-card>
