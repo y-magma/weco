@@ -37,9 +37,7 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne
 | Interaction | Graphiques | Comportement | Priorité | Support ECharts |
 |-------------|------------|--------------|----------|-----------------|
 | **Tooltip** | Tous | Valeur, tranche, pays au survol | MVP | `tooltip` |
-| **Zoom temporel** | Courbe (Série) | Fenêtre d’années : slider horizontal (X) + vertical (Y, à droite) + molette | MVP | `dataZoom` via `chartZoom.ts` |
-| **Zoom distribution / profil** | Bâtons, histogramme, CDF/PDF, trapèzes | Population (X) : slider bas ; valeur ou rang (Y) : slider vertical **à droite** (nom d’axe à gauche préservé) + molette | MVP | `buildProfileDataZoom` · `PROFILE_CHART_LAYOUT` |
-| **Zoom nuage** | Tableau (scatter) | Sliders X (bas) et Y (droite) + molette | MVP | `buildChartAxisDataZoom` |
+| **Zoom temporel** | Courbe (Série) | Fenêtre d’années, slider + molette | MVP | `dataZoom` |
 | **Zoom / brush tranches** | Bâtons, histogramme | Plage d’abscisse → régression / analyse [D1](../D-statistics/D1-analyses.md) | Phase 2 | `dataZoom` category, `brush` |
 | **Zoom multi-niveaux** | Distribution fine | 0–100 % → déciles → centiles → top 1 % / 0,1 % / 0,01 % | Phase 2 | `dataZoom` + rechargement tranches |
 | **Bascule lin / log abscisse** | Courbe, nuage, distribution | Échelle X indépendante de Y | Phase 2 | `xAxis.type: 'log'` |

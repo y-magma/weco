@@ -6,8 +6,6 @@ import { formatAxisValue } from '~/visualization/axisFormat'
 import {
   buildChartAxisDataZoom,
   buildChartToolbox,
-  CHART_ZOOM_GRID_BOTTOM,
-  CHART_ZOOM_GRID_RIGHT,
   CHART_ZOOM_SLIDER_BOTTOM,
   CHART_ZOOM_SLIDER_HEIGHT,
 } from '~/visualization/chartZoom'
@@ -81,7 +79,7 @@ export function buildProfileScatterOption(
           + `${yLabel}: ${formatAxisValue(v[1], yMeasureKind)}`
       },
     },
-    grid: { left: 64, right: CHART_ZOOM_GRID_RIGHT, top: 56, bottom: SCATTER_GRID_BOTTOM },
+    grid: { left: 64, right: 24, top: 56, bottom: SCATTER_GRID_BOTTOM },
     toolbox: buildChartToolbox(),
     dataZoom: buildChartAxisDataZoom(),
     visualMap: {
@@ -92,7 +90,7 @@ export function buildProfileScatterOption(
       calculable: true,
       orient: 'horizontal',
       left: 64,
-      right: CHART_ZOOM_GRID_RIGHT,
+      right: 24,
       bottom: SCATTER_VISUAL_MAP_BOTTOM,
       /** Horizontal bar: itemWidth = thickness, length follows left/right. */
       itemWidth: 16,

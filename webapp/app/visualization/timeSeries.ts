@@ -7,8 +7,6 @@ import {
   buildChartAxisDataZoom,
   buildChartToolbox,
   CHART_ZOOM_GRID_BOTTOM,
-  CHART_ZOOM_GRID_RIGHT,
-  CHART_ZOOM_SLIDER_RIGHT,
 } from '~/visualization/chartZoom'
 import {
   stackValueFromAverage,
@@ -66,16 +64,13 @@ export function buildTimeSeriesOption(
     },
     grid: {
       left: 48,
-      right: CHART_ZOOM_GRID_RIGHT,
+      right: 24,
       top: seriesList.length > 1 ? 88 : 72,
       bottom: CHART_ZOOM_GRID_BOTTOM,
     },
     toolbox: buildChartToolbox(),
     // 'filter' drops points outside the zoom window and breaks multi-country lines with gaps.
-    dataZoom: buildChartAxisDataZoom({
-      filterMode: 'none',
-      gridTop: seriesList.length > 1 ? 88 : 72,
-    }),
+    dataZoom: buildChartAxisDataZoom({ filterMode: 'none' }),
     xAxis: {
       type: 'category',
       data: years.map(String),
@@ -195,20 +190,10 @@ export function buildStackedTimeSeriesOption(
     })),
   )
 
-  const dataZoom = buildChartAxisDataZoom({
-    filterMode: 'none',
-    gridTop: multi ? '10%' : 72,
-    right: multi ? 28 : CHART_ZOOM_SLIDER_RIGHT,
-  }).map((zoom) => {
-    const axisIndices = countries.map((_, index) => index)
-    if ('xAxisIndex' in zoom && zoom.xAxisIndex !== undefined) {
-      return { ...zoom, xAxisIndex: axisIndices }
-    }
-    if ('yAxisIndex' in zoom && zoom.yAxisIndex !== undefined) {
-      return { ...zoom, yAxisIndex: axisIndices }
-    }
-    return zoom
-  })
+  const dataZoom = buildChartAxisDataZoom({ filterMode: 'none' }).map((zoom) => ({
+    ...zoom,
+    xAxisIndex: countries.map((_, index) => index),
+  }))
 
   return {
     title: {
