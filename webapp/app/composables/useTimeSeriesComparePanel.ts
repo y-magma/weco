@@ -19,14 +19,24 @@ import {
   getDecileBundleConfig,
   isDecileBundleVariable,
 } from '@domain/catalog/decileBundles'
+import type { TimeSeriesComparePanelSnapshot } from '@application/share/shareSnapshot'
+import {
+  applyTimeSeriesCompareSnapshot,
+  serializeTimeSeriesCompareState,
+  type TimeSeriesComparePanelRefs,
+} from '@application/share/panelSnapshots'
 
 export interface TimeSeriesComparePanelStateOptions {
   countries?: Ref<CountryOption[]>
   initialVariable?: string
   initialCountryCodes?: string[]
   initialPercentile?: string
+  initialSnapshot?: TimeSeriesComparePanelSnapshot
   panelIndex?: number
 }
+
+export { applyTimeSeriesCompareSnapshot, serializeTimeSeriesCompareState }
+export type { TimeSeriesComparePanelSnapshot }
 
 export function createTimeSeriesComparePanelState(
   options: TimeSeriesComparePanelStateOptions = {},
@@ -82,6 +92,21 @@ export function createTimeSeriesComparePanelState(
   const customLo = ref(50)
   const customHi = ref(51)
   const paramCountryCode = ref(countryCodes.value[0] ?? 'FR')
+
+  const compareRefs: TimeSeriesComparePanelRefs = {
+    countryCodes,
+    variable,
+    percentile,
+    customLo,
+    customHi,
+    decileSubSelection,
+    age,
+    pop,
+  }
+
+  if (options.initialSnapshot) {
+    applyTimeSeriesCompareSnapshot(compareRefs, options.initialSnapshot)
+  }
 
   const constraintsEnabled = computed(() => hasPercentileProfile.value)
 
@@ -328,6 +353,10 @@ export function createTimeSeriesComparePanelState(
     yearCountLabel: computed(() =>
       yearCountLabel(seriesList.value.map((series) => series.points.length)),
     ),
+    serializeSnapshot: () => serializeTimeSeriesCompareState(compareRefs),
+    applySnapshot: (snapshot: TimeSeriesComparePanelSnapshot) => {
+      applyTimeSeriesCompareSnapshot(compareRefs, snapshot)
+    },
     load,
     init,
   }

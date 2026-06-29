@@ -1,5 +1,11 @@
 export type PanneauType = 'temps' | 'temps-compare' | 'exploration'
 
+export interface GridPanelModel {
+  id: number
+  type: PanneauType
+  sourceId?: string
+}
+
 export interface PanneauTypeMeta {
   id: PanneauType
   icon: string

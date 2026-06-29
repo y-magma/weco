@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import DataSourceLinksMenu from '~/components/DataSourceLinksMenu.vue'
+import ShareUrlButton from '~/components/ShareUrlButton.vue'
 
 // Drawer visibility — togglable on all screen sizes.
 const drawerOpen = ref(true)
@@ -61,19 +63,16 @@ const docItems = [
 
     <v-app-bar flat border color="surface">
       <v-app-bar-nav-icon @click="drawerOpen = !drawerOpen" />
-      <v-app-bar-title class="text-body-1 font-weight-bold">
+      <v-app-bar-title class="text-body-1 font-weight-bold text-truncate">
         Boîte à outils de visualisations
       </v-app-bar-title>
-      <v-spacer />
-      <v-btn
-        href="https://wid.world/"
-        target="_blank"
-        rel="noopener"
-        variant="text"
-        prepend-icon="mdi-open-in-new"
-      >
-        WID.world
-      </v-btn>
+
+      <template #append>
+        <div class="d-flex align-center flex-shrink-0">
+          <ShareUrlButton />
+          <DataSourceLinksMenu />
+        </div>
+      </template>
     </v-app-bar>
 
     <v-main class="bg-background">

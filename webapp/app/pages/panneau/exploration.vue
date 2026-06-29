@@ -1,10 +1,29 @@
 <script setup lang="ts">
 import { EXPLORATION_DISABLED_SOURCE_IDS } from '~/composables/usePanneauDataSource'
+import type { ExplorationPanelSnapshot } from '@application/share/shareSnapshot'
 
 definePageMeta({ layout: 'default' })
 
-const { sourceId } = usePanneauDataSourceProvider()
+const route = useRoute()
+const initialShare = decodeRouteShareSnapshot(route.query, 'exploration')
+
+const { sourceId } = usePanneauDataSourceProvider(initialShare?.sourceId)
 const { countriesError } = useCountriesProvider()
+
+const explorationInitial = initialShare?.page === 'exploration'
+  ? initialShare.exploration
+  : undefined
+
+useShareableUrlProvider({
+  page: 'exploration',
+  buildSnapshot: (shareRegistry) => ({
+    v: 1,
+    page: 'exploration',
+    sourceId: sourceId.value,
+    exploration: (shareRegistry.getSnapshot('exploration') ?? {}) as ExplorationPanelSnapshot,
+  }),
+  watchSources: [sourceId],
+})
 </script>
 
 <template>
@@ -36,6 +55,8 @@ const { countriesError } = useCountriesProvider()
     />
 
     <PanneauExploration
+      share-key="exploration"
+      :initial-snapshot="explorationInitial"
       chart-height="460px"
       :show-data-source-section="false"
     />

@@ -14,7 +14,7 @@ Implémentation traceurs : [C2 — Représentation graphique](../C2-representati
 | `/etudes` | Index : cartes des études (titre, question, tier, tags concepts) |
 | `/etudes/[slug]` | Une étude : presets, graphiques parallèles ou superposés, édition crayon |
 
-**Différence vs `/grille` :** une source globale, composition libre.  
+**Différence vs `/grille` :** presets guidés et superposition cross-source ; `/grille` permet source unique ou source par graphique, composition libre.  
 **Différence vs `/panneau` :** une source, exploration unitaire.  
 **Études :** **une source par slot**, presets guidés, comparaison cross-source assumée.
 

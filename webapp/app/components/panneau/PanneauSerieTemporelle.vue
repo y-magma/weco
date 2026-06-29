@@ -6,11 +6,14 @@ import {
 } from '~/visualization/populationPartition'
 import type { CountryOption } from '@domain/entities'
 import type { PanneauType } from '~/composables/panneauTypes'
+import type { TimeSeriesPanelSnapshot } from '@application/share/shareSnapshot'
 
 export type PanneauLayout = 'split-column' | 'stacked'
 
 const props = withDefaults(defineProps<{
   panelIndex?: number
+  shareKey?: string
+  initialSnapshot?: TimeSeriesPanelSnapshot
   removable?: boolean
   collapsible?: boolean
   panelType?: PanneauType
@@ -20,6 +23,8 @@ const props = withDefaults(defineProps<{
   layout?: PanneauLayout
 }>(), {
   panelIndex: 0,
+  shareKey: undefined,
+  initialSnapshot: undefined,
   removable: false,
   collapsible: false,
   panelType: undefined,
@@ -38,6 +43,7 @@ if (!panelCountries) {
 
 const state = createTimeSeriesPanelState({
   countries: panelCountries,
+  initialSnapshot: props.initialSnapshot,
   panelIndex: props.panelIndex,
 })
 
@@ -75,6 +81,14 @@ const {
   decileBundleConfig,
   load,
 } = state
+
+const resolvedShareKey = computed(() => props.shareKey ?? `panel-${props.panelIndex}`)
+const { triggerSync } = useShareablePanelRegistration(
+  resolvedShareKey.value,
+  () => state.serializeSnapshot(),
+)
+
+watch(() => state.serializeSnapshot(), () => triggerSync(), { deep: true })
 
 const { sourceId, sourceLabel } = usePanneauDataSource()
 

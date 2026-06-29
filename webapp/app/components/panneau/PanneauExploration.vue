@@ -9,11 +9,14 @@ import type { CountryOption } from '@domain/entities'
 import type { PanneauType } from '~/composables/panneauTypes'
 import { EXPLORATION_DISABLED_SOURCE_IDS } from '~/composables/usePanneauDataSource'
 import { PANNEAU_EXPLORATION_EXTENDED_KEY } from '~/composables/panneauExplorationExtendedContext'
+import type { ExplorationPanelSnapshot } from '@application/share/shareSnapshot'
 
 export type PanneauLayout = 'tri-column' | 'stacked'
 
 const props = withDefaults(defineProps<{
   panelIndex?: number
+  shareKey?: string
+  initialSnapshot?: ExplorationPanelSnapshot
   removable?: boolean
   collapsible?: boolean
   panelType?: PanneauType
@@ -23,6 +26,8 @@ const props = withDefaults(defineProps<{
   layout?: PanneauLayout
 }>(), {
   panelIndex: 0,
+  shareKey: undefined,
+  initialSnapshot: undefined,
   removable: false,
   collapsible: false,
   panelType: undefined,
@@ -44,6 +49,7 @@ const initialVariable = selectedSource.value.indicators?.[props.panelIndex ?? 0]
 const state = createExplorationPanelState({
   countries,
   initialVariable,
+  initialSnapshot: props.initialSnapshot,
   panelIndex: props.panelIndex,
 })
 
@@ -106,6 +112,14 @@ const {
   hasProfile,
   decileProfileHelp,
 } = state
+
+const resolvedShareKey = computed(() => props.shareKey ?? `panel-${props.panelIndex}`)
+const { triggerSync } = useShareablePanelRegistration(
+  resolvedShareKey.value,
+  () => state.serializeSnapshot(),
+)
+
+watch(() => state.serializeSnapshot(), () => triggerSync(), { deep: true })
 
 const customBreakpointInput = ref<number | null>(null)
 const customBreakpointError = ref<string | null>(null)

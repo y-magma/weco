@@ -46,6 +46,7 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne
 | **Légende cliquable** | Courbe multi-séries | Masquer / afficher une série | MVP | `legend` |
 | **Export image** | Courbe MVP, puis tous | PNG depuis la toolbox | MVP / P2 | `toolbox.saveAsImage` |
 | **Réinitialiser vue** | Tous avec zoom | Retour à la plage initiale | MVP | `toolbox.restore` |
+| **Lien partageable** | Pages `/panneau/exploration`, `/panneau/temps`, `/grille` | Bouton global « Partager » (`ShareUrlButton.vue`) ; query lisible `?v=1&source=…&country=…` (legacy `s=` base64 accepté) ; sync live URL (`useShareableUrl.ts`, `lib/application/share/`) | MVP | **Existant** |
 
 ---
 
@@ -55,6 +56,7 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne
 |----------|--------------|----------|
 | **Plusieurs graphes en parallèle** | Dashboard : N panneaux (courbe + distribution + nuage) | MVP |
 | Synchronisation optionnelle | Même pays / fenêtre temporelle entre panneaux | Phase 2 |
+| **Source unique vs par graphique (`/grille`)** | Bascule « Source unique » / « Source par graphique » : sélecteur global (`PanneauDataSourceSection`) ou un sélecteur par panneau (`PanneauGridCell` + `PanneauGridCellScoped`) | **Existant** |
 | **Source par contexte de panneau** | Profil (`/panneau/exploration`) : OECD IDD grisé (`EXPLORATION_DISABLED_SOURCE_IDS`) ; World Bank : sélecteur « Variable » limité aux parts PIP (10 déciles) et WDI (5 quintiles) | **Existant** |
 | **Série temporelle WB (1er panneau)** | `PanneauSerieTemporelle` panel 0 : sélecteur limité aux parts PIP (10 déciles) et WDI (5 quintiles) ; graphique en aires empilées (`buildStackedShareTimeSeriesOption`) | **Existant** |
 | Implémentation | `dashboard.vue`, `useDashboard.ts` — [C2b](./C2-representation-graphique/implementation.md) |

@@ -25,13 +25,23 @@ import {
   labelForDecileBundleSub,
   worldBankPrimaryTimeSeriesIndicators,
 } from '@domain/catalog/decileBundles'
+import type { TimeSeriesPanelSnapshot } from '@application/share/shareSnapshot'
+import {
+  applyTimeSeriesSnapshot,
+  serializeTimeSeriesState,
+  type TimeSeriesPanelRefs,
+} from '@application/share/panelSnapshots'
 
 export interface TimeSeriesPanelStateOptions {
   countries?: Ref<CountryOption[]>
   initialVariable?: string
   initialCountryCode?: string
+  initialSnapshot?: TimeSeriesPanelSnapshot
   panelIndex?: number
 }
+
+export { applyTimeSeriesSnapshot, serializeTimeSeriesState }
+export type { TimeSeriesPanelSnapshot }
 
 function timeSeriesIndicatorsForPanel(
   source: { id: string, indicators?: readonly SourceIndicator[] },
@@ -97,6 +107,19 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
   const countryCode = ref(options.initialCountryCode ?? 'FR')
   const partitionMode = ref<TimeSeriesPopulationMode>('distribution')
   const customBreakpoints = ref<number[]>([])
+
+  const timeSeriesRefs: TimeSeriesPanelRefs = {
+    countryCode,
+    variable,
+    age,
+    pop,
+    partitionMode,
+    customBreakpoints,
+  }
+
+  if (options.initialSnapshot) {
+    applyTimeSeriesSnapshot(timeSeriesRefs, options.initialSnapshot)
+  }
 
   const constraintsEnabled = computed(() => hasPercentileProfile.value)
 
@@ -468,6 +491,10 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
       return yearCountLabel(scalarSeries.value.map((series) => series.points.length))
     }),
     trancheCountLabel,
+    serializeSnapshot: () => serializeTimeSeriesState(timeSeriesRefs),
+    applySnapshot: (snapshot: TimeSeriesPanelSnapshot) => {
+      applyTimeSeriesSnapshot(timeSeriesRefs, snapshot)
+    },
     load,
     init,
   }

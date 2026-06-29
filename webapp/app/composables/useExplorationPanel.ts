@@ -48,6 +48,12 @@ import {
   PIP_DECILE_PROFILE_HELP,
   WDI_QUINTILE_PROFILE_HELP,
 } from '@domain/catalog/decileBundles'
+import type { ExplorationPanelSnapshot } from '@application/share/shareSnapshot'
+import {
+  applyExplorationSnapshot,
+  serializeExplorationState,
+  type ExplorationPanelRefs,
+} from '@application/share/panelSnapshots'
 
 export const TRAPEZOID_METHOD_OPTIONS: {
   value: TrapezoidMethod
@@ -106,8 +112,12 @@ function thresholdIndicatorFor(sourceId: string, indicatorId: string, indicators
 export interface ExplorationPanelStateOptions {
   countries?: Ref<CountryOption[]>
   initialVariable?: string
+  initialSnapshot?: ExplorationPanelSnapshot
   panelIndex?: number
 }
+
+export { applyExplorationSnapshot, serializeExplorationState }
+export type { ExplorationPanelSnapshot }
 
 export function createExplorationPanelState(options: ExplorationPanelStateOptions = {}) {
   const app = useApplication()
@@ -158,6 +168,45 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   const customBreakpoints = ref<number[]>([])
   const drillLevel = ref(0)
   const hiddenApproxIntervals = ref(new Set<number>())
+
+  const explorationRefs: ExplorationPanelRefs = {
+    countryCode,
+    variable,
+    year,
+    age,
+    pop,
+    method,
+    populationViewMode,
+    approxPartitionMode,
+    customBreakpoints,
+    drillLevel,
+    showHistogram,
+    showTrapezoids,
+    logRichZoom,
+    logScaleX,
+    logScaleY,
+    originalViewMode,
+    lorenzCurve,
+    empiricalCdf,
+    empiricalPdf,
+    showEmpiricalDistribution,
+    showSmoothDistribution,
+    hiddenApproxIntervals,
+  }
+
+  if (options.initialSnapshot) {
+    applyExplorationSnapshot(explorationRefs, options.initialSnapshot)
+  }
+
+  const shareSnapshot = options.initialSnapshot
+  let shareRestorePending = Boolean(shareSnapshot)
+
+  function reapplyShareSnapshotIfNeeded() {
+    if (!shareRestorePending || !shareSnapshot) return
+    applyExplorationSnapshot(explorationRefs, shareSnapshot)
+    shareRestorePending = false
+    rebuild()
+  }
 
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -511,7 +560,9 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
 
     loading.value = true
     error.value = null
-    drillLevel.value = 0
+    if (!shareRestorePending) {
+      drillLevel.value = 0
+    }
     try {
       profile.value = await app.loadProfile.execute({
         countryCode: countryCode.value,
@@ -520,10 +571,13 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
         age: age.value,
         pop: pop.value,
       }, sourceOptions.value)
-      hiddenApproxIntervals.value = new Set()
-      showEmpiricalDistribution.value = true
-      showSmoothDistribution.value = false
+      if (!shareRestorePending) {
+        hiddenApproxIntervals.value = new Set()
+        showEmpiricalDistribution.value = true
+        showSmoothDistribution.value = false
+      }
       rebuild()
+      reapplyShareSnapshotIfNeeded()
     } catch (err) {
       profile.value = null
       approximation.value = null
@@ -633,13 +687,19 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     hiddenApproxIntervals.value = next
   })
 
-  watch(profile, () => {
+  watch(profile, (nextProfile, oldProfile) => {
+    if (!oldProfile) return
     customBreakpoints.value = []
     drillLevel.value = 0
     hiddenApproxIntervals.value = new Set()
   })
 
-  watch(() => selectedSource.value.id, async () => {
+  watch(() => selectedSource.value.id, async (newSourceId, oldSourceId) => {
+    if (shareRestorePending && oldSourceId === undefined) {
+      await loadCountries()
+      await refreshAndLoad('variableChange')
+      return
+    }
     const panelIndex = options.panelIndex ?? 0
     const indicatorList = selectedSource.value.indicators ?? []
     const nextVariable = hasDecileProfileOnly.value
@@ -727,6 +787,10 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     handleChartClick,
     approxReady,
     intervalCountLabel,
+    serializeSnapshot: () => serializeExplorationState(explorationRefs),
+    applySnapshot: (snapshot: ExplorationPanelSnapshot) => {
+      applyExplorationSnapshot(explorationRefs, snapshot)
+    },
     approxIntervalLabels,
     isApproxIntervalVisible,
     toggleApproxIntervalVisibility,

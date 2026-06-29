@@ -1,8 +1,35 @@
 <script setup lang="ts">
+import type {
+  TimeSeriesComparePanelSnapshot,
+  TimeSeriesPanelSnapshot,
+} from '@application/share/shareSnapshot'
+
 definePageMeta({ layout: 'default' })
 
-const { sourceId } = usePanneauDataSourceProvider()
+const route = useRoute()
+const initialShare = decodeRouteShareSnapshot(route.query, 'temps')
+
+const { sourceId } = usePanneauDataSourceProvider(initialShare?.sourceId)
 const { countriesError } = useCountriesProvider()
+
+const timeSeriesInitial = initialShare?.page === 'temps'
+  ? initialShare.timeSeries
+  : undefined
+const compareInitial = initialShare?.page === 'temps'
+  ? initialShare.compare
+  : undefined
+
+useShareableUrlProvider({
+  page: 'temps',
+  buildSnapshot: (shareRegistry) => ({
+    v: 1,
+    page: 'temps',
+    sourceId: sourceId.value,
+    timeSeries: (shareRegistry.getSnapshot('timeSeries') ?? {}) as TimeSeriesPanelSnapshot,
+    compare: (shareRegistry.getSnapshot('compare') ?? {}) as TimeSeriesComparePanelSnapshot,
+  }),
+  watchSources: [sourceId],
+})
 </script>
 
 <template>
@@ -30,6 +57,8 @@ const { countriesError } = useCountriesProvider()
     <PanneauDataSourceSection v-model="sourceId" class="mb-4" />
 
     <PanneauSerieTemporelle
+      share-key="timeSeries"
+      :initial-snapshot="timeSeriesInitial"
       chart-height="420px"
       :show-data-source-section="false"
     />
@@ -46,6 +75,8 @@ const { countriesError } = useCountriesProvider()
     </v-row>
 
     <PanneauSerieTemporelleCompare
+      share-key="compare"
+      :initial-snapshot="compareInitial"
       chart-height="420px"
       :show-data-source-section="false"
     />
