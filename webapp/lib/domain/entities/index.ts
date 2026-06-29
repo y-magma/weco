@@ -36,7 +36,7 @@ export interface PercentileProfile {
   label: string
   unit?: string
   /** Measure kind from the WID sixlet prefix (a…, t…, l…, etc.). */
-  kind: 'average' | 'threshold' | 'groupLevel' | 'share' | 'gini' | 'other'
+  kind: 'average' | 'threshold' | 'groupLevel' | 'share' | 'gini' | 'scalar' | 'other'
   points: PercentilePoint[]
   /** True when produced from offline sample data instead of the live API. */
   sample: boolean
@@ -92,7 +92,7 @@ export interface SourceIndicator {
   unit?: string
   group?: string
   groupLabel?: string
-  kind?: 'average' | 'threshold' | 'share' | 'gini' | 'scalar' | 'other'
+  kind?: 'average' | 'threshold' | 'groupLevel' | 'share' | 'gini' | 'scalar' | 'other'
   concept?: string
 }
 

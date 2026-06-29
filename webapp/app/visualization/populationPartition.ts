@@ -23,7 +23,7 @@ export const POPULATION_VIEW_OPTIONS: { value: PopulationViewMode, label: string
 
 /** Sous-ensemble pour le panneau trapèzes (courbe d'origine). */
 export const TRAPEZOID_POPULATION_VIEW_OPTIONS = POPULATION_VIEW_OPTIONS.filter(
-  (option) => option.value === 'all' || option.value === 'step1',
+  (option) => option.value === 'all' || option.value === 'step1' || option.value === 'step10',
 )
 
 const EPS = 1e-9

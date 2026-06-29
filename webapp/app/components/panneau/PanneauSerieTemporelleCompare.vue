@@ -72,7 +72,6 @@ const {
   decileSubSelection,
   decileBundleOptions,
   decileBundleConfig,
-  decileSubLabel,
   load,
 } = state
 
@@ -186,7 +185,7 @@ onMounted(() => {
             density="compact"
             class="mt-0 mb-0"
           >
-            {{ decileBundleConfig?.seriesSubtitle ?? 'Bundle décile' }} — pas de tranches WID ni de profils centile.
+            {{ decileBundleConfig?.seriesSubtitle ?? 'Bundle décile' }}
           </v-alert>
 
           <v-expand-transition>

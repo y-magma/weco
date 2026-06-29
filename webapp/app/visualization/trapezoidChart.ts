@@ -318,7 +318,7 @@ function originalProfileSeries(
     }
   }
 
-  const seriesType = mode === 'scatter' ? 'scatter' : 'line'
+  const seriesType = mode === 'scatter' ? 'scatter' as const : 'line' as const
   return {
     name: 'Courbe d\'origine',
     type: seriesType,

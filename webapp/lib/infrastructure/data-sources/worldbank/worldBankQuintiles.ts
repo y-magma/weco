@@ -1,32 +1,32 @@
-/** Bundle variable: WDI quintile income shares (5 × 20 %). */
-export const WDI_QUINTILE_BUNDLE_ID = 'WDI_QUINTILE_BUNDLE'
+import type { SeriesPoint } from '@domain/entities'
+import { WDI_QUINTILE_IDS } from '@domain/catalog/decileBundles'
 
-export const WDI_QUINTILE_IDS = [
-  'SI.DST.FRST.20',
-  'SI.DST.02ND.20',
-  'SI.DST.03RD.20',
-  'SI.DST.04TH.20',
-  'SI.DST.05TH.20',
-] as const
+export {
+  isWdiQuintileBundleVariable,
+  WDI_QUINTILE_BUNDLE_ID,
+  WDI_QUINTILE_IDS,
+  WDI_QUINTILE_OPTIONS,
+} from '@domain/catalog/decileBundles'
 
 export type WdiQuintileId = (typeof WDI_QUINTILE_IDS)[number]
 
-export const WDI_QUINTILE_OPTIONS: readonly {
-  id: WdiQuintileId
-  label: string
-  shortLabel: string
-}[] = [
-  { id: 'SI.DST.FRST.20', label: 'Q1 — 20 % les plus pauvres', shortLabel: 'Q1' },
-  { id: 'SI.DST.02ND.20', label: 'Q2', shortLabel: 'Q2' },
-  { id: 'SI.DST.03RD.20', label: 'Q3', shortLabel: 'Q3' },
-  { id: 'SI.DST.04TH.20', label: 'Q4', shortLabel: 'Q4' },
-  { id: 'SI.DST.05TH.20', label: 'Q5 — 20 % les plus riches', shortLabel: 'Q5' },
-]
-
-export function isWdiQuintileBundleVariable(id: string): boolean {
-  return id === WDI_QUINTILE_BUNDLE_ID
-}
-
 export function isWdiQuintileId(id: string): id is WdiQuintileId {
   return (WDI_QUINTILE_IDS as readonly string[]).includes(id)
+}
+
+/** Mid-rank (percent) for each quintile bucket — used in synthetic PercentileProfile. */
+export const WDI_QUINTILE_MID_RANKS: readonly number[] = [10, 30, 50, 70, 90]
+
+export function wdiQuintileProfileYears(seriesList: readonly SeriesPoint[][]): number[] {
+  if (seriesList.length === 0) return []
+  const yearSets = seriesList.map((series) => new Set(series.map((point) => point.year)))
+  if (yearSets.some((set) => set.size === 0)) return []
+
+  let years = [...yearSets[0]!]
+  for (let index = 1; index < yearSets.length; index += 1) {
+    const set = yearSets[index]!
+    years = years.filter((year) => set.has(year))
+  }
+
+  return years.sort((a, b) => b - a)
 }

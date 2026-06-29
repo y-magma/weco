@@ -18,7 +18,7 @@ import { useWidParamConstraints } from '~/composables/useWidParamConstraints'
 import {
   getDecileBundleConfig,
   isDecileBundleVariable,
-} from '@infrastructure/data-sources/decileBundles'
+} from '@domain/catalog/decileBundles'
 
 export interface TimeSeriesComparePanelStateOptions {
   countries?: Ref<CountryOption[]>

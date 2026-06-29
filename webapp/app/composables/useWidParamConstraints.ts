@@ -19,7 +19,6 @@ import {
   type ParamAdjustmentHints,
   type WidParamResolveMode,
 } from '@domain/services/widParamAvailability'
-import { paramMetadataStore } from '@infrastructure/cache/paramMetadataStore'
 import { yearRangeLabel } from '~/composables/panelBase'
 
 export interface WidParamRefs {
@@ -56,7 +55,7 @@ async function fetchAvailability(
   countryCode: string,
   variable: string,
 ): Promise<ParamAvailabilityEntity> {
-  const cached = paramMetadataStore.get(source.id, countryCode, variable)
+  const cached = app.paramMetadata.get(source.id, countryCode, variable)
   if (cached) return cached
 
   const availability = await app.listAvailableParams.execute(
@@ -64,7 +63,7 @@ async function fetchAvailability(
     { source },
   )
   if (availability.combos.length > 0) {
-    paramMetadataStore.set(source.id, countryCode, variable, availability)
+    app.paramMetadata.set(source.id, countryCode, variable, availability)
   }
   return availability
 }
@@ -337,7 +336,7 @@ export async function prefetchParamMetadata(
           { source: activeSource },
         )
         if (availability.combos.length > 0) {
-          paramMetadataStore.set(activeSource.id, countryCode, variable, availability)
+          app.paramMetadata.set(activeSource.id, countryCode, variable, availability)
         }
       } catch {
         // Prefetch is best-effort.

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PanneauType } from '~/composables/panneauTypes'
+import { EXPLORATION_DISABLED_SOURCE_IDS } from '~/composables/usePanneauDataSource'
 
 definePageMeta({ layout: 'default' })
 
@@ -21,6 +22,21 @@ function addPanel(type: PanneauType) {
 function removePanel(id: number) {
   panels.value = panels.value.filter((panel) => panel.id !== id)
 }
+
+const hasExplorationPanel = computed(() =>
+  panels.value.some((panel) => panel.type === 'exploration'),
+)
+
+const hasTimeSeriesPanel = computed(() =>
+  panels.value.some((panel) => panel.type === 'temps' || panel.type === 'temps-compare'),
+)
+
+/** OECD réservé aux séries temporelles tant que le profil décile n'est pas prêt. */
+const disabledSourceIds = computed(() =>
+  hasExplorationPanel.value && !hasTimeSeriesPanel.value
+    ? EXPLORATION_DISABLED_SOURCE_IDS
+    : [],
+)
 </script>
 
 <template>
@@ -44,7 +60,11 @@ function removePanel(id: number) {
       {{ countriesError }}
     </v-alert>
 
-    <PanneauDataSourceSection v-model="sourceId" class="mb-4" />
+    <PanneauDataSourceSection
+      v-model="sourceId"
+      :disabled-source-ids="disabledSourceIds"
+      class="mb-4"
+    />
 
     <div
       v-if="panels.length === 0"

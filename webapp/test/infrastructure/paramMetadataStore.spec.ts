@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ParamMetadataStore } from '@infrastructure/cache/paramMetadataStore'
+import { ParamMetadataStore } from '@domain/services/paramMetadataStore'
 
 describe('ParamMetadataStore', () => {
   it('keys entries by sourceId, country and variable', () => {

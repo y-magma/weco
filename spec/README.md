@@ -50,7 +50,10 @@ spec/
 │   ├── C2-representation-graphique/
 │   │   ├── bibliotheques.md
 │   │   └── implementation.md
-│   └── C3-interactions.md
+│   ├── C3-interactions.md
+│   └── etudes-comparatives/
+│       ├── cas-comparaison.md
+│       └── structure-etudes.md
 │
 ├── D-statistics/
 │   ├── D1-analyses.md
@@ -72,7 +75,7 @@ spec/
 | ----- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A** | [A-raw-data/](./A-raw-data/)               | [A1](./A-raw-data/A1-ce-qu-on-veut-observer.md) · [A2](./A-raw-data/A2-sources/) · [A3](./A-raw-data/A3-forme-du-brut.md) · [A4](./A-raw-data/A4-caracterisation.md)                                           |
 | **B** | [B-clean-data/](./B-clean-data/)           | [B1](./B-clean-data/B1-formats-clean.md) · [B2](./B-clean-data/B2-brut-vers-clean.md) · [B3](./B-clean-data/B3-clean-vers-unified.md) · [B4](./B-clean-data/B4-transformations-derivees.md)                    |
-| **C** | [C-visualizations/](./C-visualizations/)   | [C1](./C-visualizations/C1-graphiques-et-echelles.md) · [C2](./C-visualizations/C2-representation-graphique/) · [C3](./C-visualizations/C3-interactions.md)                                                    |
+| **C** | [C-visualizations/](./C-visualizations/)   | [C1](./C-visualizations/C1-graphiques-et-echelles.md) · [C2](./C-visualizations/C2-representation-graphique/) · [C3](./C-visualizations/C3-interactions.md) · [Études comparatives](./C-visualizations/etudes-comparatives/) |
 | **D** | [D-statistics/](./D-statistics/)           | [D1](./D-statistics/D1-analyses.md) · [D2](./D-statistics/D2-programmes-statistiques.md) · [D3](./D-statistics/D3-hypotheses.md)                                                                               |
 | **E** | [E-economic-models/](./E-economic-models/) | [E1](./E-economic-models/E1-econophysique.md) · [E2](./E-economic-models/E2-sfc.md) · [E3](./E-economic-models/E3-dsge.md)                                                                                     |
 

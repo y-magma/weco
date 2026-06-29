@@ -7,6 +7,7 @@ import {
 } from '~/visualization/populationPartition'
 import type { CountryOption } from '@domain/entities'
 import type { PanneauType } from '~/composables/panneauTypes'
+import { EXPLORATION_DISABLED_SOURCE_IDS } from '~/composables/usePanneauDataSource'
 import { PANNEAU_EXPLORATION_EXTENDED_KEY } from '~/composables/panneauExplorationExtendedContext'
 
 export type PanneauLayout = 'tri-column' | 'stacked'
@@ -231,7 +232,11 @@ onMounted(() => {
           :default-expanded="defaultFiltersExpanded"
           @remove="emit('remove')"
         >
-          <PanneauDataSourceSection v-if="showDataSourceSection" v-model="sourceId" />
+          <PanneauDataSourceSection
+            v-if="showDataSourceSection"
+            v-model="sourceId"
+            :disabled-source-ids="EXPLORATION_DISABLED_SOURCE_IDS"
+          />
 
           <v-alert
             v-if="!hasProfile"

@@ -137,8 +137,7 @@ export function overlaySeriesType(chartType: ProfileChartType): 'scatter' | 'lin
 }
 
 export function primaryProfileSeriesType(chartType: ProfileChartType): 'bar' | 'scatter' | 'line' {
-  const overlay = overlaySeriesType(chartType)
-  if (overlay) return overlay
+  if (chartType === 'scatter-bar' || chartType === 'line-bar') return 'bar'
   return chartType
 }
 
@@ -612,14 +611,20 @@ export function createRenderRankBand(yBase: number) {
 
     // When Y is zoomed, yBase may lie below the visible axis min → clamp baseline to grid bottom.
     const valueY = top[1]
-    const baseY = grid ? Math.min(base[1], grid.bottom) : base[1]
+    const baseYCoord = base[1]
+    const topX = top[0]
+    const rightX = right[0]
+    if (valueY === undefined || baseYCoord === undefined || topX === undefined || rightX === undefined) {
+      return null
+    }
+    const baseY = grid ? Math.min(baseYCoord, grid.bottom) : baseYCoord
     // Positive densities below the axis floor (log auto-scale) must not draw downward.
     if (y > 0 && valueY > baseY + 0.5) return null
 
     const rectY = Math.min(valueY, baseY)
     const rectH = Math.max(Math.abs(valueY - baseY), 1)
-    const rectW = Math.max(right[0] - top[0], 1)
-    const clipped = clampRectToGrid(top[0], rectY, rectW, rectH, grid)
+    const rectW = Math.max(rightX - topX, 1)
+    const clipped = clampRectToGrid(topX, rectY, rectW, rectH, grid)
     if (clipped.width < 0.5 || clipped.height < 0.5) return null
 
     return {
@@ -645,11 +650,14 @@ export function createRenderRankStick(yBase: number, barWidthPx = 5) {
     const grid = gridPixelRect(params)
 
     const valueY = top[1]
-    const baseY = grid ? Math.min(base[1], grid.bottom) : base[1]
+    const baseYCoord = base[1]
+    const topX = top[0]
+    if (valueY === undefined || baseYCoord === undefined || topX === undefined) return null
+    const baseY = grid ? Math.min(baseYCoord, grid.bottom) : baseYCoord
     const rectY = Math.min(valueY, baseY)
     const rectH = Math.max(Math.abs(valueY - baseY), 1)
     const halfW = barWidthPx / 2
-    const clipped = clampRectToGrid(top[0] - halfW, rectY, barWidthPx, rectH, grid)
+    const clipped = clampRectToGrid(topX - halfW, rectY, barWidthPx, rectH, grid)
     if (clipped.width < 0.5 || clipped.height < 0.5) return null
 
     return {
@@ -675,11 +683,19 @@ export function createRenderPopulationBand(xBase: number) {
     const topRight = api.coord([xVal, yHi])
     const grid = gridPixelRect(params)
 
+    const baseXCoord = base[0]
+    const baseYCoord = base[1]
+    const topRightX = topRight[0]
+    const topRightY = topRight[1]
+    if (baseXCoord === undefined || baseYCoord === undefined || topRightX === undefined || topRightY === undefined) {
+      return null
+    }
+
     // When X is zoomed, xBase may lie left of the visible axis min → clamp origin to grid left.
-    const baseX = grid ? Math.max(base[0], grid.left) : base[0]
-    const rectY = Math.min(base[1], topRight[1])
-    const rectH = Math.max(Math.abs(topRight[1] - base[1]), 1)
-    const rectW = Math.max(topRight[0] - baseX, 1)
+    const baseX = grid ? Math.max(baseXCoord, grid.left) : baseXCoord
+    const rectY = Math.min(baseYCoord, topRightY)
+    const rectH = Math.max(Math.abs(topRightY - baseYCoord), 1)
+    const rectW = Math.max(topRightX - baseX, 1)
     const clipped = clampRectToGrid(baseX, rectY, rectW, rectH, grid)
     if (clipped.width < 0.5 || clipped.height < 0.5) return null
 

@@ -1,6 +1,6 @@
 import type { EChartsOption } from 'echarts'
 import type { Ref } from 'vue'
-import { buildStackedTimeSeriesOption, buildTimeSeriesOption, type CountryTrancheSeries } from '~/visualization/timeSeries'
+import { buildStackedShareTimeSeriesOption, buildStackedTimeSeriesOption, buildTimeSeriesOption, type CountryTrancheSeries } from '~/visualization/timeSeries'
 import type { CountryOption, DataSeries, SourceIndicator } from '@domain/entities'
 import { WID_DEFAULT_AGE, WID_DEFAULT_POP } from '@domain/catalog/widCodes'
 import {
@@ -23,7 +23,8 @@ import {
   getDecileBundleConfig,
   isDecileBundleVariable,
   labelForDecileBundleSub,
-} from '@infrastructure/data-sources/decileBundles'
+  worldBankPrimaryTimeSeriesIndicators,
+} from '@domain/catalog/decileBundles'
 
 export interface TimeSeriesPanelStateOptions {
   countries?: Ref<CountryOption[]>
@@ -32,10 +33,30 @@ export interface TimeSeriesPanelStateOptions {
   panelIndex?: number
 }
 
+function timeSeriesIndicatorsForPanel(
+  source: { id: string, indicators?: readonly SourceIndicator[] },
+  panelIndex: number,
+): readonly SourceIndicator[] {
+  const all = source.indicators ?? []
+  if (source.id === 'worldbank' && panelIndex === 0) {
+    return worldBankPrimaryTimeSeriesIndicators(all)
+  }
+  return all
+}
+
+function defaultTimeSeriesVariable(
+  source: { id: string, indicators?: readonly SourceIndicator[] },
+  panelIndex: number,
+): string {
+  const list = timeSeriesIndicatorsForPanel(source, panelIndex)
+  return list[0]?.id ?? source.indicators?.[0]?.id ?? 'ahweal'
+}
+
 export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions = {}) {
   const app = useApplication()
   const { selectedSource } = usePanneauDataSource()
   const scope = new PanelScope(app, options.countries)
+  const panelIndex = options.panelIndex ?? 0
 
   const hasPercentileProfile = computed(
     () => selectedSource.value.capabilities?.percentileProfile === true,
@@ -46,11 +67,11 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
   )
 
   const indicators = computed<readonly SourceIndicator[]>(
-    () => selectedSource.value.indicators ?? [],
+    () => timeSeriesIndicatorsForPanel(selectedSource.value, panelIndex),
   )
 
   const variable = ref(
-    options.initialVariable ?? indicators.value[0]?.id ?? 'ahweal',
+    options.initialVariable ?? defaultTimeSeriesVariable(selectedSource.value, panelIndex),
   )
 
   const isDecileBundle = computed(() => isDecileBundleVariable(variable.value))
@@ -154,11 +175,17 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
     const subtitle = isDecileBundle.value
       ? `${scope.countryLabel(countryCode.value)} · ${decileBundleConfig.value?.seriesSubtitle ?? 'bundle décile'}`
       : `${scope.countryLabel(countryCode.value)} · série annuelle`
-    chartOption.value = buildTimeSeriesOption(scalarSeries.value, title, {
-      subtitle,
-      yAxisLabel: meta?.unit,
-      measureKind: meta?.kind ?? 'scalar',
-    })
+    chartOption.value = isDecileBundle.value
+      ? buildStackedShareTimeSeriesOption(scalarSeries.value, title, {
+          subtitle,
+          yAxisLabel: meta?.unit,
+          measureKind: meta?.kind ?? 'share',
+        })
+      : buildTimeSeriesOption(scalarSeries.value, title, {
+          subtitle,
+          yAxisLabel: meta?.unit,
+          measureKind: meta?.kind ?? 'scalar',
+        })
   }
 
   const organizeSeries = (
@@ -385,9 +412,7 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
   })
 
   watch(() => selectedSource.value.id, async () => {
-    const panelIndex = options.panelIndex ?? 0
-    const nextVariable = selectedSource.value.indicators?.[panelIndex]?.id
-      ?? selectedSource.value.indicators?.[0]?.id
+    const nextVariable = defaultTimeSeriesVariable(selectedSource.value, panelIndex)
     if (nextVariable) {
       variable.value = nextVariable
     }

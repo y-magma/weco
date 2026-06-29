@@ -40,6 +40,7 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne
 | **Zoom temporel** | Courbe (Série) | Fenêtre d’années, slider + molette | MVP | `dataZoom` |
 | **Zoom / brush tranches** | Bâtons, histogramme | Plage d’abscisse → régression / analyse [D1](../D-statistics/D1-analyses.md) | Phase 2 | `dataZoom` category, `brush` |
 | **Zoom multi-niveaux** | Distribution fine | 0–100 % → déciles → centiles → top 1 % / 0,1 % / 0,01 % | Phase 2 | `dataZoom` + rechargement tranches |
+| **Tranches 10 % (courbe)** | Profil (`PanneauExploration`) | Sélecteur « Tranches de population (courbe) » : agrégation en intervalles de 10 % (]0, 10 %], …, ]90, 100 %]) | **Existant** | `populationPartition.ts`, `useExplorationPanel.ts` |
 | **Bascule lin / log abscisse** | Courbe, nuage, distribution | Échelle X indépendante de Y | Phase 2 | `xAxis.type: 'log'` |
 | **Bascule lin / log ordonnée** | Courbe, bâtons, nuage | Échelle Y indépendante de X | Phase 2 | `yAxis.type: 'log'` |
 | **Légende cliquable** | Courbe multi-séries | Masquer / afficher une série | MVP | `legend` |
@@ -54,6 +55,8 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne
 |----------|--------------|----------|
 | **Plusieurs graphes en parallèle** | Dashboard : N panneaux (courbe + distribution + nuage) | MVP |
 | Synchronisation optionnelle | Même pays / fenêtre temporelle entre panneaux | Phase 2 |
+| **Source par contexte de panneau** | Profil (`/panneau/exploration`) : OECD IDD grisé (`EXPLORATION_DISABLED_SOURCE_IDS`) ; World Bank : sélecteur « Variable » limité aux parts PIP (10 déciles) et WDI (5 quintiles) | **Existant** |
+| **Série temporelle WB (1er panneau)** | `PanneauSerieTemporelle` panel 0 : sélecteur limité aux parts PIP (10 déciles) et WDI (5 quintiles) ; graphique en aires empilées (`buildStackedShareTimeSeriesOption`) | **Existant** |
 | Implémentation | `dashboard.vue`, `useDashboard.ts` — [C2b](./C2-representation-graphique/implementation.md) |
 
 ---
@@ -65,6 +68,20 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne
 | **Deux géométries sur un canvas** | Ex. histogramme + nuage, bâtons + courbe | Phase 2 |
 | Overlays d’analyse | Régression, densité PDF — [C1](./C1-graphiques-et-echelles.md) · [D2](../D-statistics/D2-programmes-statistiques.md) | Phase 2 |
 | Règle | Séries superposées : **mêmes axes** (ou axe secondaire documenté) | — |
+
+---
+
+## Études comparatives cross-source (page `/etudes`)
+
+| Exigence | Comportement | Priorité |
+|----------|--------------|----------|
+| **Page dédiée** | Index `/etudes` + sous-pages `/etudes/[slug]` — presets WID / OCDE / WB | Phase 2 |
+| **Mode parallèle** | 2–4 graphiques, **une source par slot**, chips concept visibles | Phase 2 |
+| **Mode superposé** | Une courbe, séries multi-sources ; harmonisation explicite (Gini 0–1, ratios…) | Phase 2 |
+| **Édition preset** | Params publics (pays, années) ; params avancés derrière icône crayon ; reset preset | Phase 2 |
+| **Règle vs `/grille`** | Sur `/panneau` et `/grille` : pas de superposition cross-source. Sur `/etudes` uniquement : superposition **autorisée** avec caveats affichés (voir [A4](../A-raw-data/A4-caracterisation.md)) | Phase 2 |
+
+Catalogue des cas et fiches UI : [etudes-comparatives/](./etudes-comparatives/) — [cas-comparaison.md](./etudes-comparatives/cas-comparaison.md) · [structure-etudes.md](./etudes-comparatives/structure-etudes.md).
 
 ---
 
@@ -83,4 +100,4 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne
 
 ---
 
-[C1](./C1-graphiques-et-echelles.md) · [C2](./C2-representation-graphique/) · [B4](../B-clean-data/B4-transformations-derivees.md)
+[C1](./C1-graphiques-et-echelles.md) · [C2](./C2-representation-graphique/) · [Études comparatives](./etudes-comparatives/) · [B4](../B-clean-data/B4-transformations-derivees.md)

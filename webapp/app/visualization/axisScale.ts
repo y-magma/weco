@@ -281,8 +281,8 @@ export const strictLogRankScale: RankAxisScale = {
   rankBound: (bound) => (bound > 0 && Number.isFinite(bound) ? bound : null),
   applyRankExtent(axis, extent) {
     if (!extent) return
-    const lo = strictLogRankScale.rankBound(extent.rankLo)
-    const hi = strictLogRankScale.rankBound(extent.rankHi)
+    const lo = strictLogRankScale.rankBound(extent.rankLo, 'lower')
+    const hi = strictLogRankScale.rankBound(extent.rankHi, 'upper')
     if (lo != null) axis.min = Math.max(1e-6, lo / 2)
     if (hi != null) axis.max = Math.min(100, hi * 2)
   },
@@ -386,11 +386,24 @@ export function resolveProfileAxisScales(options: {
   }
 }
 
+export interface EchartsAxisConfig {
+  type: 'value' | 'log'
+  name: string
+  nameLocation: 'middle' | 'end' | 'start'
+  nameGap?: number
+  scale?: boolean
+  min?: number
+  max?: number
+  axisLabel: {
+    formatter: (value: number) => string
+  }
+}
+
 export function buildEchartsAxis(
   name: string,
   scale: AxisScale,
-  options: { nameGap?: number, nameLocation?: 'middle' } = {},
-) {
+  options: { nameGap?: number, nameLocation?: 'middle' | 'end' | 'start' } = {},
+): EchartsAxisConfig {
   return {
     type: scale.echartsType,
     name,

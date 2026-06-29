@@ -36,11 +36,8 @@ if (!panelCountries) {
   throw new Error('PanneauSerieTemporelle requires a panelCountries provider')
 }
 
-const { selectedSource } = usePanneauDataSource()
-const initialVariable = selectedSource.value.indicators?.[props.panelIndex ?? 0]?.id ?? 'ahweal'
 const state = createTimeSeriesPanelState({
   countries: panelCountries,
-  initialVariable,
   panelIndex: props.panelIndex,
 })
 
@@ -204,7 +201,7 @@ onMounted(() => {
             density="compact"
             class="mt-3 mb-0"
           >
-            {{ decileBundleConfig?.seriesSubtitle ?? 'Bundle décile' }} — les tranches WID, l'âge et la population ne s'appliquent pas.
+            {{ decileBundleConfig?.seriesSubtitle ?? 'Bundle décile' }}
           </v-alert>
 
           <div

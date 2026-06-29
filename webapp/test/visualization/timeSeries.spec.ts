@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildStackedTimeSeriesOption, buildTimeSeriesOption } from '~/visualization/timeSeries'
+import {
+  buildStackedShareTimeSeriesOption,
+  buildStackedTimeSeriesOption,
+  buildTimeSeriesOption,
+} from '~/visualization/timeSeries'
 import type { DataSeries } from '@domain/entities'
 import { buildTimeSeriesTranches, TIME_SERIES_DEFAULT_BREAKPOINTS } from '~/visualization/timeSeriesPartition'
 
@@ -101,6 +105,25 @@ describe('buildTimeSeriesOption', () => {
     const formatter = (option.yAxis as { axisLabel: { formatter: (v: number) => string } }).axisLabel.formatter
     expect(formatter(0.001)).toBe('0,001')
     expect(formatter(0.05)).toBe('0,05')
+  })
+})
+
+describe('buildStackedShareTimeSeriesOption', () => {
+  it('renders stacked area series for decile or quintile shares', () => {
+    const deciles = Array.from({ length: 3 }, (_, index) => ({
+      id: `decile${index + 1}`,
+      label: `D${index + 1}`,
+      points: [{ year: 2020, value: 0.1 }],
+    }))
+    const option = buildStackedShareTimeSeriesOption(deciles, 'Parts par décile (10)', {
+      subtitle: 'France · parts par décile',
+      measureKind: 'share',
+    })
+    const echartsSeries = option.series as { type: string, stack: string, areaStyle: { opacity: number } }[]
+    expect(echartsSeries).toHaveLength(3)
+    expect(echartsSeries.every((item) => item.type === 'line' && item.stack === 'share')).toBe(true)
+    expect(echartsSeries.every((item) => item.areaStyle.opacity > 0)).toBe(true)
+    expect((option.legend as { orient: string }).orient).toBe('vertical')
   })
 })
 

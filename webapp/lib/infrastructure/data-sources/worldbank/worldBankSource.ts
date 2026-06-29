@@ -8,6 +8,7 @@ import type {
   ListProfileYearsParams,
   ParamAvailabilityEntity,
   PercentileProfile,
+  SeriesPoint,
 } from '@domain/entities'
 import type { DataSourcePort, DataSourceStatus } from '@domain/ports/DataSourcePort'
 import {
@@ -46,6 +47,9 @@ import {
   isWdiQuintileBundleVariable,
   isWdiQuintileId,
   WDI_QUINTILE_BUNDLE_ID,
+  WDI_QUINTILE_IDS,
+  WDI_QUINTILE_MID_RANKS,
+  wdiQuintileProfileYears,
 } from '@infrastructure/data-sources/worldbank/worldBankQuintiles'
 
 export class WorldBankDataSource implements DataSourcePort {
@@ -102,6 +106,12 @@ export class WorldBankDataSource implements DataSourcePort {
       return profile
     }
 
+    if (params.variable === WDI_QUINTILE_BUNDLE_ID) {
+      const profile = await this.buildWdiQuintileProfile(params)
+      dataSourceCache.set(cacheKey, profile)
+      return profile
+    }
+
     throw new Error(`Profil World Bank non implémenté pour ${params.variable}.`)
   }
 
@@ -141,6 +151,47 @@ export class WorldBankDataSource implements DataSourcePort {
       pop: '',
       label: `Parts par décile — ${params.countryCode} (${params.year})`,
       unit: 'part (0–1)',
+      kind: 'share',
+      points,
+      sample: false,
+    }
+
+    this.lastFetchAt = new Date().toISOString()
+    this.lastError = undefined
+    return profile
+  }
+
+  private async buildWdiQuintileProfile(params: FetchProfileParams): Promise<PercentileProfile> {
+    const seriesList = await Promise.all(
+      WDI_QUINTILE_IDS.map((quintileId) =>
+        fetchWdiTimeSeries(params.countryCode, quintileId).catch(() => [] as SeriesPoint[]),
+      ),
+    )
+
+    const points = WDI_QUINTILE_IDS.map((quintileId, index) => {
+      const point = seriesList[index]?.find((item) => item.year === params.year)
+      return {
+        percentile: quintileId,
+        rank: WDI_QUINTILE_MID_RANKS[index]!,
+        value: point?.value ?? null,
+      }
+    })
+
+    if (points.every((point) => point.value === null)) {
+      throw new Error(
+        `Quintiles WDI indisponibles pour ${params.countryCode} · ${params.year}.`,
+      )
+    }
+
+    const profile: PercentileProfile = {
+      id: `${params.countryCode}-${params.variable}-${params.year}`,
+      country: params.countryCode,
+      variable: params.variable,
+      year: params.year,
+      age: '',
+      pop: '',
+      label: `Parts par quintile — ${params.countryCode} (${params.year})`,
+      unit: '%',
       kind: 'share',
       points,
       sample: false,
@@ -266,17 +317,39 @@ export class WorldBankDataSource implements DataSourcePort {
     const cached = dataSourceCache.get<number[]>(cacheKey)
     if (cached?.length) return cached
 
-    if (params.variable !== PIP_DECILE_BUNDLE_ID) {
+    if (params.variable !== PIP_DECILE_BUNDLE_ID && params.variable !== WDI_QUINTILE_BUNDLE_ID) {
       return []
     }
 
-    await ensureWorldBankIsoMaps()
-    const iso3 = toIso3(params.countryCode)
-    if (!iso3) return []
+    if (params.variable === PIP_DECILE_BUNDLE_ID) {
+      await ensureWorldBankIsoMaps()
+      const iso3 = toIso3(params.countryCode)
+      if (!iso3) return []
+
+      try {
+        const rows = await fetchPipRows(iso3)
+        const years = pipProfileYears(rows.filter((row) => row.countryCode === iso3))
+
+        if (years.length > 0) {
+          this.lastFetchAt = new Date().toISOString()
+          this.lastError = undefined
+          dataSourceCache.set(cacheKey, years, CACHE_TTL_YEARS_MS)
+        }
+
+        return years
+      } catch (error) {
+        this.lastError = error instanceof Error ? error.message : 'Échec de la requête World Bank'
+        throw new Error(this.lastError)
+      }
+    }
 
     try {
-      const rows = await fetchPipRows(iso3)
-      const years = pipProfileYears(rows.filter((row) => row.countryCode === iso3))
+      const seriesList = await Promise.all(
+        WDI_QUINTILE_IDS.map((quintileId) =>
+          fetchWdiTimeSeries(params.countryCode, quintileId).catch(() => [] as SeriesPoint[]),
+        ),
+      )
+      const years = wdiQuintileProfileYears(seriesList)
 
       if (years.length > 0) {
         this.lastFetchAt = new Date().toISOString()

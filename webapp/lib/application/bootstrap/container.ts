@@ -1,4 +1,5 @@
 import type { DataSourcePort } from '@domain/ports/DataSourcePort'
+import { ParamMetadataStore } from '@domain/services/paramMetadataStore'
 import {
   getDefaultDataSource,
   initializeDataSources,
@@ -22,6 +23,7 @@ export interface ApplicationContainer {
   loadTimeSeries: LoadTimeSeriesUseCase
   getDefaultSource: () => DataSourcePort
   listDataSources: () => DataSourcePort[]
+  paramMetadata: ParamMetadataStore
 }
 
 let container: ApplicationContainer | null = null
@@ -30,6 +32,7 @@ export function createApplicationContainer(config?: DataSourcesConfig): Applicat
   initializeDataSources(config)
 
   const getSource = (): DataSourcePort => getDefaultDataSource()
+  const paramMetadata = new ParamMetadataStore()
 
   return {
     listCountries: new ListCountriesUseCase(getSource),
@@ -39,6 +42,7 @@ export function createApplicationContainer(config?: DataSourcesConfig): Applicat
     loadTimeSeries: new LoadTimeSeriesUseCase(getSource),
     getDefaultSource: getSource,
     listDataSources,
+    paramMetadata,
   }
 }
 

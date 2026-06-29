@@ -42,9 +42,12 @@ import {
   type TrapezoidMethod,
 } from '~/visualization/trapezoidApproximation'
 import {
+  isWdiQuintileBundleVariable,
+  isWorldBankExplorationProfileBundle,
   PIP_DECILE_BUNDLE_ID,
   PIP_DECILE_PROFILE_HELP,
-} from '@infrastructure/data-sources/worldbank/worldBankDeciles'
+  WDI_QUINTILE_PROFILE_HELP,
+} from '@domain/catalog/decileBundles'
 
 export const TRAPEZOID_METHOD_OPTIONS: {
   value: TrapezoidMethod
@@ -178,9 +181,15 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   const approximation = ref<MeanPreservingApproximation | null>(null)
   const chartOption = ref<EChartsOption | null>(null)
 
+  const decileProfileHelp = computed(() =>
+    isWdiQuintileBundleVariable(variable.value)
+      ? WDI_QUINTILE_PROFILE_HELP
+      : PIP_DECILE_PROFILE_HELP,
+  )
+
   const variables = computed(() => {
     if (hasDecileProfileOnly.value) {
-      return indicators.value.filter((item) => item.id === PIP_DECILE_BUNDLE_ID)
+      return indicators.value.filter((item) => isWorldBankExplorationProfileBundle(item.id))
     }
     const nonGini = indicators.value.filter((item) => item.kind !== 'gini')
     if (!empiricalPdf.value) return nonGini
@@ -342,7 +351,8 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     if (drillLevel.value > 0) {
       return buildDrilldownPoints(points, drillLevel.value)
     }
-    return buildPartitionPoints(points, buildStepBreakpoints(1))
+    const step = stepFromMode(populationViewMode.value)
+    return buildPartitionPoints(points, buildStepBreakpoints(step ?? 1))
   })
 
   const chartOptionsBase = () => {
@@ -701,7 +711,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     hasDecileProfile,
     hasDecileProfileOnly,
     hasProfile,
-    decileProfileHelp: PIP_DECILE_PROFILE_HELP,
+    decileProfileHelp,
     availableBoundaries,
     customPartitionValidation,
     customPartitionReady,

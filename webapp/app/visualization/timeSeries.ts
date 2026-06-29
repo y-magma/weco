@@ -10,6 +10,7 @@ import {
 } from '~/visualization/chartZoom'
 import {
   stackValueFromAverage,
+  TIME_SERIES_TRANCHE_COLORS,
   type TimeSeriesTranche,
 } from '~/visualization/timeSeriesPartition'
 
@@ -126,6 +127,85 @@ function gridLayout(count: number, index: number): { top: number | string, heigh
   const band = (usable - gap * (count - 1)) / count
   const top = 10 + index * (band + gap)
   return { top: `${top}%`, height: `${band}%` }
+}
+
+/**
+ * Aires empilées pour parts de population (déciles PIP, quintiles WDI).
+ * Les valeurs sont déjà des parts : empilement direct sans conversion moyenne × largeur.
+ */
+export function buildStackedShareTimeSeriesOption(
+  seriesList: DataSeries[],
+  title: string,
+  options: TimeSeriesChartOptions = {},
+): EChartsOption {
+  if (seriesList.length === 0) {
+    return { title: { text: title, left: 'center' } }
+  }
+
+  const { subtitle, yAxisLabel, measureKind = 'share' } = options
+  const valueScale = resolveValueScaleForMeasure(measureKind, false)
+  const years = Array.from(
+    new Set(seriesList.flatMap((series) => series.points.map((point) => point.year))),
+  ).sort((a, b) => a - b)
+
+  return {
+    color: [...TIME_SERIES_TRANCHE_COLORS],
+    title: {
+      text: title,
+      subtext: subtitle,
+      left: 'center',
+      textStyle: { fontSize: 15, fontWeight: 600 },
+      subtextStyle: { fontSize: 11 },
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      valueFormatter: (value) =>
+        value === null || value === undefined ? '—' : formatAxisValue(Number(value), measureKind),
+    },
+    legend: {
+      show: true,
+      orient: 'vertical',
+      right: 8,
+      top: 88,
+      type: 'scroll',
+      itemWidth: 14,
+      itemHeight: 10,
+      textStyle: { fontSize: 11 },
+    },
+    grid: {
+      left: 56,
+      right: 148,
+      top: 72,
+      bottom: CHART_ZOOM_GRID_BOTTOM,
+    },
+    toolbox: buildChartToolbox(),
+    dataZoom: buildChartAxisDataZoom({ filterMode: 'none' }),
+    xAxis: {
+      type: 'category',
+      data: years.map(String),
+      name: 'Année',
+    },
+    yAxis: {
+      ...buildEchartsAxis(yAxisLabel ?? 'Part', valueScale, { nameGap: 42 }),
+      scale: true,
+    },
+    series: seriesList.map((series, index) => {
+      const byYear = valuesByYear(series.points)
+      return {
+        name: series.label,
+        type: 'line' as const,
+        stack: 'share',
+        smooth: true,
+        showSymbol: false,
+        connectNulls: false,
+        itemStyle: { color: TIME_SERIES_TRANCHE_COLORS[index % TIME_SERIES_TRANCHE_COLORS.length] },
+        areaStyle: { opacity: 0.88 },
+        emphasis: { focus: 'series' as const },
+        data: years.map((year) => byYear.get(year) ?? null),
+      }
+    }),
+  }
 }
 
 /**

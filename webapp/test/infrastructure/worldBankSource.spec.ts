@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { createWorldBankDataSource } from '@infrastructure/data-sources/worldbank/worldBankSource'
 import { PIP_DECILE_BUNDLE_ID } from '@infrastructure/data-sources/worldbank/worldBankDeciles'
+import { WDI_QUINTILE_BUNDLE_ID } from '@infrastructure/data-sources/worldbank/worldBankQuintiles'
 import { resetWorldBankCountryCache } from '@infrastructure/data-sources/worldbank/worldBankCountries'
 
 const PIP_SAMPLE_CSV = `region_name,region_code,country_name,country_code,reporting_year,reporting_level,survey_acronym,survey_coverage,survey_year,welfare_type,survey_comparability,comparable_spell,poverty_line,headcount,poverty_gap,poverty_severity,watts,mean,median,mld,gini,polarization,decile1,decile2,decile3,decile4,decile5,decile6,decile7,decile8,decile9,decile10,cpi,ppp,reporting_pop,reporting_gdp,reporting_pce,is_interpolated,distribution_type,estimation_type,spl,spr,pg,estimate_type
@@ -9,6 +10,11 @@ Europe & Central Asia,ECS,France,FRA,2021,national,EU-SILC,national,2021,income,
 const WDI_GINI_JSON = [
   { page: 1, pages: 1, total: 1 },
   [{ date: '2021', value: 31.5 }],
+]
+
+const WDI_QUINTILE_JSON = [
+  { page: 1, pages: 1, total: 1 },
+  [{ date: '2021', value: 5.1 }],
 ]
 
 describe('WorldBankDataSource', () => {
@@ -20,6 +26,9 @@ describe('WorldBankDataSource', () => {
       }
       if (url.includes('/indicator/SI.POV.GINI')) {
         return { ok: true, json: async () => WDI_GINI_JSON }
+      }
+      if (url.includes('/indicator/SI.DST.')) {
+        return { ok: true, json: async () => WDI_QUINTILE_JSON }
       }
       if (url.includes('/v2/country?')) {
         return {
@@ -59,6 +68,37 @@ describe('WorldBankDataSource', () => {
     const years = await source.listProfileYears({
       countryCode: 'FR',
       variable: PIP_DECILE_BUNDLE_ID,
+      age: '',
+      pop: '',
+    })
+    expect(years).toEqual([2021])
+  })
+
+  it('builds percentile profile from WDI quintiles', async () => {
+    const source = createWorldBankDataSource()
+    const profile = await source.fetchPercentileProfile({
+      countryCode: 'FR',
+      variable: WDI_QUINTILE_BUNDLE_ID,
+      year: 2021,
+      age: '',
+      pop: '',
+    })
+
+    expect(profile.points).toHaveLength(5)
+    expect(profile.points[0]).toMatchObject({
+      percentile: 'SI.DST.FRST.20',
+      rank: 10,
+      value: 5.1,
+    })
+    expect(profile.unit).toBe('%')
+    expect(profile.kind).toBe('share')
+  })
+
+  it('lists profile years from WDI quintiles', async () => {
+    const source = createWorldBankDataSource()
+    const years = await source.listProfileYears({
+      countryCode: 'FR',
+      variable: WDI_QUINTILE_BUNDLE_ID,
       age: '',
       pop: '',
     })

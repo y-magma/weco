@@ -2,6 +2,9 @@ import type { DataSourcePort } from '@domain/ports/DataSourcePort'
 
 const PANNEAU_DATA_SOURCE_KEY = Symbol('panneauDataSourceId')
 
+/** Sources indisponibles dans le panneau profil (déciles OECD non implémentés). */
+export const EXPLORATION_DISABLED_SOURCE_IDS = ['oecd-idd'] as const
+
 /** Shared source selection for panels on the same page (e.g. temps.vue). */
 export function usePanneauDataSourceProvider(initialId?: string) {
   const { defaultSource } = useDataSources()

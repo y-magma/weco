@@ -1,6 +1,8 @@
 import type { SourceIndicator } from '@domain/entities'
-import { PIP_DECILE_BUNDLE_ID } from '@infrastructure/data-sources/worldbank/worldBankDeciles'
-import { WDI_QUINTILE_BUNDLE_ID } from '@infrastructure/data-sources/worldbank/worldBankQuintiles'
+import {
+  PIP_DECILE_BUNDLE_ID,
+  WDI_QUINTILE_BUNDLE_ID,
+} from '@domain/catalog/decileBundles'
 
 export type WorldBankApi = 'wdi' | 'pip'
 
@@ -134,3 +136,10 @@ export function findWorldBankIndicator(id: string): WorldBankIndicatorDef | unde
 export function isWorldBankProfileVariable(id: string): boolean {
   return id === PIP_DECILE_BUNDLE_ID || id === WDI_QUINTILE_BUNDLE_ID
 }
+
+/** Variables du 1er panneau série temporelle WB : parts empilées uniquement. */
+export {
+  isWorldBankPrimaryTimeSeriesIndicator,
+  WORLD_BANK_PRIMARY_TIME_SERIES_IDS,
+  worldBankPrimaryTimeSeriesIndicators,
+} from '@domain/catalog/decileBundles'

@@ -44,7 +44,7 @@ class StringCsvReader implements CsvReader {
         delimiter: this.options.delimiter,
         skipEmptyLines: this.options.skipEmptyLines ?? true,
         complete: (result) => resolve(normalizeParseResult(result)),
-        error: (error) => reject(error),
+        error: (error: Error) => reject(error),
       })
     })
   }

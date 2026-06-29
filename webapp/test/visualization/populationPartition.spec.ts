@@ -6,6 +6,7 @@ import {
   extractAvailableBoundaries,
   isBoundaryAvailable,
   selectableCustomBoundaries,
+  TRAPEZOID_POPULATION_VIEW_OPTIONS,
   validateCustomBreakpoints,
   validateNextCustomBreakpoint,
   validatePartialCustomBreakpoints,
@@ -19,6 +20,13 @@ function fullPoints(): PercentilePoint[] {
     return { percentile, rank, value: rank }
   })
 }
+
+describe('TRAPEZOID_POPULATION_VIEW_OPTIONS', () => {
+  it('includes all, step1 and step10 for the curve selector', () => {
+    const values = TRAPEZOID_POPULATION_VIEW_OPTIONS.map((option) => option.value)
+    expect(values).toEqual(['all', 'step1', 'step10'])
+  })
+})
 
 describe('buildStepBreakpoints', () => {
   it('builds 1 %, 10 % and 25 % grids ending at 100', () => {

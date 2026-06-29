@@ -14,6 +14,9 @@ import {
 import VChart from 'vue-echarts'
 import type { EChartsOption } from 'echarts'
 
+/** Chart builders may exceed strict ComposeOption typing; ECharts accepts them at runtime. */
+type ChartOptionProp = EChartsOption | Record<string, unknown>
+
 use([
   CanvasRenderer,
   LineChart,
@@ -31,7 +34,7 @@ use([
 
 withDefaults(
   defineProps<{
-    option: EChartsOption | null
+    option: ChartOptionProp | null
     loading?: boolean
     error?: string | null
     height?: string
@@ -70,7 +73,7 @@ const emit = defineEmits<{ chartClick: [params: unknown], dataZoom: [params: unk
       :style="{ height, width: '100%' }"
     >
       <VChart
-        :option="option"
+        :option="option as EChartsOption"
         :update-options="{ notMerge: true }"
         autoresize
         class="chart-instance"

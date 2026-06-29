@@ -1,19 +1,37 @@
 <script setup lang="ts">
 import type { CountryOption } from '@domain/entities'
 
+const props = withDefaults(defineProps<{
+  disabledSourceIds?: readonly string[]
+}>(), {
+  disabledSourceIds: () => [],
+})
+
 const sourceId = defineModel<string>({ default: 'wid' })
 
 const { sources, defaultSource } = useDataSources()
 
+const disabledSourceIdSet = computed(() => new Set(props.disabledSourceIds))
+
 const sourceItems = computed(() =>
-  sources.value.map((source) => ({
-    title: source.label,
-    value: source.id,
-    props: { subtitle: source.description },
-  })),
+  sources.value.map((source) => {
+    const disabled = disabledSourceIdSet.value.has(source.id)
+    return {
+      title: source.label,
+      value: source.id,
+      props: {
+        subtitle: disabled
+          ? 'Profils déciles — bientôt disponible'
+          : source.description,
+        disabled,
+      },
+    }
+  }),
 )
 
-const onlyOneSource = computed(() => sourceItems.value.length <= 1)
+const onlyOneSource = computed(
+  () => sourceItems.value.filter((item) => !item.props.disabled).length <= 1,
+)
 
 const selectedSource = computed(() =>
   sources.value.find((source) => source.id === sourceId.value) ?? defaultSource.value,
@@ -21,6 +39,21 @@ const selectedSource = computed(() =>
 
 const countries = inject<Ref<CountryOption[]>>('panelCountries', ref([]))
 const countriesError = inject<Ref<string | null>>('panelCountriesError', ref(null))
+
+function firstEnabledSourceId(): string {
+  const enabled = sources.value.find((source) => !disabledSourceIdSet.value.has(source.id))
+  return enabled?.id ?? defaultSource.value.id
+}
+
+watch(
+  () => [sourceId.value, props.disabledSourceIds] as const,
+  ([currentId, disabledIds]) => {
+    if (disabledIds.includes(currentId)) {
+      sourceId.value = firstEnabledSourceId()
+    }
+  },
+  { immediate: true },
+)
 
 const connectionStatus = computed(() => {
   if (countriesError.value) {
@@ -42,7 +75,9 @@ const connectionStatus = computed(() => {
 const sourceHelpParagraphs = computed(() => [
   selectedSource.value.description,
   'Plusieurs sources sont disponibles (WID.world, OECD IDD, World Bank WDI/PIP). Les concepts et échelles peuvent différer — comparez en changeant de source, pas en superposant les courbes.',
-  'Changer de source réinitialisera les paramètres pays, variable, année, âge et population.',
+  props.disabledSourceIds.length > 0
+    ? 'OECD IDD est réservé aux séries temporelles pour le moment ; le profil d\'inégalité nécessite les profils déciles (à venir).'
+    : 'Changer de source réinitialisera les paramètres pays, variable, année, âge et population.',
 ])
 </script>
 
@@ -64,6 +99,7 @@ const sourceHelpParagraphs = computed(() => [
           :items="sourceItems"
           item-title="title"
           item-value="value"
+          item-props="props"
           label="Source"
           prepend-inner-icon="mdi-database-outline"
           density="compact"

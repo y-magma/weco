@@ -9,7 +9,7 @@
 
 import { buildGPercentiles } from '@domain/services/percentiles'
 
-export type MeasureKind = 'average' | 'threshold' | 'share' | 'gini' | 'groupLevel' | 'other'
+export type MeasureKind = 'average' | 'threshold' | 'share' | 'gini' | 'groupLevel' | 'scalar' | 'other'
 
 export type WidVariableGroup = 'income' | 'wealth' | 'carbon'
 

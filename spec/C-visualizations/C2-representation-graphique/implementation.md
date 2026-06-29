@@ -8,7 +8,8 @@
 
 | Graphique (C1) | Fonction | Fichier | Statut |
 |----------------|----------|---------|--------|
-| Courbe | `buildTimeSeriesOption` | `webapp/src/charts/timeSeries.ts` | **Existant** |
+| Courbe | `buildTimeSeriesOption` | `webapp/app/visualization/timeSeries.ts` | **Existant** |
+| Courbe empilée (parts) | `buildStackedShareTimeSeriesOption` | `webapp/app/visualization/timeSeries.ts` | **Existant** |
 | Diagramme en bâtons | `buildDistributionOption` | `webapp/src/charts/distribution.ts` | **Existant** |
 | Nuage de points | `buildScatterOption` | `webapp/src/charts/scatter.ts` | **Existant** |
 | Histogramme | `buildHistogramOption` | `webapp/src/charts/` | Phase 2 |

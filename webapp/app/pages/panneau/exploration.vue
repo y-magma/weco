@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { EXPLORATION_DISABLED_SOURCE_IDS } from '~/composables/usePanneauDataSource'
+
 definePageMeta({ layout: 'default' })
 
 const { sourceId } = usePanneauDataSourceProvider()
@@ -27,7 +29,11 @@ const { countriesError } = useCountriesProvider()
       {{ countriesError }}
     </v-alert>
 
-    <PanneauDataSourceSection v-model="sourceId" class="mb-4" />
+    <PanneauDataSourceSection
+      v-model="sourceId"
+      :disabled-source-ids="EXPLORATION_DISABLED_SOURCE_IDS"
+      class="mb-4"
+    />
 
     <PanneauExploration
       chart-height="460px"
