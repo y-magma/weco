@@ -10,6 +10,8 @@ import type { PanneauType } from '~/composables/panneauTypes'
 import { EXPLORATION_DISABLED_SOURCE_IDS } from '~/composables/usePanneauDataSource'
 import { PANNEAU_EXPLORATION_EXTENDED_KEY } from '~/composables/panneauExplorationExtendedContext'
 import type { ExplorationPanelSnapshot } from '@application/share/shareSnapshot'
+import { useGrilleGlobalParamsConsumer } from '~/composables/useGrilleGlobalParams'
+import { useGrilleGlobalParamsApply } from '~/composables/useGrilleGlobalParamsApply'
 
 export type PanneauLayout = 'tri-column' | 'stacked'
 
@@ -120,6 +122,13 @@ const { triggerSync } = useShareablePanelRegistration(
 )
 
 watch(() => state.serializeSnapshot(), () => triggerSync(), { deep: true })
+
+// Surcharges globales provenant de la page /grille
+const globalOverrides = useGrilleGlobalParamsConsumer()
+const isInGrille = globalOverrides !== null
+if (globalOverrides) {
+  useGrilleGlobalParamsApply(globalOverrides, { countryCode, variable, year, age, pop })
+}
 
 const customBreakpointInput = ref<number | null>(null)
 const customBreakpointError = ref<string | null>(null)
@@ -332,31 +341,33 @@ onMounted(() => {
                     hide-details
                     class="mb-3"
                   />
-                  <v-select
-                    v-model="age"
-                    :items="ageOptions"
-                    :loading="yearsLoading"
-                    :disabled="yearsLoading || ageOptions.length === 0"
-                    item-title="label"
-                    item-value="value"
-                    label="Âge"
-                    density="compact"
-                    hide-details
-                    class="mb-3"
-                  />
-                  <ParamAdjustmentHint :message="paramAdjustmentHints.age" />
-                  <v-select
-                    v-model="pop"
-                    :items="popOptions"
-                    :loading="yearsLoading"
-                    :disabled="yearsLoading || popOptions.length === 0"
-                    item-title="label"
-                    item-value="value"
-                    label="Population"
-                    density="compact"
-                    hide-details
-                  />
-                  <ParamAdjustmentHint :message="paramAdjustmentHints.pop" />
+                  <template v-if="!isInGrille">
+                    <v-select
+                      v-model="age"
+                      :items="ageOptions"
+                      :loading="yearsLoading"
+                      :disabled="yearsLoading || ageOptions.length === 0"
+                      item-title="label"
+                      item-value="value"
+                      label="Âge"
+                      density="compact"
+                      hide-details
+                      class="mb-3"
+                    />
+                    <ParamAdjustmentHint :message="paramAdjustmentHints.age" />
+                    <v-select
+                      v-model="pop"
+                      :items="popOptions"
+                      :loading="yearsLoading"
+                      :disabled="yearsLoading || popOptions.length === 0"
+                      item-title="label"
+                      item-value="value"
+                      label="Population"
+                      density="compact"
+                      hide-details
+                    />
+                    <ParamAdjustmentHint :message="paramAdjustmentHints.pop" />
+                  </template>
                 </v-expansion-panel-text>
               </v-expansion-panel>
             </v-expansion-panels>

@@ -98,6 +98,7 @@ export const PROFILE_HELP = {
     paragraphs: [
       'Tranches fines sur les plus riches : affichage brut des 127 g-percentiles WID.',
       'Tranches de 1 %, 10 % ou 25 % de pop : agrégation en intervalles réguliers ]0 %, step %], ]step %, 2×step %], … jusqu’à 100 %.',
+      'Tranche 50 % - 90 % - 99 % - 99,9 % - 100 % : agrégation en cinq groupes WID (bas 50 %, 50–90 %, 90–99 %, top 1 %, top 0,1 %).',
       'En tranches de 1 %, la tranche ]99 %, 100 %] reste agrégée ; un zoom progressif permet d’affiner le sommet de la distribution.',
       'Tranches personnalisées : saisissez les bornes de fin de chaque intervalle (la borne suivante en est le début). Il n’est pas nécessaire d’aller jusqu’à 100 %. Seules les bornes présentes dans les données chargées sont acceptées.',
     ],

@@ -9,15 +9,21 @@
 import type { PercentilePoint } from '@domain/entities'
 import { parsePercentileInterval } from '@domain/services/percentiles'
 
-export type PopulationViewMode = 'all' | 'step1' | 'step10' | 'step25' | 'custom'
+export type PopulationViewMode = 'all' | 'step1' | 'step10' | 'step25' | 'distribution' | 'custom'
 
 export type PopulationStep = 1 | 10 | 25
+
+/** Preset WID : bas 50 %, 50–90 %, 90–99 %, top 1 %, top 0,1 %. */
+export const POPULATION_DISTRIBUTION_BREAKPOINTS = [50, 90, 99, 99.9, 100] as const
+
+export const POPULATION_DISTRIBUTION_LABEL = 'Tranche 50% - 90% - 99% - 99.9% - 100%'
 
 export const POPULATION_VIEW_OPTIONS: { value: PopulationViewMode, label: string }[] = [
   { value: 'all', label: 'Tranches fines sur les plus riches' },
   { value: 'step1', label: 'Tranches de 1 % de pop' },
   { value: 'step10', label: 'Tranches de 10 % de pop' },
   { value: 'step25', label: 'Tranches de 25 % de pop' },
+  { value: 'distribution', label: POPULATION_DISTRIBUTION_LABEL },
   { value: 'custom', label: 'Tranches personnalisées' },
 ]
 

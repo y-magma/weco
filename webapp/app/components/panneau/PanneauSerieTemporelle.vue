@@ -7,6 +7,9 @@ import {
 import type { CountryOption } from '@domain/entities'
 import type { PanneauType } from '~/composables/panneauTypes'
 import type { TimeSeriesPanelSnapshot } from '@application/share/shareSnapshot'
+import { useGrilleGlobalParamsConsumer } from '~/composables/useGrilleGlobalParams'
+import { useGrilleGlobalParamsApply } from '~/composables/useGrilleGlobalParamsApply'
+import { buildTimeSeriesStackHelp, TIME_SERIES_HELP } from '~/visualization/timeSeriesHelp'
 
 export type PanneauLayout = 'split-column' | 'stacked'
 
@@ -54,6 +57,7 @@ const {
   pop,
   partitionMode,
   customBreakpoints,
+  stackMode,
   countries,
   availableBoundaries,
   customPartitionValidation,
@@ -90,6 +94,13 @@ const { triggerSync } = useShareablePanelRegistration(
 
 watch(() => state.serializeSnapshot(), () => triggerSync(), { deep: true })
 
+// Surcharges globales provenant de la page /grille
+const globalOverrides = useGrilleGlobalParamsConsumer()
+const isInGrille = globalOverrides !== null
+if (globalOverrides) {
+  useGrilleGlobalParamsApply(globalOverrides, { countryCode, variable, age, pop })
+}
+
 const { sourceId, sourceLabel } = usePanneauDataSource()
 
 const customBreakpointInput = ref<number | null>(null)
@@ -119,6 +130,14 @@ const nextBoundaryHint = computed(() => {
     : 0
   return `Borne de fin après ${formatBoundaryLabel(last)}`
 })
+
+const activeStackHelp = computed(() => buildTimeSeriesStackHelp(stackMode.value))
+
+const stackModeBanner = computed(() =>
+  hasPercentileProfile.value && trancheSeriesByCountry.value.length > 0 && stackMode.value === 'weighted'
+    ? 'Valeurs tracées = moyenne WID × part de population (voir ?)'
+    : null,
+)
 
 const addCustomBreakpoint = (value: number | null) => {
   if (value == null) return
@@ -222,8 +241,13 @@ onMounted(() => {
             v-if="hasPercentileProfile"
             class="custom-partition-panel mt-3 pa-3 rounded border"
           >
-            <div class="text-body-2 font-weight-medium mb-2">
+            <div class="text-body-2 font-weight-medium mb-2 d-flex align-center ga-1">
               Tranches de population
+              <ProfileHelpButton
+                :title="TIME_SERIES_HELP.widTranches.title"
+                :paragraphs="TIME_SERIES_HELP.widTranches.paragraphs"
+                :hint="TIME_SERIES_HELP.widTranches.hint"
+              />
             </div>
 
             <v-select
@@ -316,7 +340,7 @@ onMounted(() => {
           </div>
 
           <v-expansion-panels
-            v-if="hasPercentileProfile"
+            v-if="hasPercentileProfile && !isInGrille"
             variant="accordion"
             density="compact"
             class="mt-3"
@@ -409,21 +433,70 @@ onMounted(() => {
 
           <div
             v-if="activeTranches.length > 0"
-            class="d-flex flex-wrap ga-1 mb-2"
+            class="d-flex flex-wrap align-center justify-space-between ga-1 mb-2"
           >
-            <v-chip
-              v-for="tranche in activeTranches"
-              :key="tranche.code"
-              size="x-small"
-              variant="flat"
-              :style="{ backgroundColor: tranche.color, color: '#fff' }"
-            >
-              {{ tranche.label }}
-            </v-chip>
+            <div class="d-flex flex-wrap ga-1">
+              <v-chip
+                v-for="tranche in activeTranches"
+                :key="tranche.code"
+                size="x-small"
+                variant="flat"
+                :style="{ backgroundColor: tranche.color, color: '#fff' }"
+              >
+                {{ tranche.label }}
+              </v-chip>
+            </div>
+
+            <div class="d-flex align-center ga-1 stack-mode-controls">
+              <v-btn-toggle
+                v-model="stackMode"
+                density="compact"
+                variant="outlined"
+                mandatory
+                rounded="lg"
+                class="stack-mode-toggle"
+              >
+                <v-btn value="weighted" size="x-small">
+                  <v-icon start size="14" icon="mdi-chart-areaspline" />
+                  Pondéré
+                </v-btn>
+                <v-btn value="raw" size="x-small">
+                  <v-icon start size="14" icon="mdi-chart-bar-stacked" />
+                  Valeurs réelles
+                </v-btn>
+              </v-btn-toggle>
+              <ProfileHelpButton
+                :title="activeStackHelp.title"
+                :paragraphs="activeStackHelp.paragraphs"
+                :hint="activeStackHelp.hint"
+              />
+            </div>
+          </div>
+
+          <v-alert
+            v-if="stackModeBanner"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mb-2"
+          >
+            {{ stackModeBanner }}
+          </v-alert>
+
+          <div
+            v-if="hasDecileProfile && isDecileBundle && scalarSeries.length > 0"
+            class="d-flex align-center ga-1 mb-2"
+          >
+            <span class="text-caption text-medium-emphasis">Parts empilées sans transformation</span>
+            <ProfileHelpButton
+              :title="TIME_SERIES_HELP.decileShares.title"
+              :paragraphs="TIME_SERIES_HELP.decileShares.paragraphs"
+              :hint="TIME_SERIES_HELP.decileShares.hint"
+            />
           </div>
 
           <EChart
-            :key="`${variable}-${partitionMode}-${customBreakpoints.join(',')}-${countryCode}`"
+            :key="`${variable}-${partitionMode}-${customBreakpoints.join(',')}-${countryCode}-${stackMode}`"
             :option="chartOption"
             :loading="loading"
             :error="panelError"
@@ -438,6 +511,14 @@ onMounted(() => {
 <style scoped>
 .custom-partition-panel {
   border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.stack-mode-toggle {
+  flex-shrink: 0;
+}
+
+.stack-mode-controls {
+  flex-shrink: 0;
 }
 
 .custom-partition-actions {

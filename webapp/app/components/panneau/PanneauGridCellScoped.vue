@@ -20,7 +20,7 @@ watch(sourceId, (id) => {
   emit('update:sourceId', id)
 }, { immediate: true })
 
-const shareKey = computed(() => `panel-${props.panelIndex}`)
+const shareKey = computed(() => `panel-${props.panel.id}`)
 
 const panelProps = computed(() => ({
   panelIndex: props.panelIndex,

@@ -22,6 +22,7 @@ import {
   buildStepBreakpoints,
   describeCustomIntervals,
   extractAvailableBoundaries,
+  POPULATION_DISTRIBUTION_BREAKPOINTS,
   isCustomPartitionComplete,
   POPULATION_VIEW_OPTIONS,
   stepFromMode,
@@ -353,6 +354,9 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     }
     if (mode === 'all') {
       return extractAvailableBoundaries(profile.value.points).filter((b) => b > 0)
+    }
+    if (mode === 'distribution') {
+      return [...POPULATION_DISTRIBUTION_BREAKPOINTS]
     }
     const step = stepFromMode(mode)
     return step !== null ? buildStepBreakpoints(step) : []

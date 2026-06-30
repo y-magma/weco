@@ -1,0 +1,49 @@
+---
+description: Toute transformation de données (explicite ou implicite) doit être signalée à l'utilisateur et documentée dans l'UI.
+alwaysApply: true
+---
+
+# Transparence des transformations de données
+
+Toute manipulation des valeurs entre la source (WID, World Bank, etc.) et l'affichage graphique doit être **visible et explicable** pour l'utilisateur.
+
+## Principe
+
+- Ne jamais appliquer une transformation silencieuse (pondération, agrégation, changement d'échelle, interpolation, filtrage) sans l'indiquer.
+- En session dev : **prévenir l'utilisateur** dans la conversation lorsqu'une nouvelle transformation est introduite ou modifiée.
+- Dans l'interface : placer un **`?`** (`ProfileHelpButton.vue` ou équivalent) à côté du contrôle ou du graphique concerné.
+
+## Quand ajouter un `?`
+
+| Situation | Exemple |
+|-----------|---------|
+| Valeur tracée ≠ valeur source | `stackValueFromAverage`, agrégation `buildPartitionPoints` |
+| Échelle non linéaire | log X/Y, symlog, zoom queue haute |
+| Dérivée / approximation | CDF/PDF empirique, Lorenz, spline, trapèzes |
+| Code percentile ≠ granularité native | tranches agrégées, drill-down |
+| Empilement avec sémantique particulière | parts directes vs moyennes pondérées |
+
+## Où documenter le texte d'aide
+
+- Textes centralisés : `webapp/app/visualization/profileHelp.ts`, `timeSeriesHelp.ts`, ou fichier dédié par panneau.
+- Chaque entrée : `title`, `hint` (tooltip court sur le `?`), `paragraphs` (dialogue détaillé).
+- Spec : `spec/C-visualizations/C3-interactions.md` (interactions) et `spec/B-clean-data/B4-transformations-derivees.md` (transformations).
+
+## Implémentation UI
+
+Réutiliser `ProfileHelpButton.vue` :
+
+```vue
+<ProfileHelpButton
+  :title="help.title"
+  :paragraphs="help.paragraphs"
+  :hint="help.hint"
+/>
+```
+
+Placer le bouton **à proximité immédiate** du toggle, du sélecteur ou du titre du graphique qui déclenche la transformation.
+
+## Interdit
+
+- Transformer les données « pour que le graphique soit joli » sans mention dans l'UI.
+- Libeller un axe avec l'unité source si la valeur affichée est dérivée (ex. « monnaie locale constante » sur une contribution pondérée).

@@ -171,7 +171,7 @@ const {
       <ProfileHelpButton
         title="Intervalles d'approximation"
         :paragraphs="[
-          'Choisissez les tranches de population servant d\'intervalles d\'approximation : tranches fines (127 g-percentiles), pas fixe (1 %, 10 %, 25 %) ou personnalisées.',
+          'Choisissez les tranches de population servant d\'intervalles d\'approximation : tranches fines (127 g-percentiles), pas fixe (1 %, 10 %, 25 %), tranche 50 % - 90 % - 99 % - 99,9 % - 100 % ou personnalisées.',
           'En mode personnalisé, choisissez les bornes de fin de chaque intervalle parmi les pourcentages disponibles. Il n\'est pas nécessaire d\'aller jusqu\'à 100 %.',
           'Cliquez sur un intervalle dans « Visibilité des intervalles » pour le masquer ou l\'afficher sur le graphique.',
         ]"

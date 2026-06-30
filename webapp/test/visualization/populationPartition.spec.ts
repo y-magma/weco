@@ -6,6 +6,9 @@ import {
   extractAvailableBoundaries,
   isBoundaryAvailable,
   selectableCustomBoundaries,
+  POPULATION_DISTRIBUTION_BREAKPOINTS,
+  POPULATION_DISTRIBUTION_LABEL,
+  POPULATION_VIEW_OPTIONS,
   TRAPEZOID_POPULATION_VIEW_OPTIONS,
   validateCustomBreakpoints,
   validateNextCustomBreakpoint,
@@ -20,6 +23,19 @@ function fullPoints(): PercentilePoint[] {
     return { percentile, rank, value: rank }
   })
 }
+
+describe('POPULATION_VIEW_OPTIONS', () => {
+  it('includes the WID distribution preset', () => {
+    const distribution = POPULATION_VIEW_OPTIONS.find((option) => option.value === 'distribution')
+    expect(distribution?.label).toBe(POPULATION_DISTRIBUTION_LABEL)
+  })
+})
+
+describe('POPULATION_DISTRIBUTION_BREAKPOINTS', () => {
+  it('matches the WID infographie preset', () => {
+    expect([...POPULATION_DISTRIBUTION_BREAKPOINTS]).toEqual([50, 90, 99, 99.9, 100])
+  })
+})
 
 describe('TRAPEZOID_POPULATION_VIEW_OPTIONS', () => {
   it('includes all, step1 and step10 for the curve selector', () => {

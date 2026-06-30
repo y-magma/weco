@@ -17,7 +17,7 @@ const emit = defineEmits<{
   'update:sourceId': [sourceId: string]
 }>()
 
-const shareKey = computed(() => `panel-${props.panelIndex}`)
+const shareKey = computed(() => `panel-${props.panel.id}`)
 
 const sharedPanelProps = computed(() => ({
   panelIndex: props.panelIndex,

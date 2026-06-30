@@ -209,6 +209,15 @@ export function buildStackedShareTimeSeriesOption(
 }
 
 /**
+ * Mode d'empilement des tranches WID.
+ * - `'weighted'` : valeur × largeur de tranche / 100 — chaque aire représente
+ *    la contribution de ce groupe à la moyenne nationale (défaut historique).
+ * - `'raw'` : valeur brute WID — chaque aire représente la vraie moyenne de la
+ *    tranche telle que publiée par WID.world.
+ */
+export type TrancheStackMode = 'weighted' | 'raw'
+
+/**
  * Aires empilées par tranche de population (style distribution patrimoniale).
  * Une sous-grille par pays lorsque plusieurs pays sont sélectionnés.
  */
@@ -218,6 +227,7 @@ export function buildStackedTimeSeriesOption(
   subtitle?: string,
   yAxisLabel?: string,
   measureKind: MeasureKind = 'average',
+  stackMode: TrancheStackMode = 'weighted',
 ): EChartsOption {
   if (countries.length === 0) {
     return { title: { text: title, left: 'center' } }
@@ -266,7 +276,9 @@ export function buildStackedTimeSeriesOption(
       itemStyle: { color: tranche.color },
       areaStyle: { opacity: 0.88 },
       emphasis: { focus: 'series' as const },
-      data: years.map((year) => stackValueFromAverage(byYear.get(year), tranche.width)),
+      data: years.map((year) => stackMode === 'raw'
+        ? (byYear.get(year) ?? null)
+        : stackValueFromAverage(byYear.get(year), tranche.width)),
     })),
   )
 

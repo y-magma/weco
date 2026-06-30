@@ -4,6 +4,8 @@ import type { PanneauType } from '~/composables/panneauTypes'
 import { formatBoundaryLabel } from '~/visualization/populationPartition'
 import { TIME_SERIES_COMPARE_CUSTOM_SENTINEL } from '~/visualization/timeSeriesPartition'
 import type { TimeSeriesComparePanelSnapshot } from '@application/share/shareSnapshot'
+import { useGrilleGlobalParamsConsumer } from '~/composables/useGrilleGlobalParams'
+import { useGrilleGlobalParamsApply } from '~/composables/useGrilleGlobalParamsApply'
 
 export type PanneauLayout = 'split-column' | 'stacked'
 
@@ -88,6 +90,14 @@ const { triggerSync } = useShareablePanelRegistration(
 )
 
 watch(() => state.serializeSnapshot(), () => triggerSync(), { deep: true })
+
+// Surcharges globales provenant de la page /grille.
+// Pour le panneau comparaison, le pays global remplace tous les pays sélectionnés par un unique pays.
+const globalOverrides = useGrilleGlobalParamsConsumer()
+const isInGrille = globalOverrides !== null
+if (globalOverrides) {
+  useGrilleGlobalParamsApply(globalOverrides, { countryCodes, variable, age, pop })
+}
 
 const { sourceId, sourceLabel } = usePanneauDataSource()
 
@@ -258,7 +268,7 @@ onMounted(() => {
           </v-expand-transition>
 
           <v-expansion-panels
-            v-if="hasPercentileProfile"
+            v-if="hasPercentileProfile && !isInGrille"
             variant="accordion"
             density="compact"
             class="mt-3"

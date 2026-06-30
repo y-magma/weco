@@ -6,6 +6,8 @@ import {
   buildStepBreakpoints,
   describeCustomIntervals,
   formatBracketCode,
+  POPULATION_DISTRIBUTION_BREAKPOINTS,
+  POPULATION_DISTRIBUTION_LABEL,
   type PopulationStep,
 } from '~/visualization/populationPartition'
 
@@ -14,8 +16,8 @@ export type TimeSeriesPartitionMode = 'wealth' | 'step10' | 'step25' | 'custom'
 /** Modes de découpage pour la série temporelle empilée. */
 export type TimeSeriesPopulationMode = 'distribution' | 'whole' | 'step10' | 'step25' | 'custom'
 
-/** Bornes par défaut (style infographie : bas 50 %, 50–90 %, 90–99 %, top 1 %, top 0,1 %). */
-export const TIME_SERIES_DEFAULT_BREAKPOINTS = [50, 90, 99, 99.9, 100] as const
+/** Bornes preset WID (bas 50 %, 50–90 %, 90–99 %, top 1 %, top 0,1 %). */
+export const TIME_SERIES_DEFAULT_BREAKPOINTS = POPULATION_DISTRIBUTION_BREAKPOINTS
 
 /** Preset infographie : bas 50 %, 50–90 %, 90–99 %, top 1 %, top 0,1 %. */
 export const TIME_SERIES_DISTRIBUTION_BREAKPOINTS = TIME_SERIES_DEFAULT_BREAKPOINTS
@@ -23,7 +25,7 @@ export const TIME_SERIES_DISTRIBUTION_BREAKPOINTS = TIME_SERIES_DEFAULT_BREAKPOI
 export const TIME_SERIES_WHOLE_BREAKPOINTS = [100] as const
 
 export const TIME_SERIES_POPULATION_VIEW_OPTIONS: { value: TimeSeriesPopulationMode, label: string }[] = [
-  { value: 'distribution', label: 'Tranche par défaut' },
+  { value: 'distribution', label: POPULATION_DISTRIBUTION_LABEL },
   { value: 'whole', label: 'Ensemble de la population' },
   { value: 'step10', label: 'Tranches de 10 % de pop' },
   { value: 'step25', label: 'Tranches de 25 % de pop' },
@@ -31,7 +33,7 @@ export const TIME_SERIES_POPULATION_VIEW_OPTIONS: { value: TimeSeriesPopulationM
 ]
 
 export const TIME_SERIES_PARTITION_OPTIONS: { value: TimeSeriesPartitionMode, label: string }[] = [
-  { value: 'wealth', label: 'Distribution patrimoniale (défaut)' },
+  { value: 'wealth', label: POPULATION_DISTRIBUTION_LABEL },
   { value: 'step10', label: 'Tranches de 10 % de pop' },
   { value: 'step25', label: 'Tranches de 25 % de pop' },
   { value: 'custom', label: 'Tranches personnalisées' },

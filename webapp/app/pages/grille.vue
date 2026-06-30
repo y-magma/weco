@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { GridPanelModel, PanneauType } from '~/composables/panneauTypes'
 import { EXPLORATION_DISABLED_SOURCE_IDS } from '~/composables/usePanneauDataSource'
+import { useGrilleGlobalParamsProvider } from '~/composables/useGrilleGlobalParams'
 import type {
   GridPanelSnapshot,
   PanelStateSnapshot,
@@ -46,6 +47,7 @@ const sharedSourceId = initialShare?.page === 'grille' && sourceMode.value === '
 
 const { sourceId } = usePanneauDataSourceProvider(sharedSourceId)
 const { countriesError } = useCountriesProvider({ enabled: isSharedSource })
+useGrilleGlobalParamsProvider()
 
 function addPanel(type: PanneauType) {
   panels.value.push({
@@ -57,6 +59,57 @@ function addPanel(type: PanneauType) {
 
 function removePanel(id: number) {
   panels.value = panels.value.filter((panel) => panel.id !== id)
+}
+
+function movePanel(fromIndex: number, toIndex: number) {
+  if (fromIndex === toIndex) return
+  if (fromIndex < 0 || toIndex < 0) return
+  if (fromIndex >= panels.value.length || toIndex >= panels.value.length) return
+
+  const next = [...panels.value]
+  const [moved] = next.splice(fromIndex, 1)
+  if (!moved) return
+  next.splice(toIndex, 0, moved)
+  panels.value = next
+}
+
+const draggedIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+
+function onDragStart(index: number, event: DragEvent) {
+  draggedIndex.value = index
+  event.dataTransfer?.setData('text/plain', String(index))
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
+}
+
+function onDragOver(index: number, event: DragEvent) {
+  event.preventDefault()
+  dragOverIndex.value = index
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+function onDragLeave(index: number) {
+  if (dragOverIndex.value === index) {
+    dragOverIndex.value = null
+  }
+}
+
+function onDrop(targetIndex: number, event: DragEvent) {
+  event.preventDefault()
+  const fromIndex = draggedIndex.value
+  draggedIndex.value = null
+  dragOverIndex.value = null
+  if (fromIndex === null || fromIndex === targetIndex) return
+  movePanel(fromIndex, targetIndex)
+}
+
+function onDragEnd() {
+  draggedIndex.value = null
+  dragOverIndex.value = null
 }
 
 function updatePanelSourceId(id: number, panelSourceId: string) {
@@ -109,10 +162,10 @@ useShareableUrlProvider({
     page: 'grille',
     sourceId: sourceId.value,
     sourceMode: sourceMode.value,
-    panels: panels.value.map((panel, index) => ({
+    panels: panels.value.map((panel) => ({
       type: panel.type,
       sourceId: sourceMode.value === 'per-panel' ? panel.sourceId : undefined,
-      state: shareRegistry.getSnapshot(`panel-${index}`) ?? {},
+      state: shareRegistry.getSnapshot(`panel-${panel.id}`) ?? {},
     })),
   }),
   watchSources: [sourceId, sourceMode, panels],
@@ -179,6 +232,11 @@ useShareableUrlProvider({
       class="mb-4"
     />
 
+    <GrilleGlobalParamsPanel
+      v-if="panels.length > 0"
+      class="mb-4"
+    />
+
     <div
       v-if="panels.length === 0"
       class="empty-grid d-flex align-center justify-center"
@@ -195,7 +253,45 @@ useShareableUrlProvider({
         cols="12"
         md="6"
         class="panneau-grid__cell"
+        :class="{
+          'panneau-grid__cell--dragging': draggedIndex === index,
+          'panneau-grid__cell--drag-over': dragOverIndex === index && draggedIndex !== index,
+        }"
+        @dragover="onDragOver(index, $event)"
+        @dragleave="onDragLeave(index)"
+        @drop="onDrop(index, $event)"
       >
+        <div class="panneau-grid__reorder-bar d-flex align-center ga-1 mb-2">
+          <v-btn
+            icon="mdi-drag"
+            variant="text"
+            size="x-small"
+            draggable="true"
+            aria-label="Déplacer ce panneau par glisser-déposer"
+            class="panneau-grid__drag-handle"
+            @dragstart="onDragStart(index, $event)"
+            @dragend="onDragEnd"
+          />
+          <v-btn
+            icon="mdi-chevron-up"
+            variant="text"
+            size="x-small"
+            :disabled="index === 0"
+            aria-label="Monter ce panneau"
+            @click="movePanel(index, index - 1)"
+          />
+          <v-btn
+            icon="mdi-chevron-down"
+            variant="text"
+            size="x-small"
+            :disabled="index === panels.length - 1"
+            aria-label="Descendre ce panneau"
+            @click="movePanel(index, index + 1)"
+          />
+          <span class="text-caption text-medium-emphasis ms-1">
+            Panneau {{ index + 1 }}
+          </span>
+        </div>
         <PanneauGridCell
           :panel="panel"
           :panel-index="index"
@@ -227,6 +323,25 @@ useShareableUrlProvider({
 .panneau-grid__cell {
   display: flex;
   flex-direction: column;
+  transition: opacity 0.15s ease;
+}
+
+.panneau-grid__cell--dragging {
+  opacity: 0.45;
+}
+
+.panneau-grid__cell--drag-over {
+  outline: 2px dashed rgb(var(--v-theme-primary));
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.panneau-grid__drag-handle {
+  cursor: grab;
+}
+
+.panneau-grid__drag-handle:active {
+  cursor: grabbing;
 }
 
 .panneau-grid__cell :deep(.add-panel-tile) {

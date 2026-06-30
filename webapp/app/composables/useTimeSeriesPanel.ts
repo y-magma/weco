@@ -1,6 +1,6 @@
 import type { EChartsOption } from 'echarts'
 import type { Ref } from 'vue'
-import { buildStackedShareTimeSeriesOption, buildStackedTimeSeriesOption, buildTimeSeriesOption, type CountryTrancheSeries } from '~/visualization/timeSeries'
+import { buildStackedShareTimeSeriesOption, buildStackedTimeSeriesOption, buildTimeSeriesOption, type CountryTrancheSeries, type TrancheStackMode } from '~/visualization/timeSeries'
 import type { CountryOption, DataSeries, SourceIndicator } from '@domain/entities'
 import { WID_DEFAULT_AGE, WID_DEFAULT_POP } from '@domain/catalog/widCodes'
 import {
@@ -107,6 +107,7 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
   const countryCode = ref(options.initialCountryCode ?? 'FR')
   const partitionMode = ref<TimeSeriesPopulationMode>('distribution')
   const customBreakpoints = ref<number[]>([])
+  const stackMode = ref<TrancheStackMode>('weighted')
 
   const timeSeriesRefs: TimeSeriesPanelRefs = {
     countryCode,
@@ -185,6 +186,7 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
         subtitle,
         meta?.unit,
         meta?.kind ?? 'average',
+        stackMode.value,
       )
       return
     }
@@ -425,6 +427,12 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
     }
   }, { deep: true })
 
+  watch(stackMode, () => {
+    if (hasPercentileProfile.value && trancheSeriesByCountry.value.length > 0) {
+      rebuild()
+    }
+  })
+
   watch(variable, (next) => {
     if (hasPercentileProfile.value) {
       constraints.applyOptimisticDefaults(next)
@@ -458,6 +466,7 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
     pop,
     partitionMode,
     customBreakpoints,
+    stackMode,
     countries: panelCountries,
     variables: indicators,
     ageOptions: constraints.ageOptions,
