@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { use } from 'echarts/core'
+import type { ECharts } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, CustomChart, LineChart, ScatterChart } from 'echarts/charts'
 import {
@@ -13,6 +14,12 @@ import {
 } from 'echarts/components'
 import VChart from 'vue-echarts'
 import type { EChartsOption } from 'echarts'
+import {
+  applyChartToolbox,
+  syncToolboxLogButtonStates,
+  toggleChartAxisLog,
+  type ChartToolboxHandlers,
+} from '~/visualization/chartZoom'
 
 /** Chart builders may exceed strict ComposeOption typing; ECharts accepts them at runtime. */
 type ChartOptionProp = EChartsOption | Record<string, unknown>
@@ -32,7 +39,7 @@ use([
   VisualMapComponent,
 ])
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     option: ChartOptionProp | null
     loading?: boolean
@@ -45,6 +52,56 @@ withDefaults(
     height: '360px',
   },
 )
+
+const chartRef = ref<InstanceType<typeof VChart> | null>(null)
+
+function chartInstance(): ECharts | undefined {
+  return chartRef.value?.chart as ECharts | undefined
+}
+
+function bindChartEvents(chart: ECharts) {
+  chart.off('restore', onChartRestore)
+  chart.on('restore', onChartRestore)
+  nextTick(() => syncToolboxLogButtonStates(chart, toolboxHandlers))
+}
+
+function onChartRestore() {
+  const chart = chartInstance()
+  if (chart) {
+    nextTick(() => syncToolboxLogButtonStates(chart, toolboxHandlers))
+  }
+}
+
+watch(chartRef, (component) => {
+  const chart = component?.chart as ECharts | undefined
+  if (chart) bindChartEvents(chart)
+})
+
+watch(
+  () => props.option,
+  () => {
+    nextTick(() => {
+      const chart = chartInstance()
+      if (chart) syncToolboxLogButtonStates(chart, toolboxHandlers)
+    })
+  },
+)
+
+const toolboxHandlers: ChartToolboxHandlers = {
+  onToggleLogX: () => {
+    const chart = chartInstance()
+    if (chart) toggleChartAxisLog(chart, 'xAxis', toolboxHandlers)
+  },
+  onToggleLogY: () => {
+    const chart = chartInstance()
+    if (chart) toggleChartAxisLog(chart, 'yAxis', toolboxHandlers)
+  },
+}
+
+const resolvedOption = computed(() => {
+  if (!props.option) return null
+  return applyChartToolbox(props.option as Record<string, unknown>, toolboxHandlers) as EChartsOption
+})
 
 const emit = defineEmits<{ chartClick: [params: unknown], dataZoom: [params: unknown] }>()
 </script>
@@ -73,7 +130,8 @@ const emit = defineEmits<{ chartClick: [params: unknown], dataZoom: [params: unk
       :style="{ height, width: '100%' }"
     >
       <VChart
-        :option="option as EChartsOption"
+        ref="chartRef"
+        :option="resolvedOption ?? undefined"
         :update-options="{ notMerge: true }"
         autoresize
         class="chart-instance"

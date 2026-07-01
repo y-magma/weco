@@ -265,12 +265,6 @@ describe('buildRankBandItems', () => {
 })
 
 describe('buildProfileOption', () => {
-  it('includes the shared chart toolbox', () => {
-    const option = buildProfileOption(makeProfile())
-    expect(option.toolbox).toBeDefined()
-    expect((option.toolbox as { feature?: { dataZoom?: unknown } }).feature?.dataZoom).toEqual({ yAxisIndex: 'none' })
-  })
-
   it('orders points by rank on a linear X axis (average → interval midpoint)', () => {
     const option = buildProfileOption(makeProfile(), { chartType: 'scatter' })
     expect((option.xAxis as { type: string }).type).toBe('value')

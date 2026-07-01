@@ -7,7 +7,6 @@ import type { PercentilePoint, PercentileProfile } from '@domain/entities'
 import type { ProfileChartLayer } from '@domain/panelState'
 import { measureKind } from '@domain/catalog/widCodes'
 import { parsePercentileInterval } from '@domain/services/percentiles'
-import { buildChartToolbox } from '~/visualization/chartZoom'
 import {
   applyDualAxisZoom as applyScaleDualAxisZoom,
   applyPdfDensityAxisExtent,
@@ -928,7 +927,6 @@ export function buildProfileOption(
       top: 56,
       bottom: PROFILE_CHART_LAYOUT.gridBottom,
     },
-    toolbox: buildChartToolbox(),
     dataZoom: buildProfileDataZoom(valueOnX),
   }
 

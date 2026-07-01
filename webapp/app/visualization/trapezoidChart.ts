@@ -16,7 +16,6 @@ import {
   type AxisScaleBounds,
   type RankAxisScale,
 } from '~/visualization/axisScale'
-import { buildChartToolbox } from '~/visualization/chartZoom'
 import { buildPartitionPoints } from '~/visualization/populationPartition'
 import {
   buildProfileDataZoom,
@@ -374,7 +373,6 @@ function chartShell(
       top: 72,
       bottom: PROFILE_CHART_LAYOUT.gridBottom,
     },
-    toolbox: buildChartToolbox(),
     dataZoom,
   }
 }

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GDP regression + log(Y)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; padding: 1rem; }
+    h1 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: #333; }
+    #error {
+      display: none;
+      max-width: 960px;
+      margin-bottom: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: #fdecea;
+      color: #b71c1c;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+    #chart { width: 100%; max-width: 960px; height: 520px; background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  </style>
+</head>
+<body>
+  <h1>1981–1998 GDP — scatter, régression exponentielle, ln(Y)</h1>
+  <div id="error" role="alert"></div>
+  <div id="chart"></div>
+
+  <!-- Bundles locaux (pas de dépendance CDN) -->
+  <script src="/vendor/echarts.min.js"></script>
+  <script src="/vendor/ecStat.min.js"></script>
+  <script>
+    function showError(message) {
+      const el = document.getElementById('error');
+      el.textContent = message;
+      el.style.display = 'block';
+    }
+
+    if (typeof echarts === 'undefined') {
+      showError('ECharts introuvable. Vérifiez que /vendor/echarts.min.js est bien servi.');
+    } else if (typeof ecStat === 'undefined') {
+      showError('echarts-stat introuvable. Vérifiez que /vendor/ecStat.min.js est bien servi.');
+    } else {
+      try {
+        echarts.registerTransform(ecStat.transform.regression);
+
+        const rawSource = [
+          [1, 4862.4],
+          [2, 5294.7],
+          [3, 5934.5],
+          [4, 7171.0],
+          [5, 8964.4],
+          [6, 10202.2],
+          [7, 11962.5],
+          [8, 14928.3],
+          [9, 16909.2],
+          [10, 18547.9],
+          [11, 21617.8],
+          [12, 26638.1],
+          [13, 34634.4],
+          [14, 46759.4],
+          [15, 58478.1],
+          [16, 67884.6],
+          [17, 74462.6],
+          [18, 79395.7]
+        ];
+
+        const logSource = rawSource.map(function (row) {
+          return [row[0], Math.log(row[1])];
+        });
+
+        const myChart = echarts.init(document.getElementById('chart'));
+
+        const option = {
+          dataset: [
+            { source: rawSource },
+            {
+              transform: {
+                type: 'ecStat:regression',
+                config: { method: 'exponential' }
+              }
+            },
+            { source: logSource }
+          ],
+          title: {
+            text: '1981 - 1998 gross domestic product GDP (trillion yuan)',
+            subtext: 'By ecStat.regression',
+            sublink: 'https://github.com/ecomfe/echarts-stat',
+            left: 'center'
+          },
+          legend: { top: 40 },
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'cross' }
+          },
+          toolbox: {
+            feature: {
+              dataZoom: { yAxisIndex: 'none' },
+              dataView: { readOnly: false },
+              magicType: { type: ['line', 'bar'] },
+              restore: {},
+              saveAsImage: {},
+              myLogY: {
+                show: true,
+                title: 'LogY',
+                icon: 'path://M16 22l-4-4h3V8h-3l4-4 4 4h-3v10h3l-4 4zM6 18l-4-4h3V4h-3l4-4 4 4H7v10h3l-4 4z',
+                onclick: function () {
+                  const currentOption = myChart.getOption();
+                  const currentType = currentOption.yAxis[0].type;
+                  const newType = currentType === 'log' ? 'value' : 'log';
+                  myChart.setOption({ yAxis: [{ type: newType }, {}] });
+                }
+              },
+              myLogX: {
+                show: true,
+                title: 'LogX',
+                icon: 'path://M16 22l-4-4h3V8h-3l4-4 4 4h-3v10h3l-4 4zM6 18l-4-4h3V4h-3l4-4 4 4H7v10h3l-4 4z',
+                onclick: function () {
+                  const currentOption = myChart.getOption();
+                  const currentType = currentOption.xAxis[0].type;
+                  const newType = currentType === 'log' ? 'value' : 'log';
+                  myChart.setOption({ xAxis: { type: newType } });
+                }
+              }
+            }
+          },
+          xAxis: {
+            type: 'value',
+            splitLine: { lineStyle: { type: 'dashed' } }
+          },
+          grid: { show: true, top: 80 },
+          yAxis: [
+            {
+              type: 'value',
+              splitLine: { lineStyle: { type: 'dashed' } }
+            },
+            {
+              type: 'value',
+              name: 'ln(Y)',
+              position: 'right',
+              splitLine: { show: false }
+            }
+          ],
+          series: [
+            {
+              name: 'scatter',
+              type: 'scatter',
+              datasetIndex: 0
+            },
+            {
+              name: 'line',
+              type: 'line',
+              smooth: true,
+              datasetIndex: 1,
+              symbolSize: 0.1,
+              symbol: 'circle',
+              label: { show: true, fontSize: 16 },
+              labelLayout: { dx: -20 },
+              encode: { label: 2, tooltip: 1 }
+            },
+            {
+              name: 'log(Y)',
+              type: 'line',
+              datasetIndex: 2,
+              yAxisIndex: 1,
+              smooth: true,
+              symbol: 'circle',
+              symbolSize: 6
+            }
+          ]
+        };
+
+        myChart.setOption(option);
+        window.addEventListener('resize', function () { myChart.resize(); });
+      } catch (err) {
+        showError('Erreur JavaScript : ' + (err && err.message ? err.message : String(err)));
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>

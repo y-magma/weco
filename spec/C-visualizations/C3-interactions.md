@@ -1,6 +1,6 @@
 # C3 — Échelles, interactions et produit graphique
 
-*Échelles, comportements interactifs et exigences d’interface sur les vues [C1](./C1-graphiques-et-echelles.md), via [ECharts](./C2-representation-graphique/bibliotheques.md) et [traceurs](./C2-representation-graphique/implementation.md).*
+*Échelles, comportements interactifs et exigences d’interface sur les vues [C1](./C1-graphiques-et-echelles.md), via [ECharts](./C2-representation-graphique/bibliotheques.md) et [traceurs](./C2-representation-graphique/implementation.md). Zoom graphique : [C3-zoom](./C3-zoom.md).*
 
 Entrée : [B3 unified](../B-clean-data/B3-clean-vers-unified.md) ou [B4 dérivées](../B-clean-data/B4-transformations-derivees.md).
 
@@ -37,8 +37,8 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne
 | Interaction | Graphiques | Comportement | Priorité | Support ECharts |
 |-------------|------------|--------------|----------|-----------------|
 | **Tooltip** | Tous | Valeur, tranche, pays au survol | MVP | `tooltip` |
-| **Zoom temporel** | Courbe (Série) | Fenêtre d’années, slider + molette | MVP | `dataZoom` |
-| **Zoom / brush tranches** | Bâtons, histogramme | Plage d’abscisse → régression / analyse [D1](../D-statistics/D1-analyses.md) | Phase 2 | `dataZoom` category, `brush` |
+| **Zoom graphique** | Tous (`<EChart />`) | `dataZoom` + toolbox (`dataZoom` rect., `dataView`, `magicType`, back, `restore`, `saveAsImage`) — identique sur tous les rendus | — | [C3-zoom](./C3-zoom.md) · `chartZoom.ts` |
+| **Brush tranches → analyse** | Bâtons, histogramme | Plage d’abscisse → régression / analyse [D1](../D-statistics/D1-analyses.md) | Phase 2 | `brush` |
 | **Drill-down sommet** | Distribution fine (profil) | 0–100 % → tranches 1 % → clic sur ]99 %, 100 %] → 0,1 % → 0,01 % → 0,001 % | **Existant** | `drilldown.ts`, `useExplorationPanel.ts` |
 | **Tranches 10 % (courbe)** | Profil (`PanneauExploration`) | Sélecteur « Tranches de population (courbe) » : agrégation en intervalles de 10 % (]0, 10 %], …, ]90, 100 %]) | **Existant** | `populationPartition.ts`, `useExplorationPanel.ts` |
 | **Tranche 50 % - 90 % - 99 % - 99,9 % - 100 %** | Profil (intervalles d'approximation), série temporelle WID | Preset WID : ]0, 50 %], ]50, 90 %], ]90, 99 %], ]99, 99,9 %], ]99,9, 100 %] — libellé « Tranche 50% - 90% - 99% - 99.9% - 100% » | **Existant** | `populationPartition.ts`, `timeSeriesPartition.ts` |
@@ -47,8 +47,7 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne
 | **Bascule lin / log abscisse** | Courbe, nuage, distribution | Échelle X indépendante de Y | Phase 2 | `xAxis.type: 'log'` |
 | **Bascule lin / log ordonnée** | Courbe, bâtons, nuage | Échelle Y indépendante de X | Phase 2 | `yAxis.type: 'log'` |
 | **Légende cliquable** | Courbe multi-séries | Masquer / afficher une série | MVP | `legend` |
-| **Export image** | Courbe MVP, puis tous | PNG depuis la toolbox | MVP / P2 | `toolbox.saveAsImage` |
-| **Réinitialiser vue** | Tous avec zoom | Retour à la plage initiale | MVP | `toolbox.restore` |
+| **Export image** | Tous | PNG via `toolbox.saveAsImage` | — | [C3-zoom](./C3-zoom.md) |
 | **Lien partageable** | Pages `/panneau/exploration`, `/panneau/temps`, `/grille` | Bouton global « Partager » (`ShareUrlButton.vue`) ; query lisible `?v=1&source=…&country=…` (legacy `s=` base64 accepté) ; sync live URL (`useShareableUrl.ts`, `lib/application/share/`) | MVP | **Existant** |
 | **Aide transformations (`?`)** | Tous graphiques avec dérivée ou pondération | Icône `?` (`ProfileHelpButton.vue`) à côté du contrôle concerné ; textes centralisés (`profileHelp.ts`, `timeSeriesHelp.ts`) ; bandeau info si transformation active non évidente | **Existant** | règle `.cursor/rules/data-transformations-disclosure.mdc` |
 
