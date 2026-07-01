@@ -5,6 +5,8 @@ import {
   isShareUrlTooLong,
 } from '@application/share/shareCodec'
 import type { SharePageId, ShareSnapshotV1 } from '@application/share/shareSnapshot'
+import type { WatchSource } from 'vue'
+import type { LocationQuery } from 'vue-router'
 
 const SHARE_REGISTRY_KEY = Symbol('shareRegistry')
 const SHARE_SYNC_KEY = Symbol('shareSync')
@@ -56,6 +58,37 @@ function createShareRegistry(): ShareRegistry {
   }
 }
 
+function normalizeRouteQuery(
+  query: LocationQuery,
+): Record<string, string | string[] | undefined> {
+  const normalized: Record<string, string | string[] | undefined> = {}
+  for (const [key, value] of Object.entries(query)) {
+    if (value == null) continue
+    if (Array.isArray(value)) {
+      const filtered = value.filter((item): item is string => item != null)
+      if (filtered.length > 0) normalized[key] = filtered
+    } else {
+      normalized[key] = value
+    }
+  }
+  return normalized
+}
+
+function routeQueryToSearchParams(query: LocationQuery): URLSearchParams {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(query)) {
+    if (value == null) continue
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item != null) params.append(key, item)
+      }
+    } else {
+      params.set(key, value)
+    }
+  }
+  return params
+}
+
 function normalizeRoutePath(path: string): string {
   if (path.length > 1 && path.endsWith('/')) {
     return path.slice(0, -1)
@@ -89,14 +122,7 @@ export function useShareableUrlProvider(options: ShareableUrlProviderOptions) {
     const snapshot = options.buildSnapshot(registry)
     const query = encodeShareQuery(snapshot)
     const nextQuery = new URLSearchParams(query).toString()
-    const currentQuery = new URLSearchParams(
-      Object.fromEntries(
-        Object.entries(route.query).flatMap(([key, value]) => {
-          if (value == null) return []
-          return Array.isArray(value) ? value.map((item) => [key, item]) : [[key, value]]
-        }),
-      ),
-    ).toString()
+    const currentQuery = routeQueryToSearchParams(route.query).toString()
     if (nextQuery === currentQuery) return
 
     router.replace({ path: route.path, query })
@@ -135,10 +161,7 @@ export function useShareableUrlProvider(options: ShareableUrlProviderOptions) {
     scheduleSync,
     hydrating,
     decodeInitialSnapshot: () => {
-      const decoded = decodeShareQuery(
-        route.query as Record<string, string | string[] | undefined>,
-        options.page,
-      )
+      const decoded = decodeShareQuery(normalizeRouteQuery(route.query), options.page)
       if (!decoded || decoded.page !== options.page) return null
       return decoded
     },
@@ -214,8 +237,8 @@ export function useShareableUrl() {
 }
 
 export function decodeRouteShareSnapshot(
-  query: Record<string, string | string[] | null | undefined>,
+  query: LocationQuery,
   page: SharePageId,
 ): ShareSnapshotV1 | null {
-  return decodeShareQuery(query, page)
+  return decodeShareQuery(normalizeRouteQuery(query), page)
 }

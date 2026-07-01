@@ -11,7 +11,7 @@ import { createOecdIddDataSource } from '@infrastructure/data-sources/oecd-idd/o
 import { createWorldBankDataSource } from '@infrastructure/data-sources/worldbank/worldBankSource'
 import { PIP_DECILE_BUNDLE_ID } from '@infrastructure/data-sources/worldbank/worldBankDeciles'
 import { resetWorldBankCountryCache } from '@infrastructure/data-sources/worldbank/worldBankCountries'
-import { OECD_DECILE_BUNDLE_ID } from '@infrastructure/data-sources/oecd-idd/oecdDeciles'
+import { OECD_DECILE_BUNDLE_ID } from '@domain/catalog/oecdDeciles'
 import { createWidDataSource } from '@infrastructure/data-sources/wid/widSource'
 import { resetApplicationContainer } from '@application/bootstrap/container'
 import { ListCountriesUseCase } from '@application/use-cases/ListCountriesUseCase'

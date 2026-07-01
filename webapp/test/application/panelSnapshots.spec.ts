@@ -24,7 +24,7 @@ describe('panelSnapshots', () => {
       drillLevel: ref(1),
       showHistogram: ref(true),
       showTrapezoids: ref(false),
-      logRichZoom: ref(false),
+      logRichScale: ref(false),
       logScaleX: ref(true),
       logScaleY: ref(false),
       originalViewMode: ref<'line' | 'scatter' | 'bar'>('line'),

@@ -5,7 +5,7 @@ import {
   isOecdDecileBundleVariable,
   isOecdDecileRatioId,
   OECD_DECILE_BUNDLE_ID,
-} from '@infrastructure/data-sources/oecd-idd/oecdDeciles'
+} from '@domain/catalog/oecdDeciles'
 import { listOecdCountries, toIso3 } from '@infrastructure/data-sources/oecd-idd/oecdIddCountries'
 import { createOecdIddDataSource } from '@infrastructure/data-sources/oecd-idd/oecdIddSource'
 

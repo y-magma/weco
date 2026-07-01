@@ -1,8 +1,7 @@
 import type { EChartsOption } from 'echarts'
 import type { Ref } from 'vue'
 import { buildTimeSeriesOption } from '~/visualization/timeSeries'
-import type { CountryOption, DataSeries, SourceIndicator } from '@domain/entities'
-import { WID_DEFAULT_AGE, WID_DEFAULT_POP } from '@domain/catalog/widCodes'
+import type { CountryOption, DataSeries } from '@domain/entities'
 import {
   standardPopulationBoundaries,
   TIME_SERIES_COMPARE_CUSTOM_SENTINEL,
@@ -13,12 +12,8 @@ import {
   formatBracketCode,
   isBoundaryAvailable,
 } from '~/visualization/populationPartition'
-import { PanelScope, yearCountLabel } from '~/composables/panelBase'
-import { useWidParamConstraints } from '~/composables/useWidParamConstraints'
-import {
-  getDecileBundleConfig,
-  isDecileBundleVariable,
-} from '@domain/catalog/decileBundles'
+import { yearCountLabel } from '~/composables/panelBase'
+import { createTimeSeriesSharedContext, defaultTimeSeriesVariable } from '~/composables/timeSeriesPanelShared'
 import type { TimeSeriesComparePanelSnapshot } from '@application/share/shareSnapshot'
 import {
   applyTimeSeriesCompareSnapshot,
@@ -41,91 +36,47 @@ export type { TimeSeriesComparePanelSnapshot }
 export function createTimeSeriesComparePanelState(
   options: TimeSeriesComparePanelStateOptions = {},
 ) {
-  const app = useApplication()
-  const { selectedSource } = usePanneauDataSource()
-  const scope = new PanelScope(app, options.countries)
-
-  const hasPercentileProfile = computed(
-    () => selectedSource.value.capabilities?.percentileProfile === true,
-  )
-
-  const hasDecileProfile = computed(
-    () => selectedSource.value.capabilities?.decileProfile === true,
-  )
-
-  const indicators = computed<readonly SourceIndicator[]>(
-    () => selectedSource.value.indicators ?? [],
-  )
-
-  const variable = ref(
-    options.initialVariable ?? indicators.value[0]?.id ?? 'ahweal',
-  )
-
-  const isDecileBundle = computed(() => isDecileBundleVariable(variable.value))
-  const decileBundleConfig = computed(() => getDecileBundleConfig(variable.value))
-  const decileBundleOptions = computed(() => decileBundleConfig.value?.options ?? [])
-  const variableMeta = computed(() =>
-    indicators.value.find((item) => item.id === variable.value),
-  )
-
-  const age = ref('')
-  const pop = ref('')
-
-  watch(hasPercentileProfile, (enabled) => {
-    if (enabled) {
-      age.value = WID_DEFAULT_AGE
-      pop.value = WID_DEFAULT_POP
-    } else {
-      age.value = ''
-      pop.value = ''
-    }
-  }, { immediate: true })
-
   const countryCodes = ref<string[]>(options.initialCountryCodes ?? ['FR', 'US'])
+  const paramCountryCode = ref(countryCodes.value[0] ?? 'FR')
+
+  const shared = createTimeSeriesSharedContext({
+    countries: options.countries,
+    panelIndex: options.panelIndex,
+    initialVariable: options.initialVariable,
+    constraintsCountryCode: paramCountryCode,
+  })
+  const { scope } = shared
+
   const percentile = ref(options.initialPercentile ?? 'p0p50')
   const decileSubSelection = ref('')
-  watch(decileBundleOptions, (options) => {
-    if (options.length > 0 && !options.some((item) => item.id === decileSubSelection.value)) {
-      decileSubSelection.value = options[0]!.id
+  watch(shared.decileBundleOptions, (bundleOptions) => {
+    if (bundleOptions.length > 0 && !bundleOptions.some((item) => item.id === decileSubSelection.value)) {
+      decileSubSelection.value = bundleOptions[0]!.id
     }
   }, { immediate: true })
   const customLo = ref(50)
   const customHi = ref(51)
-  const paramCountryCode = ref(countryCodes.value[0] ?? 'FR')
 
   const compareRefs: TimeSeriesComparePanelRefs = {
     countryCodes,
-    variable,
+    variable: shared.variable,
     percentile,
     customLo,
     customHi,
     decileSubSelection,
-    age,
-    pop,
+    age: shared.age,
+    pop: shared.pop,
   }
 
   if (options.initialSnapshot) {
     applyTimeSeriesCompareSnapshot(compareRefs, options.initialSnapshot)
   }
 
-  const constraintsEnabled = computed(() => hasPercentileProfile.value)
-
-  const constraints = useWidParamConstraints({
-    app: scope.app,
-    source: selectedSource,
-    variable,
-    params: { countryCode: paramCountryCode, age, pop },
-    countries: scope.countries,
-    enabled: constraintsEnabled,
-  })
-
   const seriesList = ref<DataSeries[]>([])
   const chartOption = ref<EChartsOption | null>(null)
 
   const populationOptions = TIME_SERIES_COMPARE_POPULATION_OPTIONS
   const availableBoundaries = standardPopulationBoundaries()
-
-  const sourceOptions = computed(() => ({ source: selectedSource.value }))
 
   const customIntervalValidation = computed(() => {
     if (percentile.value !== TIME_SERIES_COMPARE_CUSTOM_SENTINEL) {
@@ -155,7 +106,7 @@ export function createTimeSeriesComparePanelState(
   })
 
   const activePercentileCode = computed(() => {
-    if (!hasPercentileProfile.value) return undefined
+    if (!shared.hasPercentileProfile.value) return undefined
     if (percentile.value !== TIME_SERIES_COMPARE_CUSTOM_SENTINEL) {
       return percentile.value
     }
@@ -165,7 +116,7 @@ export function createTimeSeriesComparePanelState(
   })
 
   const populationLabel = computed(() => {
-    if (!hasPercentileProfile.value) return ''
+    if (!shared.hasPercentileProfile.value) return ''
     if (percentile.value === TIME_SERIES_COMPARE_CUSTOM_SENTINEL) {
       if (!customIntervalValidation.value.valid) {
         return 'Tranche personnalisée'
@@ -176,20 +127,25 @@ export function createTimeSeriesComparePanelState(
   })
 
   const decileSubLabel = computed(() =>
-    decileBundleOptions.value.find((item) => item.id === decileSubSelection.value)?.label
+    shared.decileBundleOptions.value.find((item) => item.id === decileSubSelection.value)?.label
       ?? decileSubSelection.value,
   )
+
+  const clearChart = () => {
+    seriesList.value = []
+    chartOption.value = null
+  }
 
   const rebuild = () => {
     if (seriesList.value.length === 0) {
       chartOption.value = null
       return
     }
-    const meta = variableMeta.value
-    const title = meta?.label ?? variable.value
-    const subtitle = hasPercentileProfile.value
+    const meta = shared.variableMeta.value
+    const title = meta?.label ?? shared.variable.value
+    const subtitle = shared.hasPercentileProfile.value
       ? `${populationLabel.value} · ${seriesList.value.length} pays`
-      : isDecileBundle.value
+      : shared.isDecileBundle.value
         ? `${decileSubLabel.value} · ${seriesList.value.length} pays`
         : `${seriesList.value.length} pays`
     chartOption.value = buildTimeSeriesOption(seriesList.value, title, {
@@ -205,19 +161,19 @@ export function createTimeSeriesComparePanelState(
       countryCodes.value = codes
     }
 
+    paramCountryCode.value = codes[0] ?? 'FR'
+
     const resolvedPercentile = activePercentileCode.value
-    if (hasPercentileProfile.value && !resolvedPercentile) {
+    if (shared.hasPercentileProfile.value && !resolvedPercentile) {
       scope.error.value = customIntervalValidation.value.error
         ?? 'Définissez une tranche personnalisée valide.'
-      seriesList.value = []
-      chartOption.value = null
+      clearChart()
       return
     }
 
-    if (isDecileBundle.value && !decileSubSelection.value) {
-      scope.error.value = `Sélectionnez un ${decileBundleConfig.value?.subSelectorLabel?.toLowerCase() ?? 'sous-indicateur'}.`
-      seriesList.value = []
-      chartOption.value = null
+    if (shared.isDecileBundle.value && !decileSubSelection.value) {
+      scope.error.value = `Sélectionnez un ${shared.decileBundleConfig.value?.subSelectorLabel?.toLowerCase() ?? 'sous-indicateur'}.`
+      clearChart()
       return
     }
 
@@ -229,19 +185,18 @@ export function createTimeSeriesComparePanelState(
       const result = await scope.app.loadTimeSeries.execute({
         countryCodes: codes,
         params: {
-          variable: isDecileBundle.value ? decileBundleConfig.value!.bundleId : variable.value,
-          age: age.value,
-          pop: pop.value,
+          variable: shared.isDecileBundle.value ? shared.decileBundleConfig.value!.bundleId : shared.variable.value,
+          age: shared.age.value,
+          pop: shared.pop.value,
           ...(resolvedPercentile ? { percentile: resolvedPercentile } : {}),
-          ...(isDecileBundle.value ? { percentile: decileSubSelection.value } : {}),
+          ...(shared.isDecileBundle.value ? { percentile: decileSubSelection.value } : {}),
         },
         countryLabel: scope.countryLabel.bind(scope),
-      }, sourceOptions.value)
+      }, shared.sourceOptions.value)
 
       if (result.series.length === 0) {
         scope.error.value = result.failures[0] ?? 'Échec du chargement des séries'
-        seriesList.value = []
-        chartOption.value = null
+        clearChart()
         return
       }
 
@@ -254,100 +209,81 @@ export function createTimeSeriesComparePanelState(
       rebuild()
     } catch (err) {
       scope.error.value = err instanceof Error ? err.message : 'Échec du chargement des séries'
-      seriesList.value = []
-      chartOption.value = null
+      clearChart()
     } finally {
       scope.loading.value = false
     }
   }
 
   const init = async () => {
-    await scope.initCountries(selectedSource.value, variable.value)
+    await scope.initCountries(shared.selectedSource.value, shared.variable.value)
     paramCountryCode.value = countryCodes.value[0] ?? 'FR'
-    if (hasPercentileProfile.value) {
-      await constraints.loadCountriesForVariable(variable.value)
-      await constraints.refreshConstraints('variableChange')
+    if (shared.hasPercentileProfile.value) {
+      await shared.constraints.loadCountriesForVariable(shared.variable.value)
+      await shared.constraints.refreshConstraints('variableChange')
     }
     await load()
   }
 
-  const refreshParamsAndLoad = async (mode: 'variableChange' | 'clamp') => {
-    paramCountryCode.value = countryCodes.value[0] ?? 'FR'
-    if (hasPercentileProfile.value) {
-      const ready = await constraints.refreshConstraints(mode)
-      if (!ready) {
-        scope.error.value = constraints.constraintsError.value ?? 'Paramètres indisponibles pour cette sélection.'
-        seriesList.value = []
-        chartOption.value = null
-        return
-      }
-    }
-    await load()
-  }
-
-  watch([countryCodes, percentile, decileSubSelection, customLo, customHi, age, pop], () => {
-    void refreshParamsAndLoad('clamp')
+  watch([countryCodes, percentile, decileSubSelection, customLo, customHi, shared.age, shared.pop], () => {
+    void shared.refreshParamsAndLoad('clamp', load, clearChart)
   }, { deep: true })
 
-  watch(variable, (next) => {
-    if (hasPercentileProfile.value) {
-      constraints.applyOptimisticDefaults(next)
-      void constraints.loadCountriesForVariable(next).then(() => refreshParamsAndLoad('variableChange'))
+  watch(shared.variable, (next) => {
+    if (shared.hasPercentileProfile.value) {
+      shared.constraints.applyOptimisticDefaults(next)
+      void shared.constraints.loadCountriesForVariable(next).then(() =>
+        shared.refreshParamsAndLoad('variableChange', load, clearChart),
+      )
     } else {
       void load()
     }
   })
 
-  watch(() => selectedSource.value.id, async () => {
-    const panelIndex = options.panelIndex ?? 0
-    const nextVariable = selectedSource.value.indicators?.[panelIndex]?.id
-      ?? selectedSource.value.indicators?.[0]?.id
+  watch(() => shared.selectedSource.value.id, async () => {
+    const nextVariable = defaultTimeSeriesVariable(shared.selectedSource.value, shared.panelIndex)
     if (nextVariable) {
-      variable.value = nextVariable
+      shared.variable.value = nextVariable
     }
-    await scope.initCountries(selectedSource.value, variable.value)
+    await scope.initCountries(shared.selectedSource.value, shared.variable.value)
     paramCountryCode.value = countryCodes.value[0] ?? 'FR'
-    if (hasPercentileProfile.value) {
-      await constraints.loadCountriesForVariable(variable.value)
-      await constraints.refreshConstraints('variableChange')
+    if (shared.hasPercentileProfile.value) {
+      await shared.constraints.loadCountriesForVariable(shared.variable.value)
+      await shared.constraints.refreshConstraints('variableChange')
     }
     await load()
   })
 
-  const panelCountries = computed(() =>
-    hasPercentileProfile.value ? constraints.countries.value : scope.countries.value,
-  )
-
   return {
     countryCodes,
-    variable,
+    variable: shared.variable,
     percentile,
     customLo,
     customHi,
     availableBoundaries,
     customIntervalValidation,
     activePercentileCode,
-    age,
-    pop,
-    countries: panelCountries,
-    variables: indicators,
-    ageOptions: constraints.ageOptions,
-    popOptions: constraints.popOptions,
-    paramsLoading: constraints.constraintsLoading,
-    yearRangeLabel: constraints.yearRangeLabel,
+    age: shared.age,
+    pop: shared.pop,
+    countries: shared.panelCountries,
+    variables: shared.indicators,
+    ageOptions: shared.constraints.ageOptions,
+    popOptions: shared.constraints.popOptions,
+    paramsLoading: shared.constraints.constraintsLoading,
+    yearRangeLabel: shared.constraints.yearRangeLabel,
     populationOptions,
     loading: scope.loading,
     error: scope.error,
     loadWarning: scope.loadWarning,
     seriesList,
     chartOption,
-    variableMeta,
-    hasPercentileProfile,
-    hasDecileProfile,
-    isDecileBundle,
+    variableMeta: shared.variableMeta,
+    hasPercentileProfile: shared.hasPercentileProfile,
+    hasDecileProfile: shared.hasDecileProfile,
+    isDecileBundle: shared.isDecileBundle,
     decileSubSelection,
-    decileBundleOptions,
-    decileBundleConfig,
+    decileBundleOptions: shared.decileBundleOptions,
+    decileBundleConfig: shared.decileBundleConfig,
     decileSubLabel,
     populationLabel,
     yearCountLabel: computed(() =>

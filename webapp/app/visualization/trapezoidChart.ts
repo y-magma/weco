@@ -40,7 +40,7 @@ const WATERMARK_COLOR = '#1565C0'
 
 export interface TrapezoidChartOptions {
   /** Espacement −log₁₀(100 − rang) : zoom sur la queue des plus riches. */
-  logRichZoom?: boolean
+  logRichScale?: boolean
   /** Échelle log native sur le rang (abscisse) ; rang ≤ 0 masqué. */
   logScaleX?: boolean
   logScaleY?: boolean
@@ -151,14 +151,14 @@ function trapezoidSeriesData(
 }
 
 function resolveTrapezoidAxisScales(
-  logRichZoom: boolean,
+  logRichScale: boolean,
   logScaleX: boolean,
   logScaleY: boolean,
   variableKind: MeasureKind = 'average',
 ) {
   const rank = logScaleX
     ? strictLogRankScale
-    : logRichZoom
+    : logRichScale
       ? rankTopLogScale
       : linearRankScale
   return {
@@ -214,12 +214,12 @@ function buildTrapezoidContext(profile: PercentileProfile, options: TrapezoidCha
   const baseline = options.baseline ?? 0
   const trapezoidBreakpoints = options.trapezoidBreakpoints ?? []
   const showHistogram = options.showWatermarkBands === true && trapezoidBreakpoints.length > 0
-  const logRichZoom = options.logRichZoom === true
+  const logRichScale = options.logRichScale === true
   const logScaleX = options.logScaleX === true
   const logScaleY = options.logScaleY === true
 
   const { rank: rankScale, value: valueScale } = resolveTrapezoidAxisScales(
-    logRichZoom,
+    logRichScale,
     logScaleX,
     logScaleY,
     measureKind(profile.variable),
@@ -239,7 +239,7 @@ function buildTrapezoidContext(profile: PercentileProfile, options: TrapezoidCha
       rankAxisConfig.min = bounds.min
       rankAxisConfig.max = bounds.max
     }
-  } else if (logRichZoom) {
+  } else if (logRichScale) {
     rankScale.applyRankExtent(rankAxisConfig, { rankLo: rankExtentStart, rankHi: rankExtentEnd })
   } else {
     rankAxisConfig.min = rankExtentStart
@@ -292,7 +292,7 @@ function buildTrapezoidContext(profile: PercentileProfile, options: TrapezoidCha
     }),
     baseline,
     plotBaseline,
-    logRichZoom,
+    logRichScale,
     logScaleX,
     logScaleY,
   }

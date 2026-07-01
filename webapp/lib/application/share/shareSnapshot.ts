@@ -1,7 +1,9 @@
-import type { ProfileChartLayer } from '~/visualization/profile'
-import type { PopulationViewMode } from '~/visualization/populationPartition'
-import type { TimeSeriesPopulationMode } from '~/visualization/timeSeriesPartition'
-import type { TrapezoidMethod } from '~/visualization/trapezoidApproximation'
+import type {
+  ProfileChartLayer,
+  PopulationViewMode,
+  TimeSeriesPopulationMode,
+  TrapezoidMethod,
+} from '@domain/panelState'
 
 export type SharePageId = 'exploration' | 'temps' | 'grille'
 export type ShareSourceMode = 'shared' | 'per-panel'
@@ -20,7 +22,7 @@ export interface ExplorationPanelSnapshot {
   drillLevel?: number
   showHistogram?: boolean
   showTrapezoids?: boolean
-  logRichZoom?: boolean
+  logRichScale?: boolean
   logScaleX?: boolean
   logScaleY?: boolean
   originalViewMode?: ProfileChartLayer

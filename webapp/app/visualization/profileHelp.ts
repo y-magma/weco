@@ -23,7 +23,6 @@ export const PROFILE_HELP = {
       'Ligne : segments reliant les points consécutifs (courbe polyligne). Même règle de positionnement sur l’axe population que le nuage.',
       'Vous pouvez sélectionner deux types en même temps : Bandes + Nuage ou Bandes + Ligne superposent les bandes en filigrane sous le nuage ou la ligne.',
       'En superposition, les bandes suivent le découpage population choisi ; la ligne ou le nuage affiche toujours les tranches fines des données brutes (jusqu’à 127 g-percentiles).',
-      'À l’ouverture, les axes sont cadrés sur les bandes ; les curseurs de zoom permettent d’élargir la vue jusqu’à l’étendue complète de la ligne ou du nuage.',
     ],
   },
   empiricalCdf: {
@@ -83,6 +82,15 @@ export const PROFILE_HELP = {
       'Profil standard : échelle logarithmique sur la richesse (log₁₀). Seules les valeurs strictement positives sont affichées ; les valeurs ≤ 0 sont masquées (trou dans la courbe).',
       'CDF empirique : espacement logarithmique sur la part de population (même transform −log₁₀(100 − rang) que pour l’axe X en profil standard), graduations en rang % réel.',
       'PDF empirique : échelle logarithmique sur la densité f. Les valeurs ≤ 0 sont masquées.',
+    ],
+  },
+  logRichScale: {
+    title: 'Échelle log queue haute (rang)',
+    hint: 'Projection rank top-log sur l’axe population',
+    paragraphs: [
+      'Change la projection de l’axe rang (pas un zoom de navigation) : espacement −log₁₀(100 − rang), graduations en rang % réel (0 % à gauche, 100 % à droite).',
+      'Étire visuellement la queue haute de la distribution (ultra-riches) sur les vues trapèzes et profil original.',
+      'Incompatible avec l’échelle log stricte sur le rang (log X) : les deux bascules s’excluent mutuellement.',
     ],
   },
   showAllPercentiles: {

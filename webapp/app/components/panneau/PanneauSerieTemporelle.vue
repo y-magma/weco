@@ -496,7 +496,7 @@ onMounted(() => {
           </div>
 
           <EChart
-            :key="`${variable}-${partitionMode}-${customBreakpoints.join(',')}-${countryCode}-${stackMode}`"
+            :key="`${variable}-${countryCode}`"
             :option="chartOption"
             :loading="loading"
             :error="panelError"

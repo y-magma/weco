@@ -7,9 +7,10 @@
  *   - découpage personnalisé (bornes de fin saisies par l'utilisateur)
  */
 import type { PercentilePoint } from '@domain/entities'
+import type { PopulationViewMode } from '@domain/panelState'
 import { parsePercentileInterval } from '@domain/services/percentiles'
 
-export type PopulationViewMode = 'all' | 'step1' | 'step10' | 'step25' | 'distribution' | 'custom'
+export type { PopulationViewMode } from '@domain/panelState'
 
 export type PopulationStep = 1 | 10 | 25
 

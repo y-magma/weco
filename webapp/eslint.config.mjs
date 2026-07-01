@@ -21,8 +21,8 @@ export default withNuxt({
           message: 'Couche application : infrastructure autorisée uniquement dans bootstrap/.',
         },
         {
-          group: ['vue', 'vue/**', 'echarts', 'echarts/**'],
-          message: 'Couche application : pas de Vue ni ECharts.',
+          group: ['vue', 'vue/**', 'echarts', 'echarts/**', 'app/*', 'app/**', '~/visualization/*', '~/visualization/**'],
+          message: 'Couche application : pas de Vue, ECharts ni visualization.',
         },
       ],
     }],

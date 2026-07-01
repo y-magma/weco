@@ -1,12 +1,14 @@
 # Boîte à outils de visualisations
 
-Nuxt + Vuetify + TypeScript SPA pour explorer les données WID.world :
+Nuxt + Vuetify + TypeScript SPA pour explorer les données d'inégalité :
 profils sur les g-percentiles, séries temporelles, grilles composables et import CSV.
+
+Sources supportées : **WID.world**, **OECD IDD**, **World Bank** (PIP + WDI).
 
 ## Features
 
 - Page d'accueil et navigation responsive (Vuetify)
-- Couche de sources de données extensible avec adaptateur **WID.world**
+- Couche de sources de données extensible : adaptateurs **WID.world**, **OECD IDD**, **World Bank**
 - **Hub `/panneau`** : deux boîtes à outils (série temporelle, profil d'inégalité et approximations)
 - **Profil d'inégalité et approximations** : profil WID, trapèzes/rectangles, échelles log, drill-down, densités, Lorenz
 - **Série temporelle** : évolution par tranches de population pour un pays, axes compacts
@@ -32,6 +34,9 @@ data layer and chart builders (no network, browser, or Vue component needed).
 ```bash
 npm test            # single run
 npm run test:watch  # watch mode
+npm run lint
+npm run typecheck
+npm run check
 ```
 
 See [`test/README.md`](./test/README.md) for the per-suite coverage breakdown.
@@ -80,12 +85,12 @@ of synthetic fallback data.
 
 ## Project structure
 
-See [`STRUCTURE.md`](./STRUCTURE.md) for the full application map (pages, composables, charts, data layer).
+See [`STRUCTURE.md`](./STRUCTURE.md) for the full application map (pages, composables, visualization, data layer).
 
 ```
 webapp/
-├── app/                  # Nuxt UI (pages, layouts, components, composables)
-├── lib/                  # Pure logic (charts, data-sources, domain, csv)
+├── app/                  # Nuxt UI (pages, layouts, components, composables, visualization/)
+├── lib/                  # Logique pure (domain, application, infrastructure)
 ├── test/                 # Vitest unit tests
 └── nuxt.config.ts
 ```

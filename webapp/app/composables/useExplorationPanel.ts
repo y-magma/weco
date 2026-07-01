@@ -7,6 +7,7 @@ import {
   thresholdVariableFor,
   WID_STRICT_DISTRIBUTION_VARIABLES,
 } from '@domain/catalog/widCodes'
+import { PanelScope } from '~/composables/panelBase'
 import { useWidParamConstraints } from '~/composables/useWidParamConstraints'
 import {
   buildDrilldownPoints,
@@ -122,8 +123,8 @@ export type { ExplorationPanelSnapshot }
 
 export function createExplorationPanelState(options: ExplorationPanelStateOptions = {}) {
   const app = useApplication()
+  const scope = new PanelScope(app, options.countries)
   const { selectedSource } = usePanneauDataSource()
-  const sharedCountries = options.countries
 
   const hasPercentileProfile = computed(
     () => selectedSource.value.capabilities?.percentileProfile === true,
@@ -155,7 +156,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   const method = ref<TrapezoidMethod>('zero')
   const showHistogram = ref(true)
   const showTrapezoids = ref(true)
-  const logRichZoom = ref(false)
+  const logRichScale = ref(false)
   const logScaleX = ref(false)
   const logScaleY = ref(false)
   const originalViewMode = ref<ProfileChartLayer>('line')
@@ -183,7 +184,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     drillLevel,
     showHistogram,
     showTrapezoids,
-    logRichZoom,
+    logRichScale,
     logScaleX,
     logScaleY,
     originalViewMode,
@@ -209,23 +210,17 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     rebuild()
   }
 
-  const loading = ref(false)
-  const error = ref<string | null>(null)
-
-  const localCountries = ref<CountryOption[]>([])
-  const sharedCountriesRef = sharedCountries ?? localCountries
-
-  const decileYears = ref<number[]>([])
-  const decileYearsLoading = ref(false)
-
   const constraints = useWidParamConstraints({
-    app,
+    app: scope.app,
     source: selectedSource,
     variable,
     params: { countryCode, age, pop, year },
-    countries: sharedCountriesRef,
+    countries: scope.countries,
     enabled: hasPercentileProfile,
   })
+
+  const decileYears = ref<number[]>([])
+  const decileYearsLoading = ref(false)
 
   const profile = ref<PercentileProfile | null>(null)
   const approximation = ref<MeanPreservingApproximation | null>(null)
@@ -251,7 +246,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   })
 
   const countries = computed(() =>
-    hasDecileProfileOnly.value ? sharedCountriesRef.value : constraints.countries.value,
+    hasDecileProfileOnly.value ? scope.countries.value : constraints.countries.value,
   )
   const ageOptions = constraints.ageOptions
   const popOptions = constraints.popOptions
@@ -423,7 +418,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
       trapezoidBreakpoints: breakpoints.length > 0 ? breakpoints : undefined,
       showWatermarkBands: approxReady.value && showHistogram.value,
       showTrapezoids: showTrapezoids.value,
-      logRichZoom: logRichZoom.value,
+      logRichScale: logRichScale.value,
       logScaleX: logScaleX.value,
       logScaleY: logScaleY.value,
       originalViewMode: originalViewMode.value,
@@ -477,7 +472,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     approximation.value = built
 
     if (!built) {
-      error.value = 'Impossible de calculer l’approximation (données manquantes sur un intervalle).'
+      scope.error.value = 'Impossible de calculer l’approximation (données manquantes sur un intervalle).'
       chartOption.value = buildOriginalProfileOption(profile.value, chartOptionsBase())
       return
     }
@@ -486,7 +481,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   }
 
   const loadDecileCountries = async () => {
-    sharedCountriesRef.value = await app.listCountries.execute(
+    scope.countries.value = await scope.app.listCountries.execute(
       { variable: variable.value },
       sourceOptions.value,
     )
@@ -495,7 +490,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   const loadDecileYears = async () => {
     decileYearsLoading.value = true
     try {
-      decileYears.value = await app.listProfileYears.execute({
+      decileYears.value = await scope.app.listProfileYears.execute({
         countryCode: countryCode.value,
         variable: variable.value,
         age: '',
@@ -519,17 +514,17 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
 
   const refreshAndLoad = async (mode: 'variableChange' | 'clamp') => {
     if (!hasProfile.value) {
-      error.value = 'Cette source ne propose pas de profil de distribution.'
+      scope.error.value = 'Cette source ne propose pas de profil de distribution.'
       profile.value = null
       approximation.value = null
       chartOption.value = null
       return
     }
     if (hasDecileProfileOnly.value) {
-      error.value = null
+      scope.error.value = null
       await loadDecileYears()
       if (decileYears.value.length === 0) {
-        error.value = 'Aucune année disponible pour ce pays.'
+        scope.error.value = 'Aucune année disponible pour ce pays.'
         profile.value = null
         approximation.value = null
         chartOption.value = null
@@ -540,9 +535,9 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     }
     const ready = await constraints.refreshConstraints(mode)
     if (constraints.constraintsError.value) {
-      error.value = constraints.constraintsError.value
+      scope.error.value = constraints.constraintsError.value
     } else {
-      error.value = null
+      scope.error.value = null
     }
     if (ready) {
       await load()
@@ -555,20 +550,20 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
 
   const load = async () => {
     if (!hasProfile.value) {
-      error.value = 'Cette source ne propose pas de profil de distribution.'
+      scope.error.value = 'Cette source ne propose pas de profil de distribution.'
       profile.value = null
       approximation.value = null
       chartOption.value = null
       return
     }
 
-    loading.value = true
-    error.value = null
+    scope.loading.value = true
+    scope.error.value = null
     if (!shareRestorePending) {
       drillLevel.value = 0
     }
     try {
-      profile.value = await app.loadProfile.execute({
+      profile.value = await scope.app.loadProfile.execute({
         countryCode: countryCode.value,
         variable: variable.value,
         year: year.value,
@@ -586,21 +581,21 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
       profile.value = null
       approximation.value = null
       chartOption.value = null
-      error.value = err instanceof Error ? err.message : 'Échec du chargement du profil'
+      scope.error.value = err instanceof Error ? err.message : 'Échec du chargement du profil'
     } finally {
-      loading.value = false
+      scope.loading.value = false
     }
   }
 
   const init = async () => {
     if (!hasProfile.value) {
-      error.value = 'Cette source ne propose pas de profil de distribution.'
+      scope.error.value = 'Cette source ne propose pas de profil de distribution.'
       return
     }
     try {
       await loadCountries()
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Échec du chargement des pays'
+      scope.error.value = err instanceof Error ? err.message : 'Échec du chargement des pays'
       return
     }
     if (hasDecileProfileOnly.value) {
@@ -657,7 +652,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
       empiricalPdf.value = false
       logScaleX.value = false
       logScaleY.value = false
-      logRichZoom.value = false
+      logRichScale.value = false
     }
   })
 
@@ -666,17 +661,17 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
   })
 
   watch(
-    [method, showHistogram, showTrapezoids, logRichZoom, logScaleX, logScaleY, originalViewMode, customBreakpoints, populationViewMode, approxPartitionMode, hiddenApproxIntervals, drillLevel, lorenzCurve, empiricalCdf, empiricalPdf, showEmpiricalDistribution, showSmoothDistribution],
+    [method, showHistogram, showTrapezoids, logRichScale, logScaleX, logScaleY, originalViewMode, customBreakpoints, populationViewMode, approxPartitionMode, hiddenApproxIntervals, drillLevel, lorenzCurve, empiricalCdf, empiricalPdf, showEmpiricalDistribution, showSmoothDistribution],
     rebuild,
     { deep: true },
   )
 
-  watch(logRichZoom, (on) => {
+  watch(logRichScale, (on) => {
     if (on) logScaleX.value = false
   })
 
   watch(logScaleX, (on) => {
-    if (on) logRichZoom.value = false
+    if (on) logRichScale.value = false
   })
 
   watch(populationViewMode, () => {
@@ -715,10 +710,10 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     approximation.value = null
     chartOption.value = null
     if (!hasProfile.value) {
-      error.value = 'Cette source ne propose pas de profil de distribution.'
+      scope.error.value = 'Cette source ne propose pas de profil de distribution.'
       return
     }
-    error.value = null
+    scope.error.value = null
     if (hasDecileProfileOnly.value) {
       originalViewMode.value = 'bar'
       showHistogram.value = false
@@ -737,7 +732,7 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     method,
     showHistogram,
     showTrapezoids,
-    logRichZoom,
+    logRichScale,
     logScaleX,
     logScaleY,
     originalViewMode,
@@ -765,8 +760,8 @@ export function createExplorationPanelState(options: ExplorationPanelStateOption
     paramAdjustmentHints,
     adjustmentToastVisible,
     adjustmentToastMessage,
-    loading,
-    error,
+    loading: scope.loading,
+    error: scope.error,
     profile,
     approximation,
     chartOption,

@@ -344,6 +344,3 @@ export async function prefetchParamMetadata(
     }),
   )
 }
-
-/** @deprecated Use prefetchParamMetadata */
-export const prefetchWidMetadata = prefetchParamMetadata

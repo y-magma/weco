@@ -354,7 +354,7 @@ onMounted(() => {
           </div>
 
           <EChart
-            :key="`${variable}-${activePercentileCode ?? percentile}-${countryCodes.join(',')}`"
+            :key="`${variable}-${countryCodes.join(',')}`"
             :option="chartOption"
             :loading="loading"
             :error="panelError"

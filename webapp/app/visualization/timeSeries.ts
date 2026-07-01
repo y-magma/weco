@@ -4,17 +4,15 @@ import type { EChartsOption } from 'echarts'
 import { buildEchartsAxis, resolveValueScaleForMeasure } from '~/visualization/axisScale'
 import { formatAxisValue } from '~/visualization/axisFormat'
 import {
-  buildChartAxisDataZoom,
-  buildChartToolbox,
-  CHART_ZOOM_GRID_BOTTOM,
-} from '~/visualization/chartZoom'
-import {
   stackValueFromAverage,
   TIME_SERIES_TRANCHE_COLORS,
   type TimeSeriesTranche,
 } from '~/visualization/timeSeriesPartition'
 
 const COLORS = ['#1565C0', '#00897B', '#EF6C00', '#6A1B9A']
+
+/** Marge basse de la grille (titres d'axe). */
+const CHART_GRID_BOTTOM = 48
 
 export interface TimeSeriesChartOptions {
   logScaleY?: boolean
@@ -67,11 +65,8 @@ export function buildTimeSeriesOption(
       left: 48,
       right: 24,
       top: seriesList.length > 1 ? 88 : 72,
-      bottom: CHART_ZOOM_GRID_BOTTOM,
+      bottom: CHART_GRID_BOTTOM,
     },
-    toolbox: buildChartToolbox(),
-    // 'filter' drops points outside the zoom window and breaks multi-country lines with gaps.
-    dataZoom: buildChartAxisDataZoom({ filterMode: 'none' }),
     xAxis: {
       type: 'category',
       data: years.map(String),
@@ -120,7 +115,7 @@ function collectYears(countries: CountryTrancheSeries[]): number[] {
 
 function gridLayout(count: number, index: number): { top: number | string, height?: string, bottom?: number | string } {
   if (count <= 1) {
-    return { top: 72, bottom: CHART_ZOOM_GRID_BOTTOM }
+    return { top: 72, bottom: CHART_GRID_BOTTOM }
   }
   const gap = 8
   const usable = 100 - 14
@@ -177,10 +172,8 @@ export function buildStackedShareTimeSeriesOption(
       left: 56,
       right: 148,
       top: 72,
-      bottom: CHART_ZOOM_GRID_BOTTOM,
+      bottom: CHART_GRID_BOTTOM,
     },
-    toolbox: buildChartToolbox(),
-    dataZoom: buildChartAxisDataZoom({ filterMode: 'none' }),
     xAxis: {
       type: 'category',
       data: years.map(String),
@@ -282,11 +275,6 @@ export function buildStackedTimeSeriesOption(
     })),
   )
 
-  const dataZoom = buildChartAxisDataZoom({ filterMode: 'none' }).map((zoom) => ({
-    ...zoom,
-    xAxisIndex: countries.map((_, index) => index),
-  }))
-
   return {
     title: {
       text: title,
@@ -314,8 +302,6 @@ export function buildStackedTimeSeriesOption(
     grid: grids,
     xAxis: xAxes,
     yAxis: yAxes,
-    toolbox: buildChartToolbox(),
-    dataZoom,
     series,
   }
 }

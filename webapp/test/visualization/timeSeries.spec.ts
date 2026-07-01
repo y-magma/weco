@@ -84,12 +84,6 @@ describe('buildTimeSeriesOption', () => {
     expect(echartsSeries[1]!.data).toEqual([null, null, 300])
   })
 
-  it('does not filter series data when zooming', () => {
-    const option = buildTimeSeriesOption([sampleSeries], 'Test')
-    const dataZoom = option.dataZoom as { filterMode?: string }[]
-    expect(dataZoom.every((item) => item.filterMode === 'none')).toBe(true)
-  })
-
   it('formats fractional share values on the y-axis', () => {
     const shareSeries: DataSeries = {
       id: 'FR-shweal',

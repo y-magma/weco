@@ -20,7 +20,7 @@ import {
   isOecdDecileBundleVariable,
   isOecdDecileRatioId,
   OECD_DECILE_RATIO_OPTIONS,
-} from '@infrastructure/data-sources/oecd-idd/oecdDeciles'
+} from '@domain/catalog/oecdDeciles'
 import { fetchOecdTimeSeries } from '@infrastructure/data-sources/oecd-idd/oecdIddClient'
 import { listOecdCountries } from '@infrastructure/data-sources/oecd-idd/oecdIddCountries'
 

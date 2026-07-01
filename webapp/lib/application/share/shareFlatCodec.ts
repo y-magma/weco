@@ -57,7 +57,7 @@ function encodeExploration(prefix: string, snapshot: ExplorationPanelSnapshot): 
   setIfPresent(query, `${prefix}drill`, snapshot.drillLevel)
   setIfPresent(query, `${prefix}hist`, snapshot.showHistogram ? 1 : undefined)
   setIfPresent(query, `${prefix}trap`, snapshot.showTrapezoids ? 1 : undefined)
-  setIfPresent(query, `${prefix}logRich`, snapshot.logRichZoom ? 1 : undefined)
+  setIfPresent(query, `${prefix}logRichScale`, snapshot.logRichScale ? 1 : undefined)
   setIfPresent(query, `${prefix}logX`, snapshot.logScaleX ? 1 : undefined)
   setIfPresent(query, `${prefix}logY`, snapshot.logScaleY ? 1 : undefined)
   setIfPresent(query, `${prefix}view`, snapshot.originalViewMode)
@@ -91,7 +91,7 @@ function decodeExploration(prefix: string, query: Record<string, string | string
     drillLevel: parseNumber(read('drill')),
     showHistogram: parseBoolean(read('hist')),
     showTrapezoids: parseBoolean(read('trap')),
-    logRichZoom: parseBoolean(read('logRich')),
+    logRichScale: parseBoolean(read('logRichScale')) ?? parseBoolean(read('logRich')),
     logScaleX: parseBoolean(read('logX')),
     logScaleY: parseBoolean(read('logY')),
     originalViewMode: read('view') as ExplorationPanelSnapshot['originalViewMode'],

@@ -53,7 +53,7 @@ const {
   empiricalPdf,
   showEmpiricalDistribution,
   showSmoothDistribution,
-  logRichZoom,
+  logRichScale,
   logScaleX,
   logScaleY,
   showHistogram,
@@ -368,19 +368,17 @@ const {
         </div>
         <div class="d-flex align-center">
           <v-switch
-            v-model="logRichZoom"
-            label="log zoom sur les riches"
+            v-model="logRichScale"
+            label="Échelle log queue haute (rang)"
             color="primary"
             density="compact"
             hide-details
             :disabled="lorenzCurve"
           />
           <ProfileHelpButton
-            title="Log zoom sur les riches"
-            :paragraphs="[
-              'Espacement logarithmique depuis le 100 % : les points sont placés en −log₁₀(100 − rang), graduations en rang % réel (0 % à gauche, 100 % à droite).',
-              'Permet de zoomer visuellement sur la queue haute de la distribution (ultra-riches) tout en gardant le sens d’affichage des axes.',
-            ]"
+            :title="PROFILE_HELP.logRichScale.title"
+            :paragraphs="PROFILE_HELP.logRichScale.paragraphs"
+            :hint="PROFILE_HELP.logRichScale.hint"
           />
         </div>
       </v-expansion-panel-text>

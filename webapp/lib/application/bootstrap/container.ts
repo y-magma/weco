@@ -12,9 +12,6 @@ import { ListProfileYearsUseCase } from '@application/use-cases/ListProfileYears
 import { LoadProfileUseCase } from '@application/use-cases/LoadProfileUseCase'
 import { LoadTimeSeriesUseCase } from '@application/use-cases/LoadTimeSeriesUseCase'
 
-/** @deprecated Use DataSourcesConfig */
-export type ApplicationConfig = DataSourcesConfig
-
 export interface ApplicationContainer {
   listCountries: ListCountriesUseCase
   listAvailableParams: ListAvailableParamsUseCase

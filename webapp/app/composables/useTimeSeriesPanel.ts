@@ -1,8 +1,8 @@
 import type { EChartsOption } from 'echarts'
 import type { Ref } from 'vue'
 import { buildStackedShareTimeSeriesOption, buildStackedTimeSeriesOption, buildTimeSeriesOption, type CountryTrancheSeries, type TrancheStackMode } from '~/visualization/timeSeries'
-import type { CountryOption, DataSeries, SourceIndicator } from '@domain/entities'
-import { WID_DEFAULT_AGE, WID_DEFAULT_POP } from '@domain/catalog/widCodes'
+import type { CountryOption, DataSeries } from '@domain/entities'
+import type { TimeSeriesPopulationMode } from '@domain/panelState'
 import {
   isCustomPartitionComplete,
   validatePartialCustomBreakpoints,
@@ -13,17 +13,13 @@ import {
   standardPopulationBoundaries,
   TIME_SERIES_POPULATION_VIEW_OPTIONS,
   trancheLabelModeForPopulation,
-  type TimeSeriesPopulationMode,
   type TimeSeriesTranche,
 } from '~/visualization/timeSeriesPartition'
-import { PanelScope, yearCountLabel } from '~/composables/panelBase'
-import { useWidParamConstraints } from '~/composables/useWidParamConstraints'
+import { yearCountLabel } from '~/composables/panelBase'
+import { createTimeSeriesSharedContext, defaultTimeSeriesVariable } from '~/composables/timeSeriesPanelShared'
 import {
   decileBundleSubIdsForLoad,
-  getDecileBundleConfig,
-  isDecileBundleVariable,
   labelForDecileBundleSub,
-  worldBankPrimaryTimeSeriesIndicators,
 } from '@domain/catalog/decileBundles'
 import type { TimeSeriesPanelSnapshot } from '@application/share/shareSnapshot'
 import {
@@ -43,77 +39,25 @@ export interface TimeSeriesPanelStateOptions {
 export { applyTimeSeriesSnapshot, serializeTimeSeriesState }
 export type { TimeSeriesPanelSnapshot }
 
-function timeSeriesIndicatorsForPanel(
-  source: { id: string, indicators?: readonly SourceIndicator[] },
-  panelIndex: number,
-): readonly SourceIndicator[] {
-  const all = source.indicators ?? []
-  if (source.id === 'worldbank' && panelIndex === 0) {
-    return worldBankPrimaryTimeSeriesIndicators(all)
-  }
-  return all
-}
-
-function defaultTimeSeriesVariable(
-  source: { id: string, indicators?: readonly SourceIndicator[] },
-  panelIndex: number,
-): string {
-  const list = timeSeriesIndicatorsForPanel(source, panelIndex)
-  return list[0]?.id ?? source.indicators?.[0]?.id ?? 'ahweal'
-}
-
 export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions = {}) {
-  const app = useApplication()
-  const { selectedSource } = usePanneauDataSource()
-  const scope = new PanelScope(app, options.countries)
-  const panelIndex = options.panelIndex ?? 0
-
-  const hasPercentileProfile = computed(
-    () => selectedSource.value.capabilities?.percentileProfile === true,
-  )
-
-  const hasDecileProfile = computed(
-    () => selectedSource.value.capabilities?.decileProfile === true,
-  )
-
-  const indicators = computed<readonly SourceIndicator[]>(
-    () => timeSeriesIndicatorsForPanel(selectedSource.value, panelIndex),
-  )
-
-  const variable = ref(
-    options.initialVariable ?? defaultTimeSeriesVariable(selectedSource.value, panelIndex),
-  )
-
-  const isDecileBundle = computed(() => isDecileBundleVariable(variable.value))
-  const decileBundleConfig = computed(() => getDecileBundleConfig(variable.value))
-  const decileBundleOptions = computed(() => decileBundleConfig.value?.options ?? [])
-  const variableMeta = computed(() =>
-    indicators.value.find((item) => item.id === variable.value),
-  )
-
-  const age = ref('')
-  const pop = ref('')
-
-  watch(hasPercentileProfile, (enabled) => {
-    if (enabled) {
-      age.value = WID_DEFAULT_AGE
-      pop.value = WID_DEFAULT_POP
-    } else {
-      age.value = ''
-      pop.value = ''
-    }
-  }, { immediate: true })
-
   const countryCode = ref(options.initialCountryCode ?? 'FR')
+  const shared = createTimeSeriesSharedContext({
+    countries: options.countries,
+    panelIndex: options.panelIndex,
+    initialVariable: options.initialVariable,
+    constraintsCountryCode: countryCode,
+  })
+  const { scope } = shared
+
   const partitionMode = ref<TimeSeriesPopulationMode>('distribution')
   const customBreakpoints = ref<number[]>([])
   const stackMode = ref<TrancheStackMode>('weighted')
 
   const timeSeriesRefs: TimeSeriesPanelRefs = {
     countryCode,
-    variable,
-    age,
-    pop,
+    variable: shared.variable,
+    age: shared.age,
+    pop: shared.pop,
     partitionMode,
     customBreakpoints,
   }
@@ -121,17 +65,6 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
   if (options.initialSnapshot) {
     applyTimeSeriesSnapshot(timeSeriesRefs, options.initialSnapshot)
   }
-
-  const constraintsEnabled = computed(() => hasPercentileProfile.value)
-
-  const constraints = useWidParamConstraints({
-    app: scope.app,
-    source: selectedSource,
-    variable,
-    params: { countryCode, age, pop },
-    countries: scope.countries,
-    enabled: constraintsEnabled,
-  })
 
   const trancheSeriesByCountry = ref<CountryTrancheSeries[]>([])
   const scalarSeries = ref<DataSeries[]>([])
@@ -151,7 +84,7 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
   )
 
   const activeBreakpoints = computed(() => {
-    if (!hasPercentileProfile.value) return []
+    if (!shared.hasPercentileProfile.value) return []
     const mode = partitionMode.value
     if (mode === 'custom') {
       return customPartitionReady.value ? customBreakpoints.value : []
@@ -169,16 +102,20 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
     return count > 0 ? `${count} tranches` : ''
   })
 
-  const sourceOptions = computed(() => ({ source: selectedSource.value }))
+  const clearChart = () => {
+    trancheSeriesByCountry.value = []
+    scalarSeries.value = []
+    chartOption.value = null
+  }
 
   const rebuild = () => {
-    if (hasPercentileProfile.value) {
+    if (shared.hasPercentileProfile.value) {
       if (trancheSeriesByCountry.value.length === 0) {
         chartOption.value = null
         return
       }
-      const meta = variableMeta.value
-      const title = meta?.label ?? variable.value
+      const meta = shared.variableMeta.value
+      const title = meta?.label ?? shared.variable.value
       const subtitle = `${trancheSeriesByCountry.value[0]!.countryLabel} · par tranche de population`
       chartOption.value = buildStackedTimeSeriesOption(
         trancheSeriesByCountry.value,
@@ -195,12 +132,12 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
       chartOption.value = null
       return
     }
-    const meta = variableMeta.value
-    const title = meta?.label ?? variable.value
-    const subtitle = isDecileBundle.value
-      ? `${scope.countryLabel(countryCode.value)} · ${decileBundleConfig.value?.seriesSubtitle ?? 'bundle décile'}`
+    const meta = shared.variableMeta.value
+    const title = meta?.label ?? shared.variable.value
+    const subtitle = shared.isDecileBundle.value
+      ? `${scope.countryLabel(countryCode.value)} · ${shared.decileBundleConfig.value?.seriesSubtitle ?? 'bundle décile'}`
       : `${scope.countryLabel(countryCode.value)} · série annuelle`
-    chartOption.value = isDecileBundle.value
+    chartOption.value = shared.isDecileBundle.value
       ? buildStackedShareTimeSeriesOption(scalarSeries.value, title, {
           subtitle,
           yAxisLabel: meta?.unit,
@@ -227,7 +164,7 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
       countryCode: code,
       countryLabel: scope.countryLabel(code),
       tranches: tranches.map((tranche) => {
-        const id = `${code}-${variable.value}-${tranche.code}-${age.value}-${pop.value}`
+        const id = `${code}-${shared.variable.value}-${tranche.code}-${shared.age.value}-${shared.pop.value}`
         const match = byKey.get(id)
         const byYear = new Map<number, number>()
         for (const point of match?.points ?? []) {
@@ -242,17 +179,16 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
     const result = await scope.app.loadTimeSeries.execute({
       countryCodes: [code],
       params: {
-        variable: variable.value,
-        age: age.value,
-        pop: pop.value,
+        variable: shared.variable.value,
+        age: shared.age.value,
+        pop: shared.pop.value,
       },
       countryLabel: scope.countryLabel.bind(scope),
-    }, sourceOptions.value)
+    }, shared.sourceOptions.value)
 
     if (result.series.length === 0) {
       scope.error.value = result.failures[0] ?? 'Échec du chargement des séries'
-      scalarSeries.value = []
-      chartOption.value = null
+      clearChart()
       return
     }
 
@@ -264,13 +200,13 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
   }
 
   const loadDecileBundle = async (code: string) => {
-    const bundleConfig = decileBundleConfig.value
+    const bundleConfig = shared.decileBundleConfig.value
     if (!bundleConfig) {
       scope.error.value = 'Configuration bundle décile introuvable.'
       return
     }
 
-    const subIds = decileBundleSubIdsForLoad(variable.value)
+    const subIds = decileBundleSubIdsForLoad(shared.variable.value)
     const requests = subIds.map((subId) =>
       scope.app.loadTimeSeries.execute({
         countryCodes: [code],
@@ -281,7 +217,7 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
           percentile: subId,
         },
         countryLabel: scope.countryLabel.bind(scope),
-      }, sourceOptions.value),
+      }, shared.sourceOptions.value),
     )
 
     const results = await Promise.all(requests)
@@ -295,14 +231,13 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
 
     if (allSeries.length === 0) {
       scope.error.value = failures[0] ?? 'Échec du chargement du bundle décile'
-      scalarSeries.value = []
-      chartOption.value = null
+      clearChart()
       return
     }
 
     scalarSeries.value = allSeries.map((series) => {
       const subId = String(series.metadata?.decileRatio ?? '')
-      const subLabel = labelForDecileBundleSub(variable.value, subId)
+      const subLabel = labelForDecileBundleSub(shared.variable.value, subId)
       return subLabel ? { ...series, label: subLabel } : series
     })
 
@@ -328,13 +263,13 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
       scope.app.loadTimeSeries.execute({
         countryCodes: [code],
         params: {
-          variable: variable.value,
-          age: age.value,
-          pop: pop.value,
+          variable: shared.variable.value,
+          age: shared.age.value,
+          pop: shared.pop.value,
           percentile: tranche.code,
         },
         countryLabel: scope.countryLabel.bind(scope),
-      }, sourceOptions.value),
+      }, shared.sourceOptions.value),
     )
 
     const results = await Promise.all(requests)
@@ -373,28 +308,26 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
     scope.loadWarning.value = null
 
     try {
-      if (hasPercentileProfile.value) {
+      if (shared.hasPercentileProfile.value) {
         await loadPercentile(code)
-      } else if (isDecileBundle.value) {
+      } else if (shared.isDecileBundle.value) {
         await loadDecileBundle(code)
       } else {
         await loadScalar(code)
       }
     } catch (err) {
       scope.error.value = err instanceof Error ? err.message : 'Échec du chargement des séries'
-      trancheSeriesByCountry.value = []
-      scalarSeries.value = []
-      chartOption.value = null
+      clearChart()
     } finally {
       scope.loading.value = false
     }
   }
 
   const init = async () => {
-    await scope.initCountries(selectedSource.value, variable.value)
-    if (hasPercentileProfile.value) {
-      await constraints.loadCountriesForVariable(variable.value)
-      await constraints.refreshConstraints('variableChange')
+    await scope.initCountries(shared.selectedSource.value, shared.variable.value)
+    if (shared.hasPercentileProfile.value) {
+      await shared.constraints.loadCountriesForVariable(shared.variable.value)
+      await shared.constraints.refreshConstraints('variableChange')
       if (activeBreakpoints.value.length > 0) {
         await load()
       }
@@ -403,76 +336,60 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
     }
   }
 
-  const refreshParamsAndLoad = async (mode: 'variableChange' | 'clamp') => {
-    if (hasPercentileProfile.value) {
-      const ready = await constraints.refreshConstraints(mode)
-      if (!ready) {
-        scope.error.value = constraints.constraintsError.value ?? 'Paramètres indisponibles pour cette sélection.'
-        trancheSeriesByCountry.value = []
-        scalarSeries.value = []
-        chartOption.value = null
-        return
-      }
-    }
-    await load()
-  }
-
-  watch([countryCode, age, pop], () => {
-    void refreshParamsAndLoad('clamp')
+  watch([countryCode, shared.age, shared.pop], () => {
+    void shared.refreshParamsAndLoad('clamp', load, clearChart)
   })
 
   watch([partitionMode, customBreakpoints], () => {
-    if (hasPercentileProfile.value) {
+    if (shared.hasPercentileProfile.value) {
       void load()
     }
   }, { deep: true })
 
   watch(stackMode, () => {
-    if (hasPercentileProfile.value && trancheSeriesByCountry.value.length > 0) {
+    if (shared.hasPercentileProfile.value && trancheSeriesByCountry.value.length > 0) {
       rebuild()
     }
   })
 
-  watch(variable, (next) => {
-    if (hasPercentileProfile.value) {
-      constraints.applyOptimisticDefaults(next)
-      void constraints.loadCountriesForVariable(next).then(() => refreshParamsAndLoad('variableChange'))
+  watch(shared.variable, (next) => {
+    if (shared.hasPercentileProfile.value) {
+      shared.constraints.applyOptimisticDefaults(next)
+      void shared.constraints.loadCountriesForVariable(next).then(() =>
+        shared.refreshParamsAndLoad('variableChange', load, clearChart),
+      )
     } else {
       void load()
     }
   })
 
-  watch(() => selectedSource.value.id, async () => {
-    const nextVariable = defaultTimeSeriesVariable(selectedSource.value, panelIndex)
+  watch(() => shared.selectedSource.value.id, async () => {
+    const nextVariable = defaultTimeSeriesVariable(shared.selectedSource.value, shared.panelIndex)
     if (nextVariable) {
-      variable.value = nextVariable
+      shared.variable.value = nextVariable
     }
-    await scope.initCountries(selectedSource.value, variable.value)
-    if (hasPercentileProfile.value) {
-      await constraints.loadCountriesForVariable(variable.value)
-      await constraints.refreshConstraints('variableChange')
+    await scope.initCountries(shared.selectedSource.value, shared.variable.value)
+    if (shared.hasPercentileProfile.value) {
+      await shared.constraints.loadCountriesForVariable(shared.variable.value)
+      await shared.constraints.refreshConstraints('variableChange')
     }
     await load()
   })
 
-  const panelCountries = computed(() =>
-    hasPercentileProfile.value ? constraints.countries.value : scope.countries.value,
-  )
-
   return {
     countryCode,
-    variable,
-    age,
-    pop,
+    variable: shared.variable,
+    age: shared.age,
+    pop: shared.pop,
     partitionMode,
     customBreakpoints,
     stackMode,
-    countries: panelCountries,
-    variables: indicators,
-    ageOptions: constraints.ageOptions,
-    popOptions: constraints.popOptions,
-    paramsLoading: constraints.constraintsLoading,
-    yearRangeLabel: constraints.yearRangeLabel,
+    countries: shared.panelCountries,
+    variables: shared.indicators,
+    ageOptions: shared.constraints.ageOptions,
+    popOptions: shared.constraints.popOptions,
+    paramsLoading: shared.constraints.constraintsLoading,
+    yearRangeLabel: shared.constraints.yearRangeLabel,
     partitionViewOptions,
     availableBoundaries,
     customPartitionValidation,
@@ -485,14 +402,14 @@ export function createTimeSeriesPanelState(options: TimeSeriesPanelStateOptions 
     trancheSeriesByCountry,
     scalarSeries,
     chartOption,
-    variableMeta,
-    hasPercentileProfile,
-    hasDecileProfile,
-    isDecileBundle,
-    decileBundleOptions,
-    decileBundleConfig,
+    variableMeta: shared.variableMeta,
+    hasPercentileProfile: shared.hasPercentileProfile,
+    hasDecileProfile: shared.hasDecileProfile,
+    isDecileBundle: shared.isDecileBundle,
+    decileBundleOptions: shared.decileBundleOptions,
+    decileBundleConfig: shared.decileBundleConfig,
     yearCountLabel: computed(() => {
-      if (hasPercentileProfile.value) {
+      if (shared.hasPercentileProfile.value) {
         return yearCountLabel(trancheSeriesByCountry.value.flatMap((country) =>
           country.tranches.flatMap((layer) => layer.byYear.size),
         ))

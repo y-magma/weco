@@ -11,9 +11,7 @@ import type {
   SeriesPoint,
 } from '@domain/entities'
 import type { DataSourcePort, DataSourceStatus } from '@domain/ports/DataSourcePort'
-import {
-  labelForDecileBundleSub,
-} from '@infrastructure/data-sources/decileBundles'
+import { labelForDecileBundleSub } from '@domain/catalog/decileBundles'
 import {
   CACHE_TTL_METADATA_MS,
   CACHE_TTL_YEARS_MS,

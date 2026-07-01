@@ -4,6 +4,7 @@ import type {
   EChartsOption,
 } from 'echarts'
 import type { PercentilePoint, PercentileProfile } from '@domain/entities'
+import type { ProfileChartLayer } from '@domain/panelState'
 import { measureKind } from '@domain/catalog/widCodes'
 import { parsePercentileInterval } from '@domain/services/percentiles'
 import { buildChartToolbox } from '~/visualization/chartZoom'
@@ -75,7 +76,7 @@ function applySmoothCdfValueAxisExtent(
   )
 }
 
-export type ProfileChartLayer = 'bar' | 'scatter' | 'line'
+export type { ProfileChartLayer } from '@domain/panelState'
 
 const CHART_LAYER_ORDER: ProfileChartLayer[] = ['bar', 'scatter', 'line']
 

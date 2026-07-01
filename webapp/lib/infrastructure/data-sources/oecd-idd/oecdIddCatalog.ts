@@ -1,5 +1,5 @@
 import type { SourceIndicator } from '@domain/entities'
-import { OECD_DECILE_BUNDLE_ID } from '@infrastructure/data-sources/oecd-idd/oecdDeciles'
+import { OECD_DECILE_BUNDLE_ID } from '@domain/catalog/oecdDeciles'
 
 export interface OecdIddIndicatorDef extends SourceIndicator {
   measure: string

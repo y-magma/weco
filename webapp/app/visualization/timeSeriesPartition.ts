@@ -2,6 +2,7 @@
  * Découpage population pour la série temporelle empilée (style distribution patrimoniale).
  */
 import { buildGPercentiles, parsePercentileRank } from '@domain/services/percentiles'
+import type { TimeSeriesPopulationMode } from '@domain/panelState'
 import {
   buildStepBreakpoints,
   describeCustomIntervals,
@@ -13,8 +14,7 @@ import {
 
 export type TimeSeriesPartitionMode = 'wealth' | 'step10' | 'step25' | 'custom'
 
-/** Modes de découpage pour la série temporelle empilée. */
-export type TimeSeriesPopulationMode = 'distribution' | 'whole' | 'step10' | 'step25' | 'custom'
+export type { TimeSeriesPopulationMode } from '@domain/panelState'
 
 /** Bornes preset WID (bas 50 %, 50–90 %, 90–99 %, top 1 %, top 0,1 %). */
 export const TIME_SERIES_DEFAULT_BREAKPOINTS = POPULATION_DISTRIBUTION_BREAKPOINTS

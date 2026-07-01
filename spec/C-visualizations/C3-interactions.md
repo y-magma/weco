@@ -39,10 +39,11 @@ Choix **au premier affichage** (avant action utilisateur). La bascule lin/log ne
 | **Tooltip** | Tous | Valeur, tranche, pays au survol | MVP | `tooltip` |
 | **Zoom temporel** | Courbe (Série) | Fenêtre d’années, slider + molette | MVP | `dataZoom` |
 | **Zoom / brush tranches** | Bâtons, histogramme | Plage d’abscisse → régression / analyse [D1](../D-statistics/D1-analyses.md) | Phase 2 | `dataZoom` category, `brush` |
-| **Zoom multi-niveaux** | Distribution fine | 0–100 % → déciles → centiles → top 1 % / 0,1 % / 0,01 % | Phase 2 | `dataZoom` + rechargement tranches |
+| **Drill-down sommet** | Distribution fine (profil) | 0–100 % → tranches 1 % → clic sur ]99 %, 100 %] → 0,1 % → 0,01 % → 0,001 % | **Existant** | `drilldown.ts`, `useExplorationPanel.ts` |
 | **Tranches 10 % (courbe)** | Profil (`PanneauExploration`) | Sélecteur « Tranches de population (courbe) » : agrégation en intervalles de 10 % (]0, 10 %], …, ]90, 100 %]) | **Existant** | `populationPartition.ts`, `useExplorationPanel.ts` |
 | **Tranche 50 % - 90 % - 99 % - 99,9 % - 100 %** | Profil (intervalles d'approximation), série temporelle WID | Preset WID : ]0, 50 %], ]50, 90 %], ]90, 99 %], ]99, 99,9 %], ]99,9, 100 %] — libellé « Tranche 50% - 90% - 99% - 99.9% - 100% » | **Existant** | `populationPartition.ts`, `timeSeriesPartition.ts` |
 | **Bascule mode d'empilement** | Série temporelle WID (`PanneauSerieTemporelle`) | Toggle « Pondéré / Valeurs réelles » : `'weighted'` = moyenne × largeur de tranche (contribution à la moyenne nationale) ; `'raw'` = vraie moyenne WID par tranche sans transformation ; **`?`** (`ProfileHelpButton`, `timeSeriesHelp.ts`) + bandeau info en mode pondéré | **Existant** | `TrancheStackMode`, `buildStackedTimeSeriesOption`, `useTimeSeriesPanel.ts` |
+| **Échelle log queue haute (rang)** | Profil trapèzes / original | Projection `rankTopLog` sur l’axe population (`logRichScale`) ; incompatible avec log X strict | **Existant** | `axisScale.ts` (`rankTopLogScale`), `trapezoidChart.ts`, `useExplorationPanel.ts` |
 | **Bascule lin / log abscisse** | Courbe, nuage, distribution | Échelle X indépendante de Y | Phase 2 | `xAxis.type: 'log'` |
 | **Bascule lin / log ordonnée** | Courbe, bâtons, nuage | Échelle Y indépendante de X | Phase 2 | `yAxis.type: 'log'` |
 | **Légende cliquable** | Courbe multi-séries | Masquer / afficher une série | MVP | `legend` |

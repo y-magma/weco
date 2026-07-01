@@ -62,18 +62,11 @@ const {
   age,
   pop,
   method,
-  showHistogram,
-  showTrapezoids,
-  logRichZoom,
-  logScaleX,
-  logScaleY,
   originalViewMode,
   populationViewMode,
   lorenzCurve,
   empiricalCdf,
   empiricalPdf,
-  showEmpiricalDistribution,
-  showSmoothDistribution,
   approxPartitionMode,
   customBreakpoints,
   availableBoundaries,
@@ -88,7 +81,6 @@ const {
   handleChartClick,
   approxIntervalLabels,
   isApproxIntervalVisible,
-  hiddenApproxIntervals,
   originalViewOptions,
   populationViewOptions,
   variables,
@@ -479,7 +471,7 @@ onMounted(() => {
           </div>
 
           <EChart
-            :key="`${variable}-${year}-${countryCode}-${method}-${originalViewMode}-${populationViewMode}-${approxPartitionMode}-${drillLevel}-${logRichZoom}-${logScaleX}-${logScaleY}-${showHistogram}-${showTrapezoids}-${lorenzCurve}-${empiricalCdf}-${empiricalPdf}-${showEmpiricalDistribution}-${showSmoothDistribution}-${customBreakpoints.join(',')}-${[...hiddenApproxIntervals].join(',')}`"
+            :key="`${variable}-${year}-${countryCode}-${method}-${drillLevel}`"
             :option="chartOption"
             :loading="loading"
             :error="panelError"

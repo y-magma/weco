@@ -4,10 +4,12 @@ import type {
   TimeSeriesComparePanelSnapshot,
   TimeSeriesPanelSnapshot,
 } from '@application/share/shareSnapshot'
-import type { ProfileChartLayer } from '~/visualization/profile'
-import type { PopulationViewMode } from '~/visualization/populationPartition'
-import type { TimeSeriesPopulationMode } from '~/visualization/timeSeriesPartition'
-import type { TrapezoidMethod } from '~/visualization/trapezoidApproximation'
+import type {
+  ProfileChartLayer,
+  PopulationViewMode,
+  TimeSeriesPopulationMode,
+  TrapezoidMethod,
+} from '@domain/panelState'
 
 export interface ExplorationPanelRefs {
   countryCode: Ref<string>
@@ -22,7 +24,7 @@ export interface ExplorationPanelRefs {
   drillLevel: Ref<number>
   showHistogram: Ref<boolean>
   showTrapezoids: Ref<boolean>
-  logRichZoom: Ref<boolean>
+  logRichScale: Ref<boolean>
   logScaleX: Ref<boolean>
   logScaleY: Ref<boolean>
   originalViewMode: Ref<ProfileChartLayer>
@@ -68,7 +70,7 @@ export function serializeExplorationState(refs: ExplorationPanelRefs): Explorati
     drillLevel: refs.drillLevel.value,
     showHistogram: refs.showHistogram.value,
     showTrapezoids: refs.showTrapezoids.value,
-    logRichZoom: refs.logRichZoom.value,
+    logRichScale: refs.logRichScale.value,
     logScaleX: refs.logScaleX.value,
     logScaleY: refs.logScaleY.value,
     originalViewMode: refs.originalViewMode.value,
@@ -103,7 +105,10 @@ export function applyExplorationSnapshot(
   if (snapshot.drillLevel !== undefined) refs.drillLevel.value = snapshot.drillLevel
   if (snapshot.showHistogram !== undefined) refs.showHistogram.value = snapshot.showHistogram
   if (snapshot.showTrapezoids !== undefined) refs.showTrapezoids.value = snapshot.showTrapezoids
-  if (snapshot.logRichZoom !== undefined) refs.logRichZoom.value = snapshot.logRichZoom
+  if (snapshot.logRichScale !== undefined) refs.logRichScale.value = snapshot.logRichScale
+  else if ('logRichZoom' in snapshot && (snapshot as { logRichZoom?: boolean }).logRichZoom !== undefined) {
+    refs.logRichScale.value = (snapshot as { logRichZoom: boolean }).logRichZoom
+  }
   if (snapshot.logScaleX !== undefined) refs.logScaleX.value = snapshot.logScaleX
   if (snapshot.logScaleY !== undefined) refs.logScaleY.value = snapshot.logScaleY
   if (snapshot.originalViewMode !== undefined) {

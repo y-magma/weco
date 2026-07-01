@@ -6,13 +6,14 @@
  * y_i = 2 m_i - y_{i-1}. Tous les nœuds dépendent linéairement de y_0 seul.
  */
 import type { PercentilePoint } from '@domain/entities'
+import type { TrapezoidMethod } from '@domain/panelState'
 import { parsePercentileInterval } from '@domain/services/percentiles'
 import {
   aggregatePointValue,
   buildPartitionPoints,
 } from '~/visualization/populationPartition'
 
-export type TrapezoidMethod = 'anchor' | 'zero' | 'leastSquares' | 'minOscillation'
+export type { TrapezoidMethod } from '@domain/panelState'
 
 export interface TrapezoidNode {
   x: number

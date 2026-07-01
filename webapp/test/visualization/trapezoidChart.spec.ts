@@ -33,8 +33,8 @@ function makeProfile(overrides: Partial<PercentileProfile> = {}): PercentileProf
 }
 
 describe('buildOriginalProfileOption — log axes', () => {
-  it('uses rank-top-log spacing on X when logRichZoom is enabled', () => {
-    const option = buildOriginalProfileOption(makeProfile(), { logRichZoom: true })
+  it('uses rank-top-log spacing on X when logRichScale is enabled', () => {
+    const option = buildOriginalProfileOption(makeProfile(), { logRichScale: true })
     const xAxis = option.xAxis as { min?: number, max?: number, scale: boolean, type: string }
     expect(xAxis.type).toBe('value')
     expect(xAxis.scale).toBe(true)
@@ -87,9 +87,9 @@ describe('buildTrapezoidProfileOption — log axes', () => {
     profile.points,
   )!
 
-  it('combines logRichZoom and logScaleY independently', () => {
+  it('combines logRichScale and logScaleY independently', () => {
     const option = buildTrapezoidProfileOption(profile, approximation, {
-      logRichZoom: true,
+      logRichScale: true,
       logScaleY: true,
       trapezoidBreakpoints: [50, 100],
       showWatermarkBands: true,

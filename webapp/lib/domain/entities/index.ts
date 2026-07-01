@@ -80,12 +80,6 @@ export interface ParamAvailabilityEntity {
   pops: string[]
 }
 
-/** @deprecated Use ParamComboEntity */
-export type WidParamComboEntity = ParamComboEntity
-
-/** @deprecated Use ParamAvailabilityEntity */
-export type WidParamAvailabilityEntity = ParamAvailabilityEntity
-
 export interface SourceIndicator {
   id: string
   label: string
